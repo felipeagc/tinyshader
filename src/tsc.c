@@ -725,6 +725,11 @@ struct IRInst
 
         struct
         {
+            IRInst *value;
+        } return_;
+
+        struct
+        {
             IRInst *pointer;
             IRInst *value;
         } store;
@@ -795,6 +800,7 @@ typedef enum AstStmtKind {
     STMT_DECL,
     STMT_EXPR,
     STMT_VAR_ASSIGN,
+    STMT_RETURN,
 } AstStmtKind;
 
 typedef enum AstDeclKind {
@@ -831,6 +837,10 @@ struct AstStmt
             AstExpr *assigned_expr;
             AstExpr *value_expr;
         } var_assign;
+        struct
+        {
+            AstExpr *value;
+        } return_;
     };
 };
 
@@ -1057,6 +1067,7 @@ TscCompiler *tscCompilerCreate()
     hashInit(&compiler->keyword_table, 32);
 
     hashSet(&compiler->keyword_table, "const", (void *)TOKEN_CONST);
+    hashSet(&compiler->keyword_table, "return", (void *)TOKEN_RETURN);
     hashSet(&compiler->keyword_table, "switch", (void *)TOKEN_SWITCH);
     hashSet(&compiler->keyword_table, "case", (void *)TOKEN_CASE);
     hashSet(&compiler->keyword_table, "default", (void *)TOKEN_DEFAULT);
@@ -2165,6 +2176,25 @@ static AstStmt *parseStmt(Parser *p)
 
     switch (parserPeek(p, 0)->kind)
     {
+    case TOKEN_RETURN: {
+        parserNext(p, 1);
+
+        AstStmt *stmt = NEW(compiler, AstStmt);
+        stmt->kind = STMT_RETURN;
+
+        if (parserPeek(p, 0)->kind != TOKEN_SEMICOLON)
+        {
+            AstExpr *return_expr = parseExpr(p);
+            if (!return_expr) return NULL;
+
+            stmt->return_.value = return_expr;
+        }
+
+        if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
+
+        return stmt;
+    }
+
     default: {
         AstExpr *expr = parseExpr(p);
         if (!expr) return NULL;
@@ -2984,7 +3014,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
         {
             addErr(compiler, &expr->loc, "could not resolve type for expression");
         }
-        if (expr->type != expected_type)
+        else if (expr->type != expected_type)
         {
             addErr(compiler, &expr->loc, "unmatched types");
         }
@@ -3005,6 +3035,27 @@ static void analyzerAnalyzeStmt(Analyzer *a, AstStmt *stmt)
 
     case STMT_EXPR: {
         analyzerAnalyzeExpr(a, stmt->expr, NULL);
+        break;
+    }
+
+    case STMT_RETURN: {
+        assert(a->scope_func);
+        Type *return_type = a->scope_func->type->func.return_type;
+
+        if (return_type->kind == TYPE_VOID && stmt->return_.value)
+        {
+            addErr(compiler, &stmt->loc, "function does not return a value");
+        }
+
+        if (return_type->kind != TYPE_VOID && !stmt->return_.value)
+        {
+            addErr(compiler, &stmt->loc, "function needs a return value");
+        }
+
+        if (stmt->return_.value)
+        {
+            analyzerAnalyzeExpr(a, stmt->return_.value, return_type);
+        }
         break;
     }
 
@@ -3141,6 +3192,12 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
             }
         }
 
+        if (param_types_valid)
+        {
+            decl->type =
+                newFuncType(m, return_type, param_types, arrLength(decl->func.func_params));
+        }
+
         for (uint32_t i = 0; i < arrLength(decl->func.stmts); ++i)
         {
             AstStmt *stmt = decl->func.stmts[i];
@@ -3148,11 +3205,6 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
         }
         analyzerPopScope(a, decl->scope);
 
-        if (param_types_valid)
-        {
-            decl->type =
-                newFuncType(m, return_type, param_types, arrLength(decl->func.func_params));
-        }
 
         break;
     }
@@ -3161,12 +3213,13 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
         if (decl->var.storage_class == SpvStorageClassFunction && !a->scope_func)
         {
             addErr(compiler, &decl->loc, "variable declaration must be inside a function");
+            break;
         }
 
         analyzerAnalyzeExpr(a, decl->var.type_expr, newBasicType(m, TYPE_TYPE));
         if (!decl->var.type_expr->as_type)
         {
-            addErr(compiler, &decl->loc, "variable type expression does not represent a type");
+            break;
         }
 
         if (decl->var.value_expr)
@@ -3641,10 +3694,11 @@ irBuildBuiltinCall(IRModule *m, IRBuiltinInstKind kind, IRInst **params, uint32_
     return inst;
 }
 
-static void irBuildReturn(IRModule *m)
+static void irBuildReturn(IRModule *m, IRInst *value)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_RETURN;
+    inst->return_.value = value;
 
     IRInst *block = irGetCurrentBlock(m);
     arrPush(block->block.insts, inst);
@@ -3880,7 +3934,15 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
         }
 
         case IR_INST_RETURN: {
-            irModuleEncodeInst(m, SpvOpReturn, NULL, 0);
+            if (inst->return_.value)
+            {
+                uint32_t params[1] = {inst->return_.value->id};
+                irModuleEncodeInst(m, SpvOpReturnValue, params, 1);
+            }
+            else
+            {
+                irModuleEncodeInst(m, SpvOpReturn, NULL, 0);
+            }
             break;
         }
 
@@ -3944,8 +4006,7 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             break;
         }
 
-        case IR_INST_BUILTIN_CALL:
-        {
+        case IR_INST_BUILTIN_CALL: {
             inst->id = irModuleReserveId(m);
 
             uint32_t param_value_count = inst->builtin_call.param_count;
@@ -3959,8 +4020,7 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
 
             switch (inst->builtin_call.kind)
             {
-            case IR_BUILTIN_DOT:
-            {
+            case IR_BUILTIN_DOT: {
                 IRInst *a = param_values[0];
                 IRInst *b = param_values[1];
                 uint32_t params[4] = {inst->type->id, inst->id, a->id, b->id};
@@ -4212,7 +4272,7 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
             param_values[i] = irLoadVal(m, param->value);
         }
 
-        irBuildFuncCall(m, func_val, param_values, param_count);
+        expr->value = irBuildFuncCall(m, func_val, param_values, param_count);
 
         break;
     }
@@ -4253,6 +4313,20 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
 
     case STMT_EXPR: {
         irModuleBuildExpr(m, stmt->expr);
+        break;
+    }
+
+    case STMT_RETURN: {
+        if (stmt->return_.value)
+        {
+            irModuleBuildExpr(m, stmt->return_.value);
+            assert(stmt->return_.value->value);
+            irBuildReturn(m, irLoadVal(m, stmt->return_.value->value));
+        }
+        else
+        {
+            irBuildReturn(m, NULL);
+        }
         break;
     }
 
@@ -4316,7 +4390,7 @@ static void irModuleBuildDecl(IRModule *m, AstDecl *decl)
 
         if (!irBlockHasTerminator(irGetCurrentBlock(m)))
         {
-            irBuildReturn(m);
+            irBuildReturn(m, NULL);
         }
 
         break;
