@@ -677,6 +677,7 @@ typedef enum IRInstKind {
 
     IR_INST_BUILTIN_CALL,
     IR_INST_CAST,
+    IR_INST_COMPOSITE_CONSTRUCT,
 } IRInstKind;
 
 typedef enum IRBuiltinInstKind {
@@ -768,6 +769,12 @@ struct IRInst
             IRInst *value;
             bool redundant;
         } cast;
+
+        struct
+        {
+            IRInst **fields;
+            uint32_t field_count;
+        } composite_construct;
     };
 };
 
@@ -2998,7 +3005,26 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
             uint32_t param_count = arrLength(expr->func_call.params);
             AstExpr **params = expr->func_call.params;
 
-            if (param_count == 1)
+            if (constructed_type->kind == TYPE_VECTOR)
+            {
+                if (param_count == constructed_type->vector.size)
+                {
+                    for (uint32_t i = 0; i < param_count; ++i)
+                    {
+                        analyzerAnalyzeExpr(a, params[i], constructed_type->vector.elem_type);
+                    }
+                }
+                else if (param_count == 1)
+                {
+                    analyzerAnalyzeExpr(a, params[0], constructed_type->vector.elem_type);
+                }
+                else
+                {
+                    addErr(compiler, &expr->loc, "invalid parameter count for constructor");
+                    break;
+                }
+            }
+            else if (param_count == 1)
             {
                 analyzerAnalyzeExpr(a, params[0], NULL);
                 if (!params[0]->type) break;
@@ -3012,13 +3038,14 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
             }
             else
             {
-                addErr(compiler, &expr->loc, "cannot construct values of this type");
+                addErr(compiler, &expr->loc, "invalid constructor");
                 break;
             }
         }
         else if (func_type->kind == TYPE_FUNC)
         {
             // Actual function call
+
             if (func_type->func.param_count != arrLength(expr->func_call.params))
             {
                 addErr(compiler, &expr->loc, "wrong amount of parameters for function call");
@@ -3777,6 +3804,23 @@ irBuildAccessChain(IRModule *m, Type *type, IRInst *base, IRInst **indices, uint
     return inst;
 }
 
+static IRInst *
+irBuildCompositeConstruct(IRModule *m, Type *type, IRInst **fields, uint32_t field_count)
+{
+    IRInst *inst = NEW(m->compiler, IRInst);
+    inst->kind = IR_INST_COMPOSITE_CONSTRUCT;
+
+    inst->type = type;
+
+    inst->composite_construct.fields = fields;
+    inst->composite_construct.field_count = field_count;
+
+    IRInst *block = irGetCurrentBlock(m);
+    arrPush(block->block.insts, inst);
+
+    return inst;
+}
+
 static IRInst *irBuildFuncCall(IRModule *m, IRInst *function, IRInst **params, uint32_t param_count)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
@@ -4149,6 +4193,27 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             break;
         }
 
+        case IR_INST_COMPOSITE_CONSTRUCT: {
+            inst->id = irModuleReserveId(m);
+
+            uint32_t param_count = 2 + inst->composite_construct.field_count;
+            uint32_t *params = NEW_ARRAY(m->compiler, uint32_t, param_count);
+
+            assert(inst->type->id > 0);
+
+            params[0] = inst->type->id;
+            params[1] = inst->id;
+
+            for (uint32_t i = 0; i < inst->composite_construct.field_count; ++i)
+            {
+                assert(inst->composite_construct.fields[i]->id);
+                params[2 + i] = inst->composite_construct.fields[i]->id;
+            }
+
+            irModuleEncodeInst(m, SpvOpCompositeConstruct, params, param_count);
+            break;
+        }
+
         case IR_INST_FUNC_CALL: {
             inst->id = irModuleReserveId(m);
 
@@ -4345,6 +4410,7 @@ static void irModuleEncodeModule(IRModule *m)
 
 static IRInst *irLoadVal(IRModule *m, IRInst *value)
 {
+    assert(value);
     if (value->kind == IR_INST_VARIABLE || value->kind == IR_INST_ACCESS_CHAIN)
     {
         return irBuildLoad(m, value);
@@ -4446,27 +4512,51 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
             uint32_t param_count = arrLength(expr->func_call.params);
             AstExpr **params = expr->func_call.params;
 
-            switch (constructed_type->kind)
+            if (constructed_type->kind == TYPE_VECTOR)
             {
-            case TYPE_INT:
-            case TYPE_FLOAT: {
-                if (param_count != 1)
+                if (param_count == constructed_type->vector.size)
                 {
-                    addErr(compiler, &expr->loc, "wrong amount of parameters for type constructor");
-                    return;
+                    IRInst **fields = NEW_ARRAY(compiler, IRInst *, constructed_type->vector.size);
+
+                    for (uint32_t i = 0; i < constructed_type->vector.size; ++i)
+                    {
+                        irModuleBuildExpr(m, params[i]);
+                        assert(params[i]->value);
+                        fields[i] = params[i]->value;
+                    }
+
+                    expr->value = irBuildCompositeConstruct(
+                        m, constructed_type, fields, constructed_type->vector.size);
                 }
+                else if (param_count == 1)
+                {
+                    IRInst **fields = NEW_ARRAY(compiler, IRInst *, constructed_type->vector.size);
 
+                    irModuleBuildExpr(m, params[0]);
+                    assert(params[0]->value);
+
+                    for (uint32_t i = 0; i < constructed_type->vector.size; ++i)
+                    {
+                        fields[i] = params[0]->value;
+                    }
+
+                    expr->value = irBuildCompositeConstruct(
+                        m, constructed_type, fields, constructed_type->vector.size);
+                }
+                else
+                {
+                    assert(0);
+                }
+            }
+            else if (param_count == 1)
+            {
                 irModuleBuildExpr(m, params[0]);
-
+                assert(params[0]->value);
                 expr->value = irBuildCast(m, constructed_type, irLoadVal(m, params[0]->value));
-
-                break;
             }
-
-            default: {
-                addErr(compiler, &expr->loc, "cannot construct values of this type");
-                return;
-            }
+            else
+            {
+                assert(0);
             }
         }
         else
@@ -4620,6 +4710,7 @@ static void irModuleBuildDecl(IRModule *m, AstDecl *decl)
         {
             irModuleBuildExpr(m, decl->var.value_expr);
             initializer = decl->var.value_expr->value;
+            assert(initializer);
             initializer = irLoadVal(m, initializer);
             irBuildStore(m, decl->value, initializer);
         }
