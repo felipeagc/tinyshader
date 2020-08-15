@@ -676,6 +676,7 @@ typedef enum IRInstKind {
     IR_INST_FUNC_CALL,
 
     IR_INST_BUILTIN_CALL,
+    IR_INST_CAST,
 } IRInstKind;
 
 typedef enum IRBuiltinInstKind {
@@ -759,6 +760,14 @@ struct IRInst
             IRInst **params;
             uint32_t param_count;
         } builtin_call;
+
+        struct
+        {
+            SpvOp op;
+            Type *dst_type;
+            IRInst *value;
+            bool redundant;
+        } cast;
     };
 };
 
@@ -1471,6 +1480,97 @@ static Type *newSampledImageType(Module *m, Type *image_type)
     ty->kind = TYPE_SAMPLED_IMAGE;
     ty->sampled_image.image_type = image_type;
     return getCachedType(m, ty);
+}
+
+static bool isTypeCastable(Type *src_type, Type *dst_type, SpvOp *op)
+{
+    if (src_type == dst_type)
+    {
+        *op = SpvOpNop;
+        return true;
+    }
+    else if (src_type->kind == TYPE_INT)
+    {
+        if (src_type->int_.is_signed)
+        {
+            if (dst_type->kind == TYPE_INT)
+            {
+                if (dst_type->int_.is_signed)
+                {
+                    *op = SpvOpSConvert;
+                    return true;
+                }
+                else
+                {
+                    return false;
+                }
+            }
+            else if (dst_type->kind == TYPE_FLOAT)
+            {
+                *op = SpvOpConvertSToF;
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+        else
+        {
+            if (dst_type->kind == TYPE_INT)
+            {
+                if (dst_type->int_.is_signed)
+                {
+                    return false;
+                }
+                else
+                {
+                    *op = SpvOpUConvert;
+                    return true;
+                }
+            }
+            else if (dst_type->kind == TYPE_FLOAT)
+            {
+                *op = SpvOpConvertUToF;
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+    }
+    else if (src_type->kind == TYPE_FLOAT)
+    {
+        if (dst_type->kind == TYPE_INT)
+        {
+            if (dst_type->int_.is_signed)
+            {
+                *op = SpvOpConvertFToS;
+                return true;
+            }
+            else
+            {
+                *op = SpvOpConvertFToU;
+                return true;
+            }
+        }
+        else if (dst_type->kind == TYPE_FLOAT)
+        {
+            *op = SpvOpFConvert;
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+    else
+    {
+        return false;
+    }
+
+    assert(0);
 }
 // }}}
 
@@ -2881,28 +2981,65 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
     case EXPR_FUNC_CALL: {
         analyzerAnalyzeExpr(a, expr->func_call.func_expr, NULL);
         Type *func_type = expr->func_call.func_expr->type;
-        if (!func_type || func_type->kind != TYPE_FUNC)
+        if (!func_type)
+        {
+            break;
+        }
+
+        if (func_type->kind == TYPE_TYPE)
+        {
+            // Type constructor
+
+            Type *constructed_type = expr->func_call.func_expr->as_type;
+            assert(constructed_type);
+
+            expr->type = constructed_type;
+
+            uint32_t param_count = arrLength(expr->func_call.params);
+            AstExpr **params = expr->func_call.params;
+
+            if (param_count == 1)
+            {
+                analyzerAnalyzeExpr(a, params[0], NULL);
+                if (!params[0]->type) break;
+
+                SpvOp op;
+                if (!isTypeCastable(params[0]->type, constructed_type, &op))
+                {
+                    addErr(compiler, &params[0]->loc, "value is not castable to this type");
+                    break;
+                }
+            }
+            else
+            {
+                addErr(compiler, &expr->loc, "cannot construct values of this type");
+                break;
+            }
+        }
+        else if (func_type->kind == TYPE_FUNC)
+        {
+            // Actual function call
+            if (func_type->func.param_count != arrLength(expr->func_call.params))
+            {
+                addErr(compiler, &expr->loc, "wrong amount of parameters for function call");
+                break;
+            }
+
+            for (uint32_t i = 0; i < func_type->func.param_count; ++i)
+            {
+                AstExpr *param = expr->func_call.params[i];
+                analyzerAnalyzeExpr(a, param, func_type->func.params[i]);
+            }
+
+            expr->type = func_type->func.return_type;
+        }
+        else
         {
             addErr(
                 compiler,
                 &expr->func_call.func_expr->loc,
                 "expression does not represent a function");
-            break;
         }
-
-        if (func_type->func.param_count != arrLength(expr->func_call.params))
-        {
-            addErr(compiler, &expr->loc, "wrong amount of parameters for function call");
-            break;
-        }
-
-        for (uint32_t i = 0; i < func_type->func.param_count; ++i)
-        {
-            AstExpr *param = expr->func_call.params[i];
-            analyzerAnalyzeExpr(a, param, func_type->func.params[i]);
-        }
-
-        expr->type = func_type->func.return_type;
 
         break;
     }
@@ -3204,7 +3341,6 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
             analyzerAnalyzeStmt(a, stmt);
         }
         analyzerPopScope(a, decl->scope);
-
 
         break;
     }
@@ -3694,6 +3830,32 @@ irBuildBuiltinCall(IRModule *m, IRBuiltinInstKind kind, IRInst **params, uint32_
     return inst;
 }
 
+static IRInst *irBuildCast(IRModule *m, Type *dst_type, IRInst *value)
+{
+    IRInst *inst = NEW(m->compiler, IRInst);
+    inst->kind = IR_INST_CAST;
+    inst->type = dst_type;
+
+    Type *src_type = value->type;
+    assert(src_type);
+
+    bool castable = isTypeCastable(src_type, dst_type, &inst->cast.op);
+    assert(castable);
+
+    if (inst->cast.op == SpvOpNop)
+    {
+        inst->cast.redundant = true;
+    }
+
+    inst->cast.dst_type = dst_type;
+    inst->cast.value = value;
+
+    IRInst *block = irGetCurrentBlock(m);
+    arrPush(block->block.insts, inst);
+
+    return inst;
+}
+
 static void irBuildReturn(IRModule *m, IRInst *value)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
@@ -4032,6 +4194,22 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             break;
         }
 
+        case IR_INST_CAST: {
+            if (inst->cast.redundant)
+            {
+                inst->id = inst->cast.value->id;
+                break;
+            }
+
+            inst->id = irModuleReserveId(m);
+            assert(inst->cast.op != SpvOpNop);
+
+            uint32_t params[3] = {inst->type->id, inst->id, inst->cast.value->id};
+            irModuleEncodeInst(m, inst->cast.op, params, 3);
+
+            break;
+        }
+
         case IR_INST_FUNC_PARAM:
         case IR_INST_CONSTANT:
         case IR_INST_FUNCTION:
@@ -4257,22 +4435,61 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
     }
 
     case EXPR_FUNC_CALL: {
-        irModuleBuildExpr(m, expr->func_call.func_expr);
-        IRInst *func_val = expr->func_call.func_expr->value;
-        assert(func_val);
+        Type *func_type = expr->func_call.func_expr->type;
+        assert(func_type);
 
-        uint32_t param_count = arrLength(expr->func_call.params);
-        IRInst **param_values = NEW_ARRAY(compiler, IRInst *, param_count);
-
-        for (uint32_t i = 0; i < param_count; ++i)
+        if (func_type->kind == TYPE_TYPE)
         {
-            AstExpr *param = expr->func_call.params[i];
-            irModuleBuildExpr(m, param);
-            assert(param->value);
-            param_values[i] = irLoadVal(m, param->value);
-        }
+            Type *constructed_type = expr->func_call.func_expr->as_type;
+            assert(constructed_type);
 
-        expr->value = irBuildFuncCall(m, func_val, param_values, param_count);
+            uint32_t param_count = arrLength(expr->func_call.params);
+            AstExpr **params = expr->func_call.params;
+
+            switch (constructed_type->kind)
+            {
+            case TYPE_INT:
+            case TYPE_FLOAT: {
+                if (param_count != 1)
+                {
+                    addErr(compiler, &expr->loc, "wrong amount of parameters for type constructor");
+                    return;
+                }
+
+                irModuleBuildExpr(m, params[0]);
+
+                expr->value = irBuildCast(m, constructed_type, irLoadVal(m, params[0]->value));
+
+                break;
+            }
+
+            default: {
+                addErr(compiler, &expr->loc, "cannot construct values of this type");
+                return;
+            }
+            }
+        }
+        else
+        {
+            assert(func_type->kind == TYPE_FUNC);
+
+            irModuleBuildExpr(m, expr->func_call.func_expr);
+            IRInst *func_val = expr->func_call.func_expr->value;
+            assert(func_val);
+
+            uint32_t param_count = arrLength(expr->func_call.params);
+            IRInst **param_values = NEW_ARRAY(compiler, IRInst *, param_count);
+
+            for (uint32_t i = 0; i < param_count; ++i)
+            {
+                AstExpr *param = expr->func_call.params[i];
+                irModuleBuildExpr(m, param);
+                assert(param->value);
+                param_values[i] = irLoadVal(m, param->value);
+            }
+
+            expr->value = irBuildFuncCall(m, func_val, param_values, param_count);
+        }
 
         break;
     }
