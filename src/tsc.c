@@ -495,6 +495,7 @@ typedef enum TokenKind {
     TOKEN_OR,  // ||
 
     TOKEN_IDENT,
+    TOKEN_DOT,
     TOKEN_IN,
     TOKEN_OUT,
     TOKEN_IMPORT,
@@ -673,7 +674,13 @@ typedef enum IRInstKind {
     IR_INST_LOAD,
     IR_INST_ACCESS_CHAIN,
     IR_INST_FUNC_CALL,
+
+    IR_INST_BUILTIN_CALL,
 } IRInstKind;
+
+typedef enum IRBuiltinInstKind {
+    IR_BUILTIN_DOT,
+} IRBuiltinInstKind;
 
 struct IRInst
 {
@@ -734,12 +741,19 @@ struct IRInst
             uint32_t index_count;
         } access_chain;
 
-        struct 
+        struct
         {
             IRInst *func;
             IRInst **params;
             uint32_t param_count;
         } func_call;
+
+        struct
+        {
+            IRBuiltinInstKind kind;
+            IRInst **params;
+            uint32_t param_count;
+        } builtin_call;
     };
 };
 
@@ -800,6 +814,7 @@ typedef enum AstExprKind {
     EXPR_TEXTURE_TYPE,
     EXPR_SAMPLED_TEXTURE_TYPE,
     EXPR_FUNC_CALL,
+    EXPR_BUILTIN_CALL,
 } AstExprKind;
 
 struct AstStmt
@@ -919,6 +934,12 @@ struct AstExpr
             AstExpr *func_expr;
             /*array*/ AstExpr **params;
         } func_call;
+
+        struct
+        {
+            IRBuiltinInstKind kind;
+            /*array*/ AstExpr **params;
+        } builtin_call;
 
         struct
         {
@@ -1049,6 +1070,7 @@ TscCompiler *tscCompilerCreate()
     hashSet(&compiler->keyword_table, "struct", (void *)TOKEN_STRUCT);
     hashSet(&compiler->keyword_table, "in", (void *)TOKEN_IN);
     hashSet(&compiler->keyword_table, "out", (void *)TOKEN_OUT);
+    hashSet(&compiler->keyword_table, "dot", (void *)TOKEN_DOT);
     hashSet(&compiler->keyword_table, "ConstantBuffer", (void *)TOKEN_CONSTANT_BUFFER);
     hashSet(&compiler->keyword_table, "SamplerState", (void *)TOKEN_SAMPLER_STATE);
     hashSet(&compiler->keyword_table, "Texture1D", (void *)TOKEN_TEXTURE_1D);
@@ -2046,42 +2068,85 @@ static AstExpr *parseAccess(Parser *p)
     return expr;
 }
 
+static AstExpr *parseBuiltinFunctionCall(Parser *p, TokenKind builtin_token)
+{
+    Location loc = parserBeginLoc(p);
+
+    AstExpr *expr = NEW(p->compiler, AstExpr);
+    expr->kind = EXPR_BUILTIN_CALL;
+
+    if (!parserConsume(p, builtin_token)) return NULL;
+
+    if (!parserConsume(p, TOKEN_LPAREN)) return NULL;
+
+    while (!parserIsAtEnd(p) && parserPeek(p, 0)->kind != TOKEN_RPAREN)
+    {
+        AstExpr *param = parseExpr(p);
+        if (!param) return NULL;
+        arrPush(expr->builtin_call.params, param);
+
+        if (parserPeek(p, 0)->kind != TOKEN_RPAREN)
+        {
+            if (!parserConsume(p, TOKEN_COMMA)) return NULL;
+        }
+    }
+
+    if (!parserConsume(p, TOKEN_RPAREN)) return NULL;
+
+    parserEndLoc(p, &loc);
+    expr->loc = loc;
+
+    return expr;
+}
+
 static AstExpr *parseFuncCall(Parser *p)
 {
     Location loc = parserBeginLoc(p);
 
-    AstExpr *expr = parseAccess(p);
-    if (!expr) return NULL;
-
-    while (!parserIsAtEnd(p) && parserPeek(p, 0)->kind == TOKEN_LPAREN)
+    switch (parserPeek(p, 0)->kind)
     {
-        parserNext(p, 1);
-
-        AstExpr *func_call = NEW(p->compiler, AstExpr);
-        func_call->kind = EXPR_FUNC_CALL;
-        func_call->func_call.func_expr = expr;
-
-        while (!parserIsAtEnd(p) && parserPeek(p, 0)->kind != TOKEN_RPAREN)
-        {
-            AstExpr *param = parseExpr(p);
-            if (!param) return NULL;
-            arrPush(func_call->func_call.params, param);
-
-            if (parserPeek(p, 0)->kind != TOKEN_RPAREN)
-            {
-                if (!parserConsume(p, TOKEN_COMMA)) return NULL;
-            }
-        }
-
-        if (!parserConsume(p, TOKEN_RPAREN)) return NULL;
-
-        parserEndLoc(p, &loc);
-        func_call->loc = loc;
-
-        expr = func_call;
+    case TOKEN_DOT: {
+        return parseBuiltinFunctionCall(p, parserPeek(p, 0)->kind);
     }
 
-    return expr;
+    default: {
+        AstExpr *expr = parseAccess(p);
+        if (!expr) return NULL;
+
+        while (!parserIsAtEnd(p) && parserPeek(p, 0)->kind == TOKEN_LPAREN)
+        {
+            parserNext(p, 1);
+
+            AstExpr *func_call = NEW(p->compiler, AstExpr);
+            func_call->kind = EXPR_FUNC_CALL;
+            func_call->func_call.func_expr = expr;
+
+            while (!parserIsAtEnd(p) && parserPeek(p, 0)->kind != TOKEN_RPAREN)
+            {
+                AstExpr *param = parseExpr(p);
+                if (!param) return NULL;
+                arrPush(func_call->func_call.params, param);
+
+                if (parserPeek(p, 0)->kind != TOKEN_RPAREN)
+                {
+                    if (!parserConsume(p, TOKEN_COMMA)) return NULL;
+                }
+            }
+
+            if (!parserConsume(p, TOKEN_RPAREN)) return NULL;
+
+            parserEndLoc(p, &loc);
+            func_call->loc = loc;
+
+            expr = func_call;
+        }
+
+        return expr;
+    }
+    }
+
+    assert(0);
+    return NULL;
 }
 
 static AstExpr *parseUnaryExpr(Parser *p)
@@ -2788,7 +2853,10 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
         Type *func_type = expr->func_call.func_expr->type;
         if (!func_type || func_type->kind != TYPE_FUNC)
         {
-            addErr(compiler, &expr->func_call.func_expr->loc, "expression does not represent a function");
+            addErr(
+                compiler,
+                &expr->func_call.func_expr->loc,
+                "expression does not represent a function");
             break;
         }
 
@@ -2805,6 +2873,57 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
         }
 
         expr->type = func_type->func.return_type;
+
+        break;
+    }
+
+    case EXPR_BUILTIN_CALL: {
+        uint32_t param_count = arrLength(expr->builtin_call.params);
+        AstExpr **params = expr->builtin_call.params;
+
+        bool got_param_types = true;
+
+        for (uint32_t i = 0; i < param_count; ++i)
+        {
+            AstExpr *param = params[i];
+            analyzerAnalyzeExpr(a, param, NULL);
+            if (!param->type)
+            {
+                got_param_types = false;
+                continue;
+            }
+        }
+
+        if (!got_param_types) break;
+
+        switch (expr->builtin_call.kind)
+        {
+        case IR_BUILTIN_DOT: {
+            if (param_count != 2)
+            {
+                addErr(compiler, &expr->loc, "dot needs 2 parameters");
+                break;
+            }
+
+            AstExpr *a = params[0];
+            AstExpr *b = params[1];
+
+            if ((a->type->kind != TYPE_VECTOR) || (b->type->kind != TYPE_VECTOR))
+            {
+                addErr(compiler, &expr->loc, "dot operates on vectors");
+                break;
+            }
+
+            if (a->type != b->type)
+            {
+                addErr(compiler, &expr->loc, "dot cannot operate on different types");
+                break;
+            }
+
+            expr->type = a->type->vector.elem_type;
+            break;
+        }
+        }
 
         break;
     }
@@ -2861,6 +2980,10 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
 
     if (expected_type)
     {
+        if (!expr->type)
+        {
+            addErr(compiler, &expr->loc, "could not resolve type for expression");
+        }
         if (expr->type != expected_type)
         {
             addErr(compiler, &expr->loc, "unmatched types");
@@ -3432,6 +3555,11 @@ static IRInst *irBuildLoad(IRModule *m, IRInst *pointer)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_LOAD;
+
+    assert(pointer->type);
+    assert(pointer->type->kind == TYPE_POINTER);
+
+    inst->type = pointer->type->ptr.sub;
     inst->load.pointer = pointer;
 
     IRInst *block = irGetCurrentBlock(m);
@@ -3460,8 +3588,7 @@ irBuildAccessChain(IRModule *m, Type *type, IRInst *base, IRInst **indices, uint
     return inst;
 }
 
-static IRInst *
-irBuildFuncCall(IRModule *m, IRInst *function, IRInst **params, uint32_t param_count)
+static IRInst *irBuildFuncCall(IRModule *m, IRInst *function, IRInst **params, uint32_t param_count)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_FUNC_CALL;
@@ -3472,6 +3599,41 @@ irBuildFuncCall(IRModule *m, IRInst *function, IRInst **params, uint32_t param_c
     inst->func_call.func = function;
     inst->func_call.params = params;
     inst->func_call.param_count = param_count;
+
+    IRInst *block = irGetCurrentBlock(m);
+    arrPush(block->block.insts, inst);
+
+    return inst;
+}
+
+static IRInst *
+irBuildBuiltinCall(IRModule *m, IRBuiltinInstKind kind, IRInst **params, uint32_t param_count)
+{
+    IRInst *inst = NEW(m->compiler, IRInst);
+    inst->kind = IR_INST_BUILTIN_CALL;
+
+    switch (kind)
+    {
+    case IR_BUILTIN_DOT: {
+        assert(param_count == 2);
+        IRInst *a = params[0];
+        IRInst *b = params[1];
+
+        assert(a->type->kind == TYPE_VECTOR);
+        assert(b->type == a->type);
+
+        inst->type = a->type->vector.elem_type;
+        assert(inst->type);
+
+        break;
+    }
+    }
+
+    assert(inst->type);
+
+    inst->builtin_call.kind = kind;
+    inst->builtin_call.params = params;
+    inst->builtin_call.param_count = param_count;
 
     IRInst *block = irGetCurrentBlock(m);
     arrPush(block->block.insts, inst);
@@ -3782,6 +3944,34 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             break;
         }
 
+        case IR_INST_BUILTIN_CALL:
+        {
+            inst->id = irModuleReserveId(m);
+
+            uint32_t param_value_count = inst->builtin_call.param_count;
+            IRInst **param_values = inst->builtin_call.params;
+
+            for (uint32_t i = 0; i < param_value_count; ++i)
+            {
+                assert(param_values[i]);
+                assert(param_values[i]->id);
+            }
+
+            switch (inst->builtin_call.kind)
+            {
+            case IR_BUILTIN_DOT:
+            {
+                IRInst *a = param_values[0];
+                IRInst *b = param_values[1];
+                uint32_t params[4] = {inst->type->id, inst->id, a->id, b->id};
+                irModuleEncodeInst(m, SpvOpDot, params, 4);
+                break;
+            }
+            }
+
+            break;
+        }
+
         case IR_INST_FUNC_PARAM:
         case IR_INST_CONSTANT:
         case IR_INST_FUNCTION:
@@ -4012,17 +4202,34 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
         assert(func_val);
 
         uint32_t param_count = arrLength(expr->func_call.params);
-        IRInst **param_values = NEW_ARRAY(compiler, IRInst*, param_count);
+        IRInst **param_values = NEW_ARRAY(compiler, IRInst *, param_count);
 
         for (uint32_t i = 0; i < param_count; ++i)
         {
             AstExpr *param = expr->func_call.params[i];
             irModuleBuildExpr(m, param);
             assert(param->value);
-            param_values[i] = param->value;
+            param_values[i] = irLoadVal(m, param->value);
         }
 
         irBuildFuncCall(m, func_val, param_values, param_count);
+
+        break;
+    }
+
+    case EXPR_BUILTIN_CALL: {
+        uint32_t param_count = arrLength(expr->builtin_call.params);
+        IRInst **param_values = NEW_ARRAY(compiler, IRInst *, param_count);
+
+        for (uint32_t i = 0; i < param_count; ++i)
+        {
+            AstExpr *param = expr->builtin_call.params[i];
+            irModuleBuildExpr(m, param);
+            assert(param->value);
+            param_values[i] = irLoadVal(m, param->value);
+        }
+
+        expr->value = irBuildBuiltinCall(m, expr->builtin_call.kind, param_values, param_count);
 
         break;
     }
