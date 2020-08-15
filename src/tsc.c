@@ -1,11 +1,11 @@
 #include "tsc.h"
 
 #include "spirv.h"
+#include <assert.h>
+#include <stdarg.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
-#include <stdio.h>
-#include <stdarg.h>
 
 // Basics {{{
 
@@ -37,7 +37,7 @@ static inline bool isAlphanum(char c)
 #define arrAdd(a, n) (arr__sbmaybegrow(a, n), arr__sbn(a) += (n), &(a)[arr__sbn(a) - (n)])
 #define arrLast(a) (&((a)[arr__sbn(a) - 1]))
 
-#define arr__sbraw(a) ((int *)(void *)(a)-2)
+#define arr__sbraw(a) ((uint32_t *)(void *)(a)-2)
 #define arr__sbm(a) arr__sbraw(a)[0]
 #define arr__sbn(a) arr__sbraw(a)[1]
 
@@ -45,12 +45,13 @@ static inline bool isAlphanum(char c)
 #define arr__sbmaybegrow(a, n) (arr__sbneedgrow(a, (n)) ? arr__sbgrow(a, n) : 0)
 #define arr__sbgrow(a, n) (*((void **)&(a)) = arr__sbgrowf((a), (n), sizeof(*(a))))
 
-static void *arr__sbgrowf(void *arr, int increment, int itemsize)
+static void *arr__sbgrowf(void *arr, uint32_t increment, uint32_t itemsize)
 {
-    int dbl_cur = arr ? 2 * arr__sbm(arr) : 0;
-    int min_needed = arrLength(arr) + increment;
-    int m = dbl_cur > min_needed ? dbl_cur : min_needed;
-    int *p = (int *)realloc(arr ? arr__sbraw(arr) : 0, itemsize * m + sizeof(int) * 2);
+    uint32_t dbl_cur = arr ? 2 * arr__sbm(arr) : 0;
+    uint32_t min_needed = arrLength(arr) + increment;
+    uint32_t m = dbl_cur > min_needed ? dbl_cur : min_needed;
+    uint32_t *p =
+        (uint32_t *)realloc(arr ? arr__sbraw(arr) : 0, itemsize * m + sizeof(uint32_t) * 2);
     if (p)
     {
         if (!arr) p[1] = 0;
@@ -59,7 +60,7 @@ static void *arr__sbgrowf(void *arr, int increment, int itemsize)
     }
     else
     {
-        return (void *)(2 * sizeof(int)); // try to force a NULL pointer exception later
+        return (void *)(2 * sizeof(uint32_t)); // try to force a NULL pointer exception later
     }
 }
 
@@ -671,6 +672,7 @@ typedef enum IRInstKind {
     IR_INST_STORE,
     IR_INST_LOAD,
     IR_INST_ACCESS_CHAIN,
+    IR_INST_FUNC_CALL,
 } IRInstKind;
 
 struct IRInst
@@ -731,6 +733,13 @@ struct IRInst
             IRInst **indices;
             uint32_t index_count;
         } access_chain;
+
+        struct 
+        {
+            IRInst *func;
+            IRInst **params;
+            uint32_t param_count;
+        } func_call;
     };
 };
 
@@ -790,6 +799,7 @@ typedef enum AstExprKind {
     EXPR_SAMPLER_TYPE,
     EXPR_TEXTURE_TYPE,
     EXPR_SAMPLED_TEXTURE_TYPE,
+    EXPR_FUNC_CALL,
 } AstExprKind;
 
 struct AstStmt
@@ -903,6 +913,12 @@ struct AstExpr
             AstExpr *base;
             /*array*/ AstExpr **chain;
         } access;
+
+        struct
+        {
+            AstExpr *func_expr;
+            /*array*/ AstExpr **params;
+        } func_call;
 
         struct
         {
@@ -1874,6 +1890,8 @@ static void lexerLex(Lexer *l, TscCompiler *compiler, File *file)
 // }}}
 
 // Parser functions {{{
+static AstExpr *parseExpr(Parser *p);
+
 static inline bool parserIsAtEnd(Parser *p)
 {
     return p->pos >= arrLength(p->file->tokens);
@@ -2028,9 +2046,52 @@ static AstExpr *parseAccess(Parser *p)
     return expr;
 }
 
+static AstExpr *parseFuncCall(Parser *p)
+{
+    Location loc = parserBeginLoc(p);
+
+    AstExpr *expr = parseAccess(p);
+    if (!expr) return NULL;
+
+    while (!parserIsAtEnd(p) && parserPeek(p, 0)->kind == TOKEN_LPAREN)
+    {
+        parserNext(p, 1);
+
+        AstExpr *func_call = NEW(p->compiler, AstExpr);
+        func_call->kind = EXPR_FUNC_CALL;
+        func_call->func_call.func_expr = expr;
+
+        while (!parserIsAtEnd(p) && parserPeek(p, 0)->kind != TOKEN_RPAREN)
+        {
+            AstExpr *param = parseExpr(p);
+            if (!param) return NULL;
+            arrPush(func_call->func_call.params, param);
+
+            if (parserPeek(p, 0)->kind != TOKEN_RPAREN)
+            {
+                if (!parserConsume(p, TOKEN_COMMA)) return NULL;
+            }
+        }
+
+        if (!parserConsume(p, TOKEN_RPAREN)) return NULL;
+
+        parserEndLoc(p, &loc);
+        func_call->loc = loc;
+
+        expr = func_call;
+    }
+
+    return expr;
+}
+
+static AstExpr *parseUnaryExpr(Parser *p)
+{
+    return parseFuncCall(p);
+}
+
 static AstExpr *parseExpr(Parser *p)
 {
-    return parseAccess(p);
+    return parseUnaryExpr(p);
 }
 
 static AstStmt *parseStmt(Parser *p)
@@ -2188,7 +2249,7 @@ static AstDecl *parseTopLevel(Parser *p)
         decl->kind = DECL_CONST;
         decl->attributes = attributes;
 
-        AstExpr *type_expr = parseExpr(p);
+        AstExpr *type_expr = parseUnaryExpr(p);
         if (!type_expr) return NULL;
 
         Token *name_tok = parserConsume(p, TOKEN_IDENT);
@@ -2222,7 +2283,7 @@ static AstDecl *parseTopLevel(Parser *p)
 
         while (parserPeek(p, 0)->kind != TOKEN_RCURLY)
         {
-            AstExpr *type_expr = parseExpr(p);
+            AstExpr *type_expr = parseUnaryExpr(p);
             if (!type_expr) return NULL;
 
             Token *name_tok = parserConsume(p, TOKEN_IDENT);
@@ -2267,7 +2328,7 @@ static AstDecl *parseTopLevel(Parser *p)
 
             if (!parserConsume(p, TOKEN_LESS)) return NULL;
 
-            type_expr = parseExpr(p);
+            type_expr = parseUnaryExpr(p);
             if (!type_expr) return NULL;
 
             if (!parserConsume(p, TOKEN_GREATER)) return NULL;
@@ -2330,7 +2391,7 @@ static AstDecl *parseTopLevel(Parser *p)
 
             if (!parserConsume(p, TOKEN_LESS)) return NULL;
 
-            type_expr->texture.sampled_type_expr = parseExpr(p);
+            type_expr->texture.sampled_type_expr = parseUnaryExpr(p);
             if (!type_expr->texture.sampled_type_expr) return NULL;
 
             if (!parserConsume(p, TOKEN_GREATER)) return NULL;
@@ -2370,7 +2431,7 @@ static AstDecl *parseTopLevel(Parser *p)
     }
 
     default: {
-        AstExpr *type_expr = parseExpr(p);
+        AstExpr *type_expr = parseUnaryExpr(p);
         if (!type_expr) return NULL;
 
         Token *name_tok = parserConsume(p, TOKEN_IDENT);
@@ -2378,6 +2439,8 @@ static AstDecl *parseTopLevel(Parser *p)
 
         if (parserPeek(p, 0)->kind == TOKEN_LPAREN)
         {
+            // Function declaration
+
             AstDecl *decl = NEW(compiler, AstDecl);
             decl->kind = DECL_FUNC;
             decl->name = name_tok->str;
@@ -2404,7 +2467,7 @@ static AstDecl *parseTopLevel(Parser *p)
                     var_kind = VAR_OUTPUT;
                 }
 
-                AstExpr *type_expr = parseExpr(p);
+                AstExpr *type_expr = parseUnaryExpr(p);
                 if (!type_expr) return NULL;
 
                 Token *param_name_tok = parserConsume(p, TOKEN_IDENT);
@@ -2716,6 +2779,32 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
         }
 
         expr->assignable = expr->access.base->assignable;
+
+        break;
+    }
+
+    case EXPR_FUNC_CALL: {
+        analyzerAnalyzeExpr(a, expr->func_call.func_expr, NULL);
+        Type *func_type = expr->func_call.func_expr->type;
+        if (!func_type || func_type->kind != TYPE_FUNC)
+        {
+            addErr(compiler, &expr->func_call.func_expr->loc, "expression does not represent a function");
+            break;
+        }
+
+        if (func_type->func.param_count != arrLength(expr->func_call.params))
+        {
+            addErr(compiler, &expr->loc, "wrong amount of parameters for function call");
+            break;
+        }
+
+        for (uint32_t i = 0; i < func_type->func.param_count; ++i)
+        {
+            AstExpr *param = expr->func_call.params[i];
+            analyzerAnalyzeExpr(a, param, func_type->func.params[i]);
+        }
+
+        expr->type = func_type->func.return_type;
 
         break;
     }
@@ -3371,6 +3460,25 @@ irBuildAccessChain(IRModule *m, Type *type, IRInst *base, IRInst **indices, uint
     return inst;
 }
 
+static IRInst *
+irBuildFuncCall(IRModule *m, IRInst *function, IRInst **params, uint32_t param_count)
+{
+    IRInst *inst = NEW(m->compiler, IRInst);
+    inst->kind = IR_INST_FUNC_CALL;
+
+    inst->type = function->type->func.return_type;
+    assert(inst->type);
+
+    inst->func_call.func = function;
+    inst->func_call.params = params;
+    inst->func_call.param_count = param_count;
+
+    IRInst *block = irGetCurrentBlock(m);
+    arrPush(block->block.insts, inst);
+
+    return inst;
+}
+
 static void irBuildReturn(IRModule *m)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
@@ -3655,6 +3763,25 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             break;
         }
 
+        case IR_INST_FUNC_CALL: {
+            inst->id = irModuleReserveId(m);
+
+            uint32_t param_count = 3 + inst->func_call.param_count;
+            uint32_t *params = NEW_ARRAY(m->compiler, uint32_t, param_count);
+
+            params[0] = inst->type->id;
+            params[1] = inst->id;
+            params[2] = inst->func_call.func->id;
+            for (uint32_t i = 0; i < inst->func_call.param_count; ++i)
+            {
+                assert(inst->func_call.params[i]->id);
+                params[3 + i] = inst->func_call.params[i]->id;
+            }
+
+            irModuleEncodeInst(m, SpvOpFunctionCall, params, param_count);
+            break;
+        }
+
         case IR_INST_FUNC_PARAM:
         case IR_INST_CONSTANT:
         case IR_INST_FUNCTION:
@@ -3875,6 +4002,27 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
         {
             assert(0);
         }
+
+        break;
+    }
+
+    case EXPR_FUNC_CALL: {
+        irModuleBuildExpr(m, expr->func_call.func_expr);
+        IRInst *func_val = expr->func_call.func_expr->value;
+        assert(func_val);
+
+        uint32_t param_count = arrLength(expr->func_call.params);
+        IRInst **param_values = NEW_ARRAY(compiler, IRInst*, param_count);
+
+        for (uint32_t i = 0; i < param_count; ++i)
+        {
+            AstExpr *param = expr->func_call.params[i];
+            irModuleBuildExpr(m, param);
+            assert(param->value);
+            param_values[i] = param->value;
+        }
+
+        irBuildFuncCall(m, func_val, param_values, param_count);
 
         break;
     }
@@ -4138,7 +4286,7 @@ void tscCompile(TscCompiler *compiler, TscCompilerInput *input, TscCompilerOutpu
     moduleDestroy(module);
 }
 
-void tscCompilerOutputDestroy(TscCompiler *compiler, TscCompilerOutput *output)
+void tscCompilerOutputDestroy(TscCompilerOutput *output)
 {
     if (output->spirv) free(output->spirv);
     if (output->errors)

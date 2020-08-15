@@ -67,7 +67,7 @@ int main(int argc, char *argv[])
 
     fclose(f);
 
-    tscCompilerOutputDestroy(compiler, &output);
+    tscCompilerOutputDestroy(&output);
 
     tscCompilerDestroy(compiler);
 

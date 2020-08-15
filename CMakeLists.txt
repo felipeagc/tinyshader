@@ -8,6 +8,8 @@ add_library(
 	src/tsc.h
 	src/spirv.h)
 
+target_compile_options(tsc PRIVATE -Wall -Wextra -Wno-unused-function)
+
 add_executable(tscc src/tscc.c)
 
 target_link_libraries(tscc PRIVATE tsc)

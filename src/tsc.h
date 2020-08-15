@@ -31,7 +31,7 @@ void tscCompilerDestroy(TscCompiler *compiler);
 void tscCompile(TscCompiler *compiler, TscCompilerInput *input,
                 TscCompilerOutput *output);
 
-void tscCompilerOutputDestroy(TscCompiler *compiler, TscCompilerOutput *output);
+void tscCompilerOutputDestroy(TscCompilerOutput *output);
 
 #ifdef __cplusplus
 }
