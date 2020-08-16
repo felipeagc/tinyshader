@@ -1654,6 +1654,7 @@ static Type *getScalarType(Type *type)
 {
     switch (type->kind)
     {
+    case TYPE_BOOL:
     case TYPE_FLOAT:
     case TYPE_INT: {
         return type;
@@ -3461,11 +3462,14 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
             analyzerAnalyzeExpr(a, expr->unary.right, NULL);
             if (!expr->unary.right->type) break;
             Type *right_type = expr->unary.right->type;
+            Type *scalar_type = getScalarType(right_type);
 
-            if (right_type->kind != TYPE_INT && right_type->kind != TYPE_FLOAT &&
-                right_type->kind != TYPE_VECTOR)
+            if (!scalar_type || (scalar_type->kind != TYPE_INT && scalar_type->kind != TYPE_FLOAT))
             {
-                addErr(compiler, &expr->unary.right->loc, "cannot negate expressions of this type");
+                addErr(
+                    compiler,
+                    &expr->unary.right->loc,
+                    "\'negation\' expression does not work on this type");
                 break;
             }
 
@@ -3475,6 +3479,22 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
         }
 
         case UNOP_NOT: {
+            analyzerAnalyzeExpr(a, expr->unary.right, NULL);
+            if (!expr->unary.right->type) break;
+            Type *right_type = expr->unary.right->type;
+            Type *scalar_type = getScalarType(right_type);
+
+            if (!scalar_type || (scalar_type->kind != TYPE_INT && scalar_type->kind != TYPE_BOOL))
+            {
+                addErr(
+                    compiler,
+                    &expr->unary.right->loc,
+                    "\'not\' expression does not work on this type");
+                break;
+            }
+
+            expr->type = right_type;
+
             break;
         }
         }
@@ -4346,7 +4366,8 @@ static void irModuleEncodeTypes(IRModule *m)
         }
 
         case TYPE_BOOL: {
-            irModuleEncodeInst(m, SpvOpTypeBool, &type->id, 1);
+            uint32_t params[3] = {type->id, 32, false};
+            irModuleEncodeInst(m, SpvOpTypeInt, params, 3);
             break;
         }
 
