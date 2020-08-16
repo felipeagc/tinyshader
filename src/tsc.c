@@ -678,6 +678,8 @@ typedef enum IRInstKind {
     IR_INST_BUILTIN_CALL,
     IR_INST_CAST,
     IR_INST_COMPOSITE_CONSTRUCT,
+    IR_INST_COMPOSITE_EXTRACT,
+    IR_INST_VECTOR_SHUFFLE,
 } IRInstKind;
 
 typedef enum IRBuiltinInstKind {
@@ -775,6 +777,21 @@ struct IRInst
             IRInst **fields;
             uint32_t field_count;
         } composite_construct;
+
+        struct
+        {
+            IRInst *value;
+            uint32_t *indices;
+            uint32_t index_count;
+        } composite_extract;
+
+        struct
+        {
+            IRInst *vector_a;
+            IRInst *vector_b;
+            uint32_t *indices;
+            uint32_t index_count;
+        } vector_shuffle;
     };
 };
 
@@ -946,6 +963,8 @@ struct AstExpr
         {
             char *name;
 
+            uint32_t *shuffle_indices;
+            uint32_t shuffle_index_count;
             AstDecl *decl; // The declaration this identifier refers to
         } ident;
 
@@ -2959,15 +2978,81 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
         {
             AstExpr *right = expr->access.chain[i];
 
-            if (!left->scope || !left->type || (left->type->kind != TYPE_STRUCT))
+            if (!left->type)
+            {
+                assert(arrLength(compiler->errors) > 0);
+                break;
+            }
+
+            if (left->type->kind == TYPE_STRUCT)
+            {
+                assert(left->scope);
+
+                analyzerPushScope(a, left->scope);
+                analyzerAnalyzeExpr(a, right, NULL);
+                analyzerPopScope(a, left->scope);
+            }
+            else if (left->type->kind == TYPE_VECTOR)
+            {
+                assert(right->kind == EXPR_IDENT);
+
+                char *selector = right->ident.name;
+                uint32_t new_vec_dim = strlen(selector);
+                if (new_vec_dim > 4)
+                {
+                    addErr(compiler, &right->loc, "vector shuffle must select at most 4 elements");
+                    break;
+                }
+
+                uint32_t *positions = NEW_ARRAY(compiler, uint32_t, new_vec_dim);
+
+                for (uint32_t j = 0; j < new_vec_dim; ++j)
+                {
+                    bool valid = true;
+                    switch (selector[j])
+                    {
+                    case 'r':
+                    case 'x': positions[j] = 0; break;
+                    case 'g':
+                    case 'y': positions[j] = 1; break;
+                    case 'b':
+                    case 'z': positions[j] = 2; break;
+                    case 'a':
+                    case 'w': positions[j] = 3; break;
+
+                    default:
+                        addErr(compiler, &right->loc, "invalid vector shuffle");
+                        valid = false;
+                        break;
+                    }
+
+                    if (positions[j] >= left->type->vector.size)
+                    {
+                        addErr(compiler, &right->loc, "invalid vector shuffle");
+                        break;
+                        valid = false;
+                    }
+
+                    if (!valid) break;
+                }
+
+                right->ident.shuffle_indices = positions;
+                right->ident.shuffle_index_count = new_vec_dim;
+
+                if (new_vec_dim == 1)
+                {
+                    right->type = left->type->vector.elem_type;
+                }
+                else
+                {
+                    right->type = newVectorType(m, left->type->vector.elem_type, new_vec_dim);
+                }
+            }
+            else
             {
                 addErr(compiler, &left->loc, "expression is not accessible");
                 break;
             }
-
-            analyzerPushScope(a, left->scope);
-            analyzerAnalyzeExpr(a, right, NULL);
-            analyzerPopScope(a, left->scope);
 
             if (i == (arrLength(expr->access.chain) - 1))
             {
@@ -3804,6 +3889,61 @@ irBuildAccessChain(IRModule *m, Type *type, IRInst *base, IRInst **indices, uint
     return inst;
 }
 
+static IRInst *irBuildVectorShuffle(
+    IRModule *m, IRInst *vector_a, IRInst *vector_b, uint32_t *indices, uint32_t index_count)
+{
+    IRInst *inst = NEW(m->compiler, IRInst);
+    inst->kind = IR_INST_VECTOR_SHUFFLE;
+
+    assert(vector_a->type->kind == TYPE_VECTOR);
+    assert(vector_b->type->kind == TYPE_VECTOR);
+    assert(vector_a->type->vector.elem_type == vector_b->type->vector.elem_type);
+
+    inst->type = newVectorType(m->mod, vector_a->type->vector.elem_type, index_count);
+
+    inst->vector_shuffle.vector_a = vector_a;
+    inst->vector_shuffle.vector_b = vector_b;
+    inst->vector_shuffle.indices = indices;
+    inst->vector_shuffle.index_count = index_count;
+
+    IRInst *block = irGetCurrentBlock(m);
+    arrPush(block->block.insts, inst);
+
+    return inst;
+}
+
+static IRInst *
+irBuildCompositeExtract(IRModule *m, IRInst *value, uint32_t *indices, uint32_t index_count)
+{
+    IRInst *inst = NEW(m->compiler, IRInst);
+    inst->kind = IR_INST_COMPOSITE_EXTRACT;
+
+    if (value->type->kind == TYPE_VECTOR)
+    {
+        if (index_count == 1)
+        {
+            inst->type = value->type->vector.elem_type;
+        }
+        else
+        {
+            inst->type = newVectorType(m->mod, value->type->vector.elem_type, index_count);
+        }
+    }
+    else
+    {
+        assert(0);
+    }
+
+    inst->composite_extract.value = value;
+    inst->composite_extract.indices = indices;
+    inst->composite_extract.index_count = index_count;
+
+    IRInst *block = irGetCurrentBlock(m);
+    arrPush(block->block.insts, inst);
+
+    return inst;
+}
+
 static IRInst *
 irBuildCompositeConstruct(IRModule *m, Type *type, IRInst **fields, uint32_t field_count)
 {
@@ -4275,6 +4415,49 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             break;
         }
 
+        case IR_INST_COMPOSITE_EXTRACT: {
+            inst->id = irModuleReserveId(m);
+
+            uint32_t param_count = 3 + inst->composite_extract.index_count;
+            uint32_t *params = NEW_ARRAY(m->compiler, uint32_t, param_count);
+
+            assert(inst->type->id > 0);
+
+            params[0] = inst->type->id;
+            params[1] = inst->id;
+            params[2] = inst->composite_extract.value->id;
+
+            for (uint32_t i = 0; i < inst->composite_extract.index_count; ++i)
+            {
+                params[4 + i] = inst->composite_extract.indices[i];
+            }
+
+            irModuleEncodeInst(m, SpvOpCompositeExtract, params, param_count);
+            break;
+        }
+
+        case IR_INST_VECTOR_SHUFFLE: {
+            inst->id = irModuleReserveId(m);
+
+            uint32_t param_count = 4 + inst->vector_shuffle.index_count;
+            uint32_t *params = NEW_ARRAY(m->compiler, uint32_t, param_count);
+
+            assert(inst->type->id > 0);
+
+            params[0] = inst->type->id;
+            params[1] = inst->id;
+            params[2] = inst->vector_shuffle.vector_a->id;
+            params[3] = inst->vector_shuffle.vector_b->id;
+
+            for (uint32_t i = 0; i < inst->vector_shuffle.index_count; ++i)
+            {
+                params[4 + i] = inst->vector_shuffle.indices[i];
+            }
+
+            irModuleEncodeInst(m, SpvOpVectorShuffle, params, param_count);
+            break;
+        }
+
         case IR_INST_FUNC_PARAM:
         case IR_INST_CONSTANT:
         case IR_INST_FUNCTION:
@@ -4408,10 +4591,15 @@ static void irModuleEncodeModule(IRModule *m)
     m->stream[3] = m->id_bound;
 }
 
+static bool isLvalue(IRInst *value)
+{
+    return value->kind == IR_INST_VARIABLE || value->kind == IR_INST_ACCESS_CHAIN;
+}
+
 static IRInst *irLoadVal(IRModule *m, IRInst *value)
 {
     assert(value);
-    if (value->kind == IR_INST_VARIABLE || value->kind == IR_INST_ACCESS_CHAIN)
+    if (isLvalue(value))
     {
         return irBuildLoad(m, value);
     }
@@ -4466,23 +4654,28 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
     }
 
     case EXPR_ACCESS: {
+        Type *index_type = newIntType(m->mod, 32, false);
+
         AstExpr *base = expr->access.base;
         assert(base->type);
 
-        Type *index_type = newIntType(m->mod, 32, true);
+        irModuleBuildExpr(m, base);
+        IRInst *value = base->value;
+        assert(value);
+
+        uint32_t index_count = 0;
+        IRInst **indices = NEW_ARRAY(compiler, IRInst *, arrLength(expr->access.chain));
 
         if (base->type->kind == TYPE_STRUCT)
         {
-            irModuleBuildExpr(m, base);
-
-            uint32_t index_count = arrLength(expr->access.chain);
-            IRInst **indices = NEW_ARRAY(compiler, IRInst *, index_count);
-
             for (uint32_t i = 0; i < arrLength(expr->access.chain); ++i)
             {
                 AstExpr *field_ident = expr->access.chain[i];
                 assert(field_ident->kind == EXPR_IDENT);
-                assert(field_ident->ident.decl);
+
+                if (!field_ident->ident.decl) break;
+
+                index_count++;
 
                 AstDecl *field_decl = field_ident->ident.decl;
                 assert(field_decl->kind == DECL_STRUCT_FIELD);
@@ -4490,12 +4683,47 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
                 indices[i] = irBuildConstInt(m, index_type, field_decl->struct_field.index);
             }
 
-            expr->value = irBuildAccessChain(m, expr->type, base->value, indices, index_count);
+            Type *last_type = expr->access.chain[index_count - 1]->type;
+            value = irBuildAccessChain(m, last_type, base->value, indices, index_count);
         }
-        else
+
+        for (uint32_t i = index_count; i < arrLength(expr->access.chain); ++i)
         {
-            assert(0);
+            AstExpr *field_ident = expr->access.chain[i];
+            assert(field_ident->kind == EXPR_IDENT);
+            assert(!field_ident->ident.decl);
+            assert(field_ident->ident.shuffle_indices);
+            assert(field_ident->ident.shuffle_index_count > 0);
+
+            uint32_t *shuffle_indices = field_ident->ident.shuffle_indices;
+            uint32_t shuffle_index_count = field_ident->ident.shuffle_index_count;
+
+            if (shuffle_index_count == 1)
+            {
+                if (!isLvalue(value))
+                {
+                    // It's a temporary value
+                    IRInst *vec_value = irLoadVal(m, value);
+                    value = irBuildCompositeExtract(m, vec_value, shuffle_indices, shuffle_index_count);
+                }
+                else
+                {
+                    // It's a variable
+                    IRInst **ir_indices = NEW_ARRAY(compiler, IRInst *, 1);
+                    ir_indices[0] = irBuildConstInt(m, index_type, shuffle_indices[0]);
+                    value = irBuildAccessChain(m, field_ident->type, value, ir_indices, 1);
+                }
+            }
+            else
+            {
+                IRInst *vec_value = irLoadVal(m, value);
+
+                value = irBuildVectorShuffle(
+                    m, vec_value, vec_value, shuffle_indices, shuffle_index_count);
+            }
         }
+
+        expr->value = value;
 
         break;
     }
