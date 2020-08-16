@@ -4522,7 +4522,7 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
                     {
                         irModuleBuildExpr(m, params[i]);
                         assert(params[i]->value);
-                        fields[i] = params[i]->value;
+                        fields[i] = irLoadVal(m, params[i]->value);
                     }
 
                     expr->value = irBuildCompositeConstruct(
@@ -4534,10 +4534,11 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
 
                     irModuleBuildExpr(m, params[0]);
                     assert(params[0]->value);
+                    IRInst *field_val = irLoadVal(m, params[0]->value);
 
                     for (uint32_t i = 0; i < constructed_type->vector.size; ++i)
                     {
-                        fields[i] = params[0]->value;
+                        fields[i] = field_val;
                     }
 
                     expr->value = irBuildCompositeConstruct(
