@@ -680,6 +680,9 @@ typedef enum IRInstKind {
     IR_INST_COMPOSITE_CONSTRUCT,
     IR_INST_COMPOSITE_EXTRACT,
     IR_INST_VECTOR_SHUFFLE,
+
+    IR_INST_UNARY,
+    IR_INST_BINARY,
 } IRInstKind;
 
 typedef enum IRBuiltinInstKind {
@@ -792,6 +795,19 @@ struct IRInst
             uint32_t *indices;
             uint32_t index_count;
         } vector_shuffle;
+
+        struct
+        {
+            IRInst *right;
+            SpvOp op;
+        } unary;
+
+        struct
+        {
+            IRInst *left;
+            IRInst *right;
+            SpvOp op;
+        } binary;
     };
 };
 
@@ -829,6 +845,26 @@ typedef enum AstVarKind {
     VAR_GLOBAL,
 } AstVarKind;
 
+typedef enum AstUnaryOp {
+    UNOP_NEG,
+    UNOP_NOT,
+} AstUnaryOp;
+
+typedef enum AstBinaryOp {
+    BINOP_ADD,
+    BINOP_SUB,
+    BINOP_MUL,
+    BINOP_DIV,
+    BINOP_MOD,
+
+    BINOP_EQ,
+    BINOP_NOTEQ,
+    BINOP_LESS,
+    BINOP_LESSEQ,
+    BINOP_GREATER,
+    BINOP_GREATEREQ,
+} AstBinaryOp;
+
 typedef enum AstStmtKind {
     STMT_DECL,
     STMT_EXPR,
@@ -854,6 +890,8 @@ typedef enum AstExprKind {
     EXPR_SAMPLED_TEXTURE_TYPE,
     EXPR_FUNC_CALL,
     EXPR_BUILTIN_CALL,
+    EXPR_UNARY,
+    EXPR_BINARY,
 } AstExprKind;
 
 struct AstStmt
@@ -991,6 +1029,19 @@ struct AstExpr
             AstExpr *sampled_type_expr;
             SpvDim dim;
         } texture;
+
+        struct
+        {
+            AstUnaryOp op;
+            AstExpr *right;
+        } unary;
+
+        struct
+        {
+            AstBinaryOp op;
+            AstExpr *left;
+            AstExpr *right;
+        } binary;
     };
 };
 
@@ -1597,6 +1648,25 @@ static bool isTypeCastable(Type *src_type, Type *dst_type, SpvOp *op)
     }
 
     assert(0);
+}
+
+static Type *getScalarType(Type *type)
+{
+    switch (type->kind)
+    {
+    case TYPE_FLOAT:
+    case TYPE_INT: {
+        return type;
+    }
+
+    case TYPE_VECTOR: {
+        return type->vector.elem_type;
+    }
+
+    default: break;
+    }
+
+    return NULL;
 }
 // }}}
 
@@ -2288,12 +2358,140 @@ static AstExpr *parseAccessFuncCall(Parser *p)
 
 static AstExpr *parseUnaryExpr(Parser *p)
 {
+    if (parserPeek(p, 0)->kind == TOKEN_SUB || parserPeek(p, 0)->kind == TOKEN_NOT)
+    {
+        Token *op_tok = parserNext(p, 1);
+
+        AstUnaryOp op = {0};
+
+        switch (op_tok->kind)
+        {
+        case TOKEN_SUB: op = UNOP_NEG; break;
+        case TOKEN_NOT: op = UNOP_NOT; break;
+        default: assert(0); break;
+        }
+
+        AstExpr *right = parseUnaryExpr(p);
+
+        AstExpr *expr = NEW(p->compiler, AstExpr);
+        expr->kind = EXPR_UNARY;
+        expr->unary.right = right;
+        expr->unary.op = op;
+
+        return expr;
+    }
+
     return parseAccessFuncCall(p);
+}
+
+static AstExpr *parseMuliplication(Parser *p)
+{
+    AstExpr *expr = parseUnaryExpr(p);
+    if (!expr) return NULL;
+
+    while (!parserIsAtEnd(p) &&
+           (parserPeek(p, 0)->kind == TOKEN_MUL || parserPeek(p, 0)->kind == TOKEN_DIV))
+    {
+        Token *op_tok = parserNext(p, 1);
+
+        AstBinaryOp op = {0};
+
+        switch (op_tok->kind)
+        {
+        case TOKEN_MUL: op = BINOP_MUL; break;
+        case TOKEN_DIV: op = BINOP_DIV; break;
+        default: assert(0); break;
+        }
+
+        AstExpr *left = expr;
+        AstExpr *right = parseUnaryExpr(p);
+        if (!right) return NULL;
+
+        expr = NEW(p->compiler, AstExpr);
+        expr->kind = EXPR_BINARY;
+        expr->binary.left = left;
+        expr->binary.right = right;
+        expr->binary.op = op;
+    }
+
+    return expr;
+}
+
+static AstExpr *parseAddition(Parser *p)
+{
+    AstExpr *expr = parseMuliplication(p);
+    if (!expr) return NULL;
+
+    while (!parserIsAtEnd(p) &&
+           (parserPeek(p, 0)->kind == TOKEN_ADD || parserPeek(p, 0)->kind == TOKEN_SUB))
+    {
+        Token *op_tok = parserNext(p, 1);
+
+        AstBinaryOp op = {0};
+
+        switch (op_tok->kind)
+        {
+        case TOKEN_ADD: op = BINOP_ADD; break;
+        case TOKEN_SUB: op = BINOP_SUB; break;
+        default: assert(0); break;
+        }
+
+        AstExpr *left = expr;
+        AstExpr *right = parseMuliplication(p);
+        if (!right) return NULL;
+
+        expr = NEW(p->compiler, AstExpr);
+        expr->kind = EXPR_BINARY;
+        expr->binary.left = left;
+        expr->binary.right = right;
+        expr->binary.op = op;
+    }
+
+    return expr;
+}
+
+static AstExpr *parseComparison(Parser *p)
+{
+    AstExpr *expr = parseAddition(p);
+    if (!expr) return NULL;
+
+    while (!parserIsAtEnd(p) &&
+           (parserPeek(p, 0)->kind == TOKEN_EQUAL || parserPeek(p, 0)->kind == TOKEN_NOTEQ ||
+            parserPeek(p, 0)->kind == TOKEN_LESS || parserPeek(p, 0)->kind == TOKEN_LESSEQ ||
+            parserPeek(p, 0)->kind == TOKEN_GREATER || parserPeek(p, 0)->kind == TOKEN_GREATEREQ))
+    {
+        Token *op_tok = parserNext(p, 1);
+
+        AstBinaryOp op = {0};
+
+        switch (op_tok->kind)
+        {
+        case TOKEN_EQUAL: op = BINOP_EQ; break;
+        case TOKEN_NOTEQ: op = BINOP_NOTEQ; break;
+        case TOKEN_LESS: op = BINOP_LESS; break;
+        case TOKEN_LESSEQ: op = BINOP_LESSEQ; break;
+        case TOKEN_GREATER: op = BINOP_GREATER; break;
+        case TOKEN_GREATEREQ: op = BINOP_GREATEREQ; break;
+        default: assert(0); break;
+        }
+
+        AstExpr *left = expr;
+        AstExpr *right = parseAddition(p);
+        if (!right) return NULL;
+
+        expr = NEW(p->compiler, AstExpr);
+        expr->kind = EXPR_BINARY;
+        expr->binary.left = left;
+        expr->binary.right = right;
+        expr->binary.op = op;
+    }
+
+    return expr;
 }
 
 static AstExpr *parseExpr(Parser *p)
 {
-    return parseUnaryExpr(p);
+    return parseComparison(p);
 }
 
 static AstStmt *parseStmt(Parser *p)
@@ -3255,6 +3453,39 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
         expr->as_type = newSampledImageType(m, image_type);
         break;
     }
+
+    case EXPR_UNARY: {
+        switch (expr->unary.op)
+        {
+        case UNOP_NEG: {
+            analyzerAnalyzeExpr(a, expr->unary.right, NULL);
+            if (!expr->unary.right->type) break;
+            Type *right_type = expr->unary.right->type;
+
+            if (right_type->kind != TYPE_INT && right_type->kind != TYPE_FLOAT &&
+                right_type->kind != TYPE_VECTOR)
+            {
+                addErr(compiler, &expr->unary.right->loc, "cannot negate expressions of this type");
+                break;
+            }
+
+            expr->type = right_type;
+
+            break;
+        }
+
+        case UNOP_NOT: {
+            break;
+        }
+        }
+
+        break;
+    }
+
+    case EXPR_BINARY: {
+        assert(0);
+        break;
+    }
     }
 
     if (expected_type)
@@ -4040,6 +4271,22 @@ static IRInst *irBuildCast(IRModule *m, Type *dst_type, IRInst *value)
     return inst;
 }
 
+static IRInst *irBuildUnary(IRModule *m, SpvOp op, Type *type, IRInst *right)
+{
+    IRInst *inst = NEW(m->compiler, IRInst);
+    inst->kind = IR_INST_UNARY;
+    inst->type = type;
+    assert(inst->type);
+
+    inst->unary.op = op;
+    inst->unary.right = right;
+
+    IRInst *block = irGetCurrentBlock(m);
+    arrPush(block->block.insts, inst);
+
+    return inst;
+}
+
 static void irBuildReturn(IRModule *m, IRInst *value)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
@@ -4458,6 +4705,29 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             break;
         }
 
+        case IR_INST_UNARY: {
+            inst->id = irModuleReserveId(m);
+            assert(inst->type->id > 0);
+
+            uint32_t param_count = 3;
+            uint32_t params[3] = {inst->type->id, inst->id, inst->unary.right->id};
+
+            irModuleEncodeInst(m, inst->unary.op, params, param_count);
+            break;
+        }
+
+        case IR_INST_BINARY: {
+            inst->id = irModuleReserveId(m);
+            assert(inst->type->id > 0);
+
+            uint32_t param_count = 4;
+            uint32_t params[4] = {
+                inst->type->id, inst->id, inst->binary.left->id, inst->binary.right->id};
+
+            irModuleEncodeInst(m, inst->binary.op, params, param_count);
+            break;
+        }
+
         case IR_INST_FUNC_PARAM:
         case IR_INST_CONSTANT:
         case IR_INST_FUNCTION:
@@ -4828,6 +5098,43 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
 
         expr->value = irBuildBuiltinCall(m, expr->builtin_call.kind, param_values, param_count);
 
+        break;
+    }
+
+    case EXPR_UNARY: {
+        switch (expr->unary.op)
+        {
+        case UNOP_NEG: {
+            irModuleBuildExpr(m, expr->unary.right);
+            IRInst *right_val = irLoadVal(m, expr->unary.right->value);
+
+            Type *scalar_type = getScalarType(expr->type);
+            SpvOp op = {0};
+
+            switch (scalar_type->kind)
+            {
+            case TYPE_FLOAT: op = SpvOpFNegate; break;
+            case TYPE_INT: op = SpvOpSNegate; break;
+            default: assert(0); break;
+            }
+
+            expr->value = irBuildUnary(m, op, expr->type, right_val);
+            break;
+        }
+
+        case UNOP_NOT: {
+            irModuleBuildExpr(m, expr->unary.right);
+            IRInst *right_val = irLoadVal(m, expr->unary.right->value);
+
+            expr->value = irBuildUnary(m, SpvOpNot, expr->type, right_val);
+            break;
+        }
+        }
+        break;
+    }
+
+    case EXPR_BINARY: {
+        assert(0);
         break;
     }
 
