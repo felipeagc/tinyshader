@@ -2171,87 +2171,65 @@ static AstExpr *parsePrimaryExpr(Parser *p)
     return NULL;
 }
 
-static AstExpr *parseAccess(Parser *p)
+static AstExpr *parseAccessFuncCall(Parser *p)
 {
     TscCompiler *compiler = p->compiler;
-
     Location loc = parserBeginLoc(p);
 
-    AstExpr *expr = parsePrimaryExpr(p);
-    if (!expr) return NULL;
+    AstExpr *expr = NULL;
 
-    if (parserPeek(p, 0)->kind == TOKEN_PERIOD)
-    {
-        AstExpr *access = NEW(compiler, AstExpr);
-        access->kind = EXPR_ACCESS;
-        access->access.base = expr;
+    bool is_builtin = true;
+    IRBuiltinInstKind builtin_kind = {0};
 
-        while (parserPeek(p, 0)->kind == TOKEN_PERIOD)
-        {
-            parserNext(p, 1);
-
-            AstExpr *ident = parseIdentExpr(p);
-            if (!ident) return NULL;
-
-            arrPush(access->access.chain, ident);
-        }
-
-        parserEndLoc(p, &loc);
-        access->loc = loc;
-
-        return access;
-    }
-
-    return expr;
-}
-
-static AstExpr *parseBuiltinFunctionCall(Parser *p, TokenKind builtin_token)
-{
-    Location loc = parserBeginLoc(p);
-
-    AstExpr *expr = NEW(p->compiler, AstExpr);
-    expr->kind = EXPR_BUILTIN_CALL;
-
-    if (!parserConsume(p, builtin_token)) return NULL;
-
-    if (!parserConsume(p, TOKEN_LPAREN)) return NULL;
-
-    while (!parserIsAtEnd(p) && parserPeek(p, 0)->kind != TOKEN_RPAREN)
-    {
-        AstExpr *param = parseExpr(p);
-        if (!param) return NULL;
-        arrPush(expr->builtin_call.params, param);
-
-        if (parserPeek(p, 0)->kind != TOKEN_RPAREN)
-        {
-            if (!parserConsume(p, TOKEN_COMMA)) return NULL;
-        }
-    }
-
-    if (!parserConsume(p, TOKEN_RPAREN)) return NULL;
-
-    parserEndLoc(p, &loc);
-    expr->loc = loc;
-
-    return expr;
-}
-
-static AstExpr *parseFuncCall(Parser *p)
-{
-    Location loc = parserBeginLoc(p);
-
+    // Check if it's a builtin function
     switch (parserPeek(p, 0)->kind)
     {
-    case TOKEN_DOT: {
-        return parseBuiltinFunctionCall(p, parserPeek(p, 0)->kind);
+    case TOKEN_DOT: builtin_kind = IR_BUILTIN_DOT; break;
+
+    default: is_builtin = false; break;
     }
 
-    default: {
-        AstExpr *expr = parseAccess(p);
-        if (!expr) return NULL;
+    if (is_builtin)
+    {
+        expr = NEW(p->compiler, AstExpr);
+        expr->kind = EXPR_BUILTIN_CALL;
+        expr->builtin_call.kind = builtin_kind;
 
-        while (!parserIsAtEnd(p) && parserPeek(p, 0)->kind == TOKEN_LPAREN)
+        parserNext(p, 1); // skip name token
+
+        if (!parserConsume(p, TOKEN_LPAREN)) return NULL;
+
+        while (!parserIsAtEnd(p) && parserPeek(p, 0)->kind != TOKEN_RPAREN)
         {
+            AstExpr *param = parseExpr(p);
+            if (!param) return NULL;
+            arrPush(expr->builtin_call.params, param);
+
+            if (parserPeek(p, 0)->kind != TOKEN_RPAREN)
+            {
+                if (!parserConsume(p, TOKEN_COMMA)) return NULL;
+            }
+        }
+
+        if (!parserConsume(p, TOKEN_RPAREN)) return NULL;
+
+        parserEndLoc(p, &loc);
+        expr->loc = loc;
+    }
+    else
+    {
+        expr = parsePrimaryExpr(p);
+        if (!expr) return NULL;
+    }
+
+    // Not a builtin function, must be an access or function call
+
+    while (!parserIsAtEnd(p) &&
+           (parserPeek(p, 0)->kind == TOKEN_LPAREN || parserPeek(p, 0)->kind == TOKEN_PERIOD))
+    {
+        if (parserPeek(p, 0)->kind == TOKEN_LPAREN)
+        {
+            // Function call expression
             parserNext(p, 1);
 
             AstExpr *func_call = NEW(p->compiler, AstExpr);
@@ -2277,18 +2255,40 @@ static AstExpr *parseFuncCall(Parser *p)
 
             expr = func_call;
         }
+        else if (parserPeek(p, 0)->kind == TOKEN_PERIOD)
+        {
+            // Access expression
 
-        return expr;
-    }
+            AstExpr *base_expr = expr;
+            expr = NEW(compiler, AstExpr);
+            expr->kind = EXPR_ACCESS;
+            expr->access.base = base_expr;
+
+            while (parserPeek(p, 0)->kind == TOKEN_PERIOD)
+            {
+                parserNext(p, 1);
+
+                AstExpr *ident = parseIdentExpr(p);
+                if (!ident) return NULL;
+
+                arrPush(expr->access.chain, ident);
+            }
+
+            parserEndLoc(p, &loc);
+            expr->loc = loc;
+        }
+        else
+        {
+            assert(0);
+        }
     }
 
-    assert(0);
-    return NULL;
+    return expr;
 }
 
 static AstExpr *parseUnaryExpr(Parser *p)
 {
-    return parseFuncCall(p);
+    return parseAccessFuncCall(p);
 }
 
 static AstExpr *parseExpr(Parser *p)
@@ -4704,7 +4704,8 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
                 {
                     // It's a temporary value
                     IRInst *vec_value = irLoadVal(m, value);
-                    value = irBuildCompositeExtract(m, vec_value, shuffle_indices, shuffle_index_count);
+                    value =
+                        irBuildCompositeExtract(m, vec_value, shuffle_indices, shuffle_index_count);
                 }
                 else
                 {
