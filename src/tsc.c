@@ -1654,8 +1654,27 @@ static Type *getScalarType(Type *type)
 {
     switch (type->kind)
     {
-    case TYPE_BOOL:
     case TYPE_FLOAT:
+    case TYPE_INT: {
+        return type;
+    }
+
+    case TYPE_VECTOR: {
+        return type->vector.elem_type;
+    }
+
+    default: break;
+    }
+
+    return NULL;
+}
+
+// Returns a type that can be used in a logical operation
+static Type *getLogicalType(Type *type)
+{
+    switch (type->kind)
+    {
+    case TYPE_BOOL:
     case TYPE_INT: {
         return type;
     }
@@ -3464,7 +3483,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
             Type *right_type = expr->unary.right->type;
             Type *scalar_type = getScalarType(right_type);
 
-            if (!scalar_type || (scalar_type->kind != TYPE_INT && scalar_type->kind != TYPE_FLOAT))
+            if (!scalar_type)
             {
                 addErr(
                     compiler,
@@ -3482,9 +3501,9 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
             analyzerAnalyzeExpr(a, expr->unary.right, NULL);
             if (!expr->unary.right->type) break;
             Type *right_type = expr->unary.right->type;
-            Type *scalar_type = getScalarType(right_type);
+            Type *logical_type = getLogicalType(right_type);
 
-            if (!scalar_type || (scalar_type->kind != TYPE_INT && scalar_type->kind != TYPE_BOOL))
+            if (!logical_type)
             {
                 addErr(
                     compiler,
@@ -3503,7 +3522,35 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
     }
 
     case EXPR_BINARY: {
-        assert(0);
+        switch (expr->binary.op)
+        {
+        case BINOP_ADD:
+        case BINOP_SUB:
+        case BINOP_MUL:
+        case BINOP_DIV:
+        case BINOP_MOD: {
+            analyzerAnalyzeExpr(a, expr->binary.left, NULL);
+            analyzerAnalyzeExpr(a, expr->binary.right, NULL);
+            if (!expr->binary.left->type || !expr->binary.right->type) break;
+
+            Type *left_type = expr->binary.left->type;
+            Type *right_type = expr->binary.right->type;
+
+            Type *left_scalar = getScalarType(left_type);
+            Type *right_scalar = getScalarType(right_type);
+            if ((!left_scalar) || (!right_scalar) || (left_type != right_type))
+            {
+                addErr(compiler, &expr->loc, "invalid types for binary operation");
+            }
+
+            expr->type = left_type;
+
+            break;
+        }
+
+        default: assert(0); break;
+        }
+
         break;
     }
     }
@@ -4300,6 +4347,23 @@ static IRInst *irBuildUnary(IRModule *m, SpvOp op, Type *type, IRInst *right)
 
     inst->unary.op = op;
     inst->unary.right = right;
+
+    IRInst *block = irGetCurrentBlock(m);
+    arrPush(block->block.insts, inst);
+
+    return inst;
+}
+
+static IRInst *irBuildBinary(IRModule *m, SpvOp op, Type *type, IRInst *left, IRInst *right)
+{
+    IRInst *inst = NEW(m->compiler, IRInst);
+    inst->kind = IR_INST_BINARY;
+    inst->type = type;
+    assert(inst->type);
+
+    inst->binary.op = op;
+    inst->binary.left = left;
+    inst->binary.right = right;
 
     IRInst *block = irGetCurrentBlock(m);
     arrPush(block->block.insts, inst);
@@ -5155,7 +5219,77 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
     }
 
     case EXPR_BINARY: {
-        assert(0);
+        irModuleBuildExpr(m, expr->binary.left);
+        IRInst *left_val = irLoadVal(m, expr->binary.left->value);
+        irModuleBuildExpr(m, expr->binary.right);
+        IRInst *right_val = irLoadVal(m, expr->binary.right->value);
+
+        Type *scalar_type = getScalarType(expr->type);
+        SpvOp op = {0};
+
+        switch (expr->binary.op)
+        {
+        case BINOP_ADD: {
+            switch (scalar_type->kind)
+            {
+            case TYPE_FLOAT: op = SpvOpFAdd; break;
+            case TYPE_INT: op = SpvOpIAdd; break;
+            default: assert(0); break;
+            }
+            break;
+        }
+        case BINOP_SUB: {
+            switch (scalar_type->kind)
+            {
+            case TYPE_FLOAT: op = SpvOpFSub; break;
+            case TYPE_INT: op = SpvOpISub; break;
+            default: assert(0); break;
+            }
+            break;
+        }
+        case BINOP_MUL: {
+            switch (scalar_type->kind)
+            {
+            case TYPE_FLOAT: op = SpvOpFMul; break;
+            case TYPE_INT: op = SpvOpIMul; break;
+            default: assert(0); break;
+            }
+            break;
+        }
+        case BINOP_DIV: {
+            switch (scalar_type->kind)
+            {
+            case TYPE_FLOAT: op = SpvOpFDiv; break;
+            case TYPE_INT:
+                if (scalar_type->int_.is_signed)
+                    op = SpvOpSDiv;
+                else
+                    op = SpvOpUDiv;
+                break;
+            default: assert(0); break;
+            }
+            break;
+        }
+        case BINOP_MOD: {
+            switch (scalar_type->kind)
+            {
+            case TYPE_FLOAT: op = SpvOpFMod; break;
+            case TYPE_INT:
+                if (scalar_type->int_.is_signed)
+                    op = SpvOpSMod;
+                else
+                    op = SpvOpUMod;
+                break;
+            default: assert(0); break;
+            }
+            break;
+        }
+
+        default: assert(0); break;
+        }
+
+        expr->value = irBuildBinary(m, op, expr->type, left_val, right_val);
+
         break;
     }
 
