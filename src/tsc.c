@@ -3842,6 +3842,13 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
             }
         }
 
+        if (decl->var.storage_class == SpvStorageClassUniform && decl->type->kind == TYPE_STRUCT)
+        {
+            IRDecoration dec = {0};
+            dec.kind = SpvDecorationBlock;
+            arrPush(decl->decorations, dec);
+        }
+
         // Add decorations
         for (uint32_t i = 0; i < arrLength(decl->attributes); ++i)
         {
@@ -4456,8 +4463,14 @@ static void irModuleEncodeDecorations(IRModule *m)
         for (uint32_t j = 0; j < arrLength(inst->decorations); ++j)
         {
             IRDecoration *dec = &inst->decorations[j];
+            uint32_t param_count = 3;
             uint32_t params[3] = {inst->id, dec->kind, dec->value};
-            irModuleEncodeInst(m, SpvOpDecorate, params, 3);
+            switch (dec->kind)
+            {
+            case SpvDecorationBlock: param_count = 2; break;
+            default: break;
+            }
+            irModuleEncodeInst(m, SpvOpDecorate, params, param_count);
         }
     }
 }
@@ -5341,9 +5354,7 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
             switch (elem_type->kind)
             {
             case TYPE_FLOAT: op = SpvOpFOrdEqual; break;
-            case TYPE_INT:
-                op = SpvOpIEqual;
-                break;
+            case TYPE_INT: op = SpvOpIEqual; break;
             default: assert(0); break;
             }
             break;
@@ -5353,9 +5364,7 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
             switch (elem_type->kind)
             {
             case TYPE_FLOAT: op = SpvOpFOrdNotEqual; break;
-            case TYPE_INT:
-                op = SpvOpINotEqual;
-                break;
+            case TYPE_INT: op = SpvOpINotEqual; break;
             default: assert(0); break;
             }
             break;
@@ -5420,7 +5429,6 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
             }
             break;
         }
-
         }
 
         expr->value = irBuildBinary(m, op, expr->type, left_val, right_val);
