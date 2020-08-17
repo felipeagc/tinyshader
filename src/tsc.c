@@ -5171,7 +5171,7 @@ static void irModuleEncodeFunctions(IRModule *m)
             uint32_t params[4] = {
                 inst->type->func.return_type->id,
                 inst->id,
-                SpvFunctionControlMaskNone,
+                SpvFunctionControlInlineMask,
                 inst->type->id,
             };
             irModuleEncodeInst(m, SpvOpFunction, params, 4);
