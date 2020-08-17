@@ -496,6 +496,7 @@ typedef enum TokenKind {
 
     TOKEN_IDENT,
     TOKEN_DOT,
+    TOKEN_MUL_BUILTIN,
     TOKEN_IN,
     TOKEN_OUT,
     TOKEN_IMPORT,
@@ -696,6 +697,7 @@ typedef enum IRInstKind {
 
 typedef enum IRBuiltinInstKind {
     IR_BUILTIN_DOT,
+    IR_BUILTIN_MUL,
 } IRBuiltinInstKind;
 
 struct IRInst
@@ -1179,6 +1181,7 @@ TscCompiler *tscCompilerCreate()
     hashSet(&compiler->keyword_table, "in", (void *)TOKEN_IN);
     hashSet(&compiler->keyword_table, "out", (void *)TOKEN_OUT);
     hashSet(&compiler->keyword_table, "dot", (void *)TOKEN_DOT);
+    hashSet(&compiler->keyword_table, "mul", (void *)TOKEN_MUL_BUILTIN);
     hashSet(&compiler->keyword_table, "ConstantBuffer", (void *)TOKEN_CONSTANT_BUFFER);
     hashSet(&compiler->keyword_table, "SamplerState", (void *)TOKEN_SAMPLER_STATE);
     hashSet(&compiler->keyword_table, "Texture1D", (void *)TOKEN_TEXTURE_1D);
@@ -2467,6 +2470,7 @@ static AstExpr *parseAccessFuncCall(Parser *p)
     switch (parserPeek(p, 0)->kind)
     {
     case TOKEN_DOT: builtin_kind = IR_BUILTIN_DOT; break;
+    case TOKEN_MUL_BUILTIN: builtin_kind = IR_BUILTIN_MUL; break;
 
     default: is_builtin = false; break;
     }
@@ -3647,6 +3651,77 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
             expr->type = a->type->vector.elem_type;
             break;
         }
+
+        case IR_BUILTIN_MUL: {
+            if (param_count != 2)
+            {
+                addErr(compiler, &expr->loc, "dot needs 2 parameters");
+                break;
+            }
+
+            AstExpr *a = params[0];
+            AstExpr *b = params[1];
+
+            if (!((a->type->kind == TYPE_VECTOR && b->type->kind == TYPE_MATRIX) ||
+                  (a->type->kind == TYPE_MATRIX && b->type->kind == TYPE_VECTOR) ||
+                  (a->type->kind == TYPE_VECTOR && b->type->kind == TYPE_VECTOR) ||
+                  (a->type->kind == TYPE_MATRIX && b->type->kind == TYPE_MATRIX)))
+            {
+                addErr(compiler, &expr->loc, "invalid parameters for mul");
+                break;
+            }
+
+            if (a->type->kind == TYPE_VECTOR && b->type->kind == TYPE_MATRIX)
+            {
+                // Matrix times vector, yes, it's backwards
+                if (a->type != b->type->matrix.col_type)
+                {
+                    addErr(compiler, &expr->loc, "mismatched matrix columns with vector type");
+                    break;
+                }
+
+                expr->type = a->type;
+            }
+            else if (a->type->kind == TYPE_MATRIX && b->type->kind == TYPE_VECTOR)
+            {
+                // Vector times matrix, yes, it's backwards
+                if (b->type != a->type->matrix.col_type)
+                {
+                    addErr(compiler, &expr->loc, "mismatched matrix columns with vector type");
+                    break;
+                }
+
+                expr->type = b->type;
+            }
+            else if(a->type->kind == TYPE_VECTOR && b->type->kind == TYPE_VECTOR)
+            {
+                // Vector dot product
+                if (b->type != a->type)
+                {
+                    addErr(compiler, &expr->loc, "mismatched vector types");
+                    break;
+                }
+
+                expr->type = a->type->vector.elem_type;
+            }
+            else if (a->type->kind == TYPE_MATRIX && b->type->kind == TYPE_MATRIX)
+            {
+                // Matrix times matrix
+                if (b->type != a->type)
+                {
+                    addErr(compiler, &expr->loc, "mismatched matrix types");
+                    break;
+                }
+
+                expr->type = a->type;
+            }
+            else
+            {
+                assert(0);
+            }
+
+            break;
+        }
         }
 
         break;
@@ -4573,6 +4648,39 @@ irBuildBuiltinCall(IRModule *m, IRBuiltinInstKind kind, IRInst **params, uint32_
 
         break;
     }
+
+    case IR_BUILTIN_MUL: {
+        assert(param_count == 2);
+        IRInst *a = params[0];
+        IRInst *b = params[1];
+
+        if (a->type->kind == TYPE_VECTOR && b->type->kind == TYPE_MATRIX)
+        {
+            // Matrix times vector, yes, it's backwards
+            inst->type = a->type;
+        }
+        else if (a->type->kind == TYPE_MATRIX && b->type->kind == TYPE_VECTOR)
+        {
+            // Vector times matrix, yes, it's backwards
+            inst->type = b->type;
+        }
+        else if(a->type->kind == TYPE_VECTOR && b->type->kind == TYPE_VECTOR)
+        {
+            // Vector dot product
+            inst->type = a->type->vector.elem_type;
+        }
+        else if (a->type->kind == TYPE_MATRIX && b->type->kind == TYPE_MATRIX)
+        {
+            // Matrix times matrix
+            inst->type = a->type;
+        }
+        else
+        {
+            assert(0);
+        }
+
+        break;
+    }
     }
 
     assert(inst->type);
@@ -5027,6 +5135,42 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
                 IRInst *b = param_values[1];
                 uint32_t params[4] = {inst->type->id, inst->id, a->id, b->id};
                 irModuleEncodeInst(m, SpvOpDot, params, 4);
+                break;
+            }
+
+            case IR_BUILTIN_MUL: {
+                IRInst *a = param_values[0];
+                IRInst *b = param_values[1];
+
+                if (a->type->kind == TYPE_VECTOR && b->type->kind == TYPE_MATRIX)
+                {
+                    // Matrix times vector, yes, it's backwards
+                    uint32_t params[4] = {inst->type->id, inst->id, b->id, a->id};
+                    irModuleEncodeInst(m, SpvOpMatrixTimesVector, params, 4);
+                }
+                else if (a->type->kind == TYPE_MATRIX && b->type->kind == TYPE_VECTOR)
+                {
+                    // Vector times matrix, yes, it's backwards
+                    uint32_t params[4] = {inst->type->id, inst->id, b->id, a->id};
+                    irModuleEncodeInst(m, SpvOpVectorTimesMatrix, params, 4);
+                }
+                else if(a->type->kind == TYPE_VECTOR && b->type->kind == TYPE_VECTOR)
+                {
+                    // Vector dot product
+                    uint32_t params[4] = {inst->type->id, inst->id, a->id, b->id};
+                    irModuleEncodeInst(m, SpvOpDot, params, 4);
+                }
+                else if (a->type->kind == TYPE_MATRIX && b->type->kind == TYPE_MATRIX)
+                {
+                    // Matrix times matrix
+                    uint32_t params[4] = {inst->type->id, inst->id, b->id, a->id};
+                    irModuleEncodeInst(m, SpvOpMatrixTimesMatrix, params, 4);
+                }
+                else
+                {
+                    assert(0);
+                }
+
                 break;
             }
             }
