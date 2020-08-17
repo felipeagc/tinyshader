@@ -588,6 +588,9 @@ typedef struct Type
     TypeKind kind;
     char *string;
     uint32_t id;
+    uint32_t size;
+    uint32_t align;
+
     union
     {
         struct
@@ -627,6 +630,7 @@ typedef struct Type
 
             AstDecl **field_decls;
             struct Type **fields;
+            uint32_t *field_offsets;
             uint32_t field_count;
         } struct_;
         struct
@@ -1714,6 +1718,133 @@ static Type *getElemType(Type *type)
     }
 
     return type;
+}
+
+static uint32_t padToAlignment(uint32_t current, uint32_t align)
+{
+    assert(align >= 1);
+
+    uint32_t minum = current & (align - 1);
+    if (minum)
+    {
+        assert((current % align) != 0);
+        current += align - minum;
+    }
+
+    return current;
+}
+
+static uint32_t typeAlignOf(Module *m, Type *type)
+{
+    if (type->align > 0) return type->align;
+
+    uint32_t align = 1;
+    switch (type->kind)
+    {
+    case TYPE_INT: align = type->int_.bits / 8; break;
+    case TYPE_FLOAT: align = type->float_.bits / 8; break;
+
+    case TYPE_VECTOR:{
+        switch (type->vector.size)
+        {
+        case 2: align = typeAlignOf(m, type->vector.elem_type) * 2; break;
+        case 3:
+        case 4: align = typeAlignOf(m, type->vector.elem_type) * 4; break;
+        default: assert(0); break;
+        }
+
+        break;
+    }
+
+    case TYPE_MATRIX:
+    {
+        align = typeAlignOf(m, type->matrix.col_type);
+        break;
+    }
+
+    case TYPE_STRUCT: {
+        for (Type **field = type->struct_.fields;
+             field != type->struct_.fields + type->struct_.field_count;
+             ++field)
+        {
+            uint32_t field_align = typeAlignOf(m, *field);
+            if (field_align > align) align = field_align;
+        }
+
+        break;
+    }
+
+    case TYPE_IMAGE:
+    case TYPE_SAMPLER:
+    case TYPE_SAMPLED_IMAGE:
+    case TYPE_POINTER:
+    case TYPE_BOOL:
+    case TYPE_FUNC:
+    case TYPE_VOID:
+    case TYPE_TYPE: align = 0; break;
+    }
+
+    type->align = align;
+
+    return type->align;
+}
+
+static uint32_t typeSizeOf(Module *m, Type *type)
+{
+    if (type->size > 0) return type->size;
+
+    uint32_t size = 0;
+
+    switch (type->kind)
+    {
+    case TYPE_INT: size = type->int_.bits / 8; break;
+    case TYPE_FLOAT: size = type->float_.bits / 8; break;
+
+    case TYPE_VECTOR: {
+        switch (type->vector.size)
+        {
+        case 2: size = typeSizeOf(m, type->vector.elem_type) * 2; break;
+        case 3: size = typeSizeOf(m, type->vector.elem_type) * 3; break;
+        case 4: size = typeSizeOf(m, type->vector.elem_type) * 4; break;
+        default: assert(0); break;
+        }
+        break;
+    }
+
+    case TYPE_MATRIX:
+    {
+        size = typeSizeOf(m, type->matrix.col_type) * type->matrix.col_count;
+        break;
+    }
+
+    case TYPE_STRUCT: {
+        assert(type->struct_.field_offsets == NULL);
+        type->struct_.field_offsets = NEW_ARRAY(m->compiler, uint32_t, type->struct_.field_count);
+
+        for (size_t i = 0; i < type->struct_.field_count; ++i)
+        {
+            Type *field = type->struct_.fields[i];
+            uint32_t field_align = typeAlignOf(m, field);
+            size = padToAlignment(size, field_align);// Add padding
+            type->struct_.field_offsets[i] = size;
+            size += typeSizeOf(m, field);
+        }
+
+        break;
+    }
+
+    case TYPE_IMAGE:
+    case TYPE_SAMPLER:
+    case TYPE_SAMPLED_IMAGE:
+    case TYPE_POINTER:
+    case TYPE_BOOL:
+    case TYPE_FUNC:
+    case TYPE_VOID:
+    case TYPE_TYPE: size = 0; break;
+    }
+
+    type->size = size;
+    return type->size;
 }
 // }}}
 
@@ -4452,6 +4583,15 @@ static void irModuleEncodeInst(IRModule *m, SpvOp opcode, uint32_t *params, size
     }
 }
 
+static void irModuleReserveTypeIds(IRModule *m)
+{
+    for (uint32_t i = 0; i < arrLength(m->mod->type_cache.values); ++i)
+    {
+        Type *type = (Type *)m->mod->type_cache.values[i];
+        type->id = irModuleReserveId(m);
+    }
+}
+
 static void irModuleEncodeDecorations(IRModule *m)
 {
     for (uint32_t i = 0; i < arrLength(m->globals); ++i)
@@ -4473,16 +4613,30 @@ static void irModuleEncodeDecorations(IRModule *m)
             irModuleEncodeInst(m, SpvOpDecorate, params, param_count);
         }
     }
+
+    for (uint32_t i = 0; i < arrLength(m->mod->type_cache.values); ++i)
+    {
+        Type *type = (Type *)m->mod->type_cache.values[i];
+        if (type->kind == TYPE_STRUCT)
+        {
+            typeSizeOf(m->mod, type);
+            assert(type->struct_.field_offsets != NULL);
+            assert(type->id > 0);
+
+            for (uint32_t j = 0; j < type->struct_.field_count; ++j)
+            {
+                uint32_t field_offset = type->struct_.field_offsets[j];
+                uint32_t param_count = 4;
+                uint32_t params[4] = {type->id, j, SpvDecorationOffset, field_offset};
+
+                irModuleEncodeInst(m, SpvOpMemberDecorate, params, param_count);
+            }
+        }
+    }
 }
 
 static void irModuleEncodeTypes(IRModule *m)
 {
-    for (uint32_t i = 0; i < arrLength(m->mod->type_cache.values); ++i)
-    {
-        Type *type = (Type *)m->mod->type_cache.values[i];
-        type->id = irModuleReserveId(m);
-    }
-
     for (uint32_t i = 0; i < arrLength(m->mod->type_cache.values); ++i)
     {
         Type *type = (Type *)m->mod->type_cache.values[i];
@@ -4995,6 +5149,8 @@ static void irModuleEncodeModule(IRModule *m)
     }
 
     irModuleEncodeEntryPoints(m);
+
+    irModuleReserveTypeIds(m);
 
     irModuleEncodeDecorations(m);
 
