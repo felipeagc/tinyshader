@@ -1669,6 +1669,23 @@ static Type *getScalarType(Type *type)
     return NULL;
 }
 
+// Returns a type that can be used in a comparison operation
+static Type *getComparableType(Type *type)
+{
+    switch (type->kind)
+    {
+    case TYPE_FLOAT:
+    case TYPE_BOOL:
+    case TYPE_INT: {
+        return type;
+    }
+
+    default: break;
+    }
+
+    return NULL;
+}
+
 // Returns a type that can be used in a logical operation
 static Type *getLogicalType(Type *type)
 {
@@ -1679,6 +1696,16 @@ static Type *getLogicalType(Type *type)
         return type;
     }
 
+    default: break;
+    }
+
+    return NULL;
+}
+
+static Type *getElemType(Type *type)
+{
+    switch (type->kind)
+    {
     case TYPE_VECTOR: {
         return type->vector.elem_type;
     }
@@ -1686,7 +1713,7 @@ static Type *getLogicalType(Type *type)
     default: break;
     }
 
-    return NULL;
+    return type;
 }
 // }}}
 
@@ -3540,7 +3567,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
             Type *right_scalar = getScalarType(right_type);
             if ((!left_scalar) || (!right_scalar) || (left_type != right_type))
             {
-                addErr(compiler, &expr->loc, "invalid types for binary operation");
+                addErr(compiler, &expr->loc, "invalid types for binary arithmentic operation");
             }
 
             expr->type = left_type;
@@ -3548,7 +3575,31 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
             break;
         }
 
-        default: assert(0); break;
+        case BINOP_EQ:
+        case BINOP_NOTEQ:
+        case BINOP_LESS:
+        case BINOP_LESSEQ:
+        case BINOP_GREATER:
+        case BINOP_GREATEREQ: {
+            analyzerAnalyzeExpr(a, expr->binary.left, NULL);
+            analyzerAnalyzeExpr(a, expr->binary.right, NULL);
+            if (!expr->binary.left->type || !expr->binary.right->type) break;
+
+            Type *left_type = expr->binary.left->type;
+            Type *right_type = expr->binary.right->type;
+
+            Type *left_comparable = getComparableType(left_type);
+            Type *right_comparable = getComparableType(right_type);
+
+            if ((!left_comparable) || (!right_comparable) || (left_type != right_type))
+            {
+                addErr(compiler, &expr->loc, "invalid types for binary comparison operation");
+            }
+
+            expr->type = newBasicType(m, TYPE_BOOL);
+
+            break;
+        }
         }
 
         break;
@@ -4254,6 +4305,7 @@ irBuildCompositeConstruct(IRModule *m, Type *type, IRInst **fields, uint32_t fie
     inst->composite_construct.field_count = field_count;
 
     IRInst *block = irGetCurrentBlock(m);
+    assert(block);
     arrPush(block->block.insts, inst);
 
     return inst;
@@ -4430,8 +4482,7 @@ static void irModuleEncodeTypes(IRModule *m)
         }
 
         case TYPE_BOOL: {
-            uint32_t params[3] = {type->id, 32, false};
-            irModuleEncodeInst(m, SpvOpTypeInt, params, 3);
+            irModuleEncodeInst(m, SpvOpTypeBool, &type->id, 1);
             break;
         }
 
@@ -5224,13 +5275,14 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
         irModuleBuildExpr(m, expr->binary.right);
         IRInst *right_val = irLoadVal(m, expr->binary.right->value);
 
-        Type *scalar_type = getScalarType(expr->type);
+        Type *elem_type = getElemType(expr->binary.left->type);
+        assert(elem_type);
         SpvOp op = {0};
 
         switch (expr->binary.op)
         {
         case BINOP_ADD: {
-            switch (scalar_type->kind)
+            switch (elem_type->kind)
             {
             case TYPE_FLOAT: op = SpvOpFAdd; break;
             case TYPE_INT: op = SpvOpIAdd; break;
@@ -5239,7 +5291,7 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
             break;
         }
         case BINOP_SUB: {
-            switch (scalar_type->kind)
+            switch (elem_type->kind)
             {
             case TYPE_FLOAT: op = SpvOpFSub; break;
             case TYPE_INT: op = SpvOpISub; break;
@@ -5248,7 +5300,7 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
             break;
         }
         case BINOP_MUL: {
-            switch (scalar_type->kind)
+            switch (elem_type->kind)
             {
             case TYPE_FLOAT: op = SpvOpFMul; break;
             case TYPE_INT: op = SpvOpIMul; break;
@@ -5257,11 +5309,11 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
             break;
         }
         case BINOP_DIV: {
-            switch (scalar_type->kind)
+            switch (elem_type->kind)
             {
             case TYPE_FLOAT: op = SpvOpFDiv; break;
             case TYPE_INT:
-                if (scalar_type->int_.is_signed)
+                if (elem_type->int_.is_signed)
                     op = SpvOpSDiv;
                 else
                     op = SpvOpUDiv;
@@ -5271,11 +5323,11 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
             break;
         }
         case BINOP_MOD: {
-            switch (scalar_type->kind)
+            switch (elem_type->kind)
             {
             case TYPE_FLOAT: op = SpvOpFMod; break;
             case TYPE_INT:
-                if (scalar_type->int_.is_signed)
+                if (elem_type->int_.is_signed)
                     op = SpvOpSMod;
                 else
                     op = SpvOpUMod;
@@ -5285,7 +5337,90 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
             break;
         }
 
-        default: assert(0); break;
+        case BINOP_EQ: {
+            switch (elem_type->kind)
+            {
+            case TYPE_FLOAT: op = SpvOpFOrdEqual; break;
+            case TYPE_INT:
+                op = SpvOpIEqual;
+                break;
+            default: assert(0); break;
+            }
+            break;
+        }
+
+        case BINOP_NOTEQ: {
+            switch (elem_type->kind)
+            {
+            case TYPE_FLOAT: op = SpvOpFOrdNotEqual; break;
+            case TYPE_INT:
+                op = SpvOpINotEqual;
+                break;
+            default: assert(0); break;
+            }
+            break;
+        }
+
+        case BINOP_LESS: {
+            switch (elem_type->kind)
+            {
+            case TYPE_FLOAT: op = SpvOpFOrdLessThan; break;
+            case TYPE_INT:
+                if (elem_type->int_.is_signed)
+                    op = SpvOpSLessThan;
+                else
+                    op = SpvOpULessThan;
+                break;
+            default: assert(0); break;
+            }
+            break;
+        }
+
+        case BINOP_LESSEQ: {
+            switch (elem_type->kind)
+            {
+            case TYPE_FLOAT: op = SpvOpFOrdLessThanEqual; break;
+            case TYPE_INT:
+                if (elem_type->int_.is_signed)
+                    op = SpvOpSLessThanEqual;
+                else
+                    op = SpvOpULessThanEqual;
+                break;
+            default: assert(0); break;
+            }
+            break;
+        }
+
+        case BINOP_GREATER: {
+            switch (elem_type->kind)
+            {
+            case TYPE_FLOAT: op = SpvOpFOrdGreaterThan; break;
+            case TYPE_INT:
+                if (elem_type->int_.is_signed)
+                    op = SpvOpSGreaterThan;
+                else
+                    op = SpvOpUGreaterThan;
+                break;
+            default: assert(0); break;
+            }
+            break;
+        }
+
+        case BINOP_GREATEREQ: {
+            switch (elem_type->kind)
+            {
+            case TYPE_FLOAT: op = SpvOpFOrdGreaterThanEqual; break;
+            case TYPE_INT:
+                if (elem_type->int_.is_signed)
+                    op = SpvOpSGreaterThanEqual;
+                else
+                    op = SpvOpUGreaterThanEqual;
+                break;
+            default: assert(0); break;
+            }
+            break;
+        }
+
         }
 
         expr->value = irBuildBinary(m, op, expr->type, left_val, right_val);
