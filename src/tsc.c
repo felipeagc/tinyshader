@@ -530,21 +530,15 @@ typedef enum TokenKind {
 
     TOKEN_UINT,
     TOKEN_INT,
-
-    TOKEN_FLOAT2,
-    TOKEN_FLOAT3,
-    TOKEN_FLOAT4,
-
-    TOKEN_FLOAT2X2,
-    TOKEN_FLOAT3X3,
-    TOKEN_FLOAT4X4,
-
     TOKEN_FLOAT,
 
     TOKEN_VOID,
 
     TOKEN_FALSE,
     TOKEN_TRUE,
+
+    TOKEN_VECTOR_TYPE,
+    TOKEN_MATRIX_TYPE,
 } TokenKind;
 
 typedef struct Token
@@ -556,6 +550,17 @@ typedef struct Token
         char *str;
         double double_;
         int64_t int_;
+        struct
+        {
+            TokenKind elem_type;
+            uint8_t dim;
+        } vector_type;
+        struct
+        {
+            TokenKind elem_type;
+            uint8_t dim1;
+            uint8_t dim2;
+        } matrix_type;
     };
 } Token;
 
@@ -1187,17 +1192,11 @@ TscCompiler *tscCompilerCreate()
 
     hashSet(&compiler->keyword_table, "uint", (void *)TOKEN_UINT);
     hashSet(&compiler->keyword_table, "int", (void *)TOKEN_INT);
+    hashSet(&compiler->keyword_table, "float", (void *)TOKEN_FLOAT);
     hashSet(&compiler->keyword_table, "bool", (void *)TOKEN_BOOL);
     hashSet(&compiler->keyword_table, "true", (void *)TOKEN_TRUE);
     hashSet(&compiler->keyword_table, "false", (void *)TOKEN_FALSE);
     hashSet(&compiler->keyword_table, "void", (void *)TOKEN_VOID);
-    hashSet(&compiler->keyword_table, "float", (void *)TOKEN_FLOAT);
-    hashSet(&compiler->keyword_table, "float2", (void *)TOKEN_FLOAT2);
-    hashSet(&compiler->keyword_table, "float3", (void *)TOKEN_FLOAT3);
-    hashSet(&compiler->keyword_table, "float4", (void *)TOKEN_FLOAT4);
-    hashSet(&compiler->keyword_table, "float2x2", (void *)TOKEN_FLOAT2X2);
-    hashSet(&compiler->keyword_table, "float3x3", (void *)TOKEN_FLOAT3X3);
-    hashSet(&compiler->keyword_table, "float4x4", (void *)TOKEN_FLOAT4X4);
 
     return compiler;
 }
@@ -2207,6 +2206,45 @@ static void lexerLex(Lexer *l, TscCompiler *compiler, File *file)
                 else
                 {
                     l->token.kind = TOKEN_IDENT;
+
+                    char *type_prefixes[3] = {"float", "uint", "int"};
+                    TokenKind type_kinds[3] = {TOKEN_FLOAT, TOKEN_UINT, TOKEN_INT};
+                    char *type_str = l->token.str;
+                    size_t type_str_len = strlen(type_str);
+
+                    for (uint32_t i = 0; i < 3; ++i)
+                    {
+                        size_t prefix_len = strlen(type_prefixes[i]);
+                        if (strncmp(type_str, type_prefixes[i], prefix_len) == 0)
+                        {
+                            if ((prefix_len + 1) == type_str_len)
+                            {
+                                uint8_t dim = (uint8_t)(type_str[prefix_len] - '0');
+                                if (dim > 1 && dim <= 4)
+                                {
+                                    l->token.kind = TOKEN_VECTOR_TYPE;
+                                    l->token.vector_type.elem_type = type_kinds[i];
+                                    l->token.vector_type.dim = dim;
+                                }
+                            }
+
+                            if ((prefix_len + 3) == type_str_len && type_str[prefix_len + 1] == 'x')
+                            {
+                                // Matrix type
+                                uint8_t dim1 = (uint8_t)(type_str[prefix_len] - '0');
+                                uint8_t dim2 = (uint8_t)(type_str[prefix_len + 2] - '0');
+                                if (dim1 > 1 && dim1 <= 4 && dim2 > 1 && dim2 <= 4)
+                                {
+                                    l->token.kind = TOKEN_MATRIX_TYPE;
+                                    l->token.matrix_type.elem_type = type_kinds[i];
+                                    l->token.matrix_type.dim1 = dim1;
+                                    l->token.matrix_type.dim2 = dim2;
+                                }
+                            }
+
+                            break;
+                        }
+                    }
                 }
             }
             else if (isNumeric(lexerPeek(l, 0)))
@@ -2394,12 +2432,8 @@ static AstExpr *parsePrimaryExpr(Parser *p)
     case TOKEN_INT:
     case TOKEN_UINT:
     case TOKEN_FLOAT:
-    case TOKEN_FLOAT2:
-    case TOKEN_FLOAT3:
-    case TOKEN_FLOAT4:
-    case TOKEN_FLOAT2X2:
-    case TOKEN_FLOAT3X3:
-    case TOKEN_FLOAT4X4: {
+    case TOKEN_VECTOR_TYPE:
+    case TOKEN_MATRIX_TYPE: {
         AstExpr *expr = NEW(compiler, AstExpr);
         expr->kind = EXPR_PRIMARY;
         expr->primary.token = parserNext(p, 1);
@@ -3252,47 +3286,66 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
             break;
         }
 
-        case TOKEN_FLOAT2: {
-            Type *float_type = newFloatType(a->module, 32);
-            expr->as_type = newVectorType(a->module, float_type, 2);
+        case TOKEN_VECTOR_TYPE: {
+            Type *elem_type = NULL;
+
+            switch (expr->primary.token->vector_type.elem_type)
+            {
+            case TOKEN_FLOAT: {
+                elem_type = newFloatType(a->module, 32);
+                break;
+            }
+
+            case TOKEN_INT: {
+                elem_type = newIntType(a->module, 32, true);
+                break;
+            }
+
+            case TOKEN_UINT: {
+                elem_type = newIntType(a->module, 32, false);
+                break;
+            }
+
+            default: assert(0); break;
+            }
+
+            assert(elem_type);
+
+            expr->as_type =
+                newVectorType(a->module, elem_type, (uint32_t)expr->primary.token->vector_type.dim);
             expr->type = newBasicType(a->module, TYPE_TYPE);
             break;
         }
 
-        case TOKEN_FLOAT3: {
-            Type *float_type = newFloatType(a->module, 32);
-            expr->as_type = newVectorType(a->module, float_type, 3);
-            expr->type = newBasicType(a->module, TYPE_TYPE);
-            break;
-        }
+        case TOKEN_MATRIX_TYPE: {
+            Type *elem_type = NULL;
 
-        case TOKEN_FLOAT4: {
-            Type *float_type = newFloatType(a->module, 32);
-            expr->as_type = newVectorType(a->module, float_type, 4);
-            expr->type = newBasicType(a->module, TYPE_TYPE);
-            break;
-        }
+            switch (expr->primary.token->matrix_type.elem_type)
+            {
+            case TOKEN_FLOAT: {
+                elem_type = newFloatType(a->module, 32);
+                break;
+            }
 
-        case TOKEN_FLOAT2X2: {
-            Type *float_type = newFloatType(a->module, 32);
-            Type *col_type = newVectorType(a->module, float_type, 2);
-            expr->as_type = newMatrixType(a->module, col_type, 2);
-            expr->type = newBasicType(a->module, TYPE_TYPE);
-            break;
-        }
+            case TOKEN_INT: {
+                elem_type = newIntType(a->module, 32, true);
+                break;
+            }
 
-        case TOKEN_FLOAT3X3: {
-            Type *float_type = newFloatType(a->module, 32);
-            Type *col_type = newVectorType(a->module, float_type, 3);
-            expr->as_type = newMatrixType(a->module, col_type, 3);
-            expr->type = newBasicType(a->module, TYPE_TYPE);
-            break;
-        }
+            case TOKEN_UINT: {
+                elem_type = newIntType(a->module, 32, false);
+                break;
+            }
 
-        case TOKEN_FLOAT4X4: {
-            Type *float_type = newFloatType(a->module, 32);
-            Type *col_type = newVectorType(a->module, float_type, 4);
-            expr->as_type = newMatrixType(a->module, col_type, 4);
+            default: assert(0); break;
+            }
+
+            assert(elem_type);
+
+            Type *col_type = newVectorType(
+                a->module, elem_type, (uint32_t)expr->primary.token->matrix_type.dim1);
+            expr->as_type =
+                newMatrixType(a->module, col_type, (uint32_t)expr->primary.token->matrix_type.dim2);
             expr->type = newBasicType(a->module, TYPE_TYPE);
             break;
         }
