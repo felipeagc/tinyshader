@@ -939,7 +939,7 @@ struct AstDecl
             SpvExecutionModel *execution_model;
 
             /*array*/ AstStmt **stmts;
-            /*array*/ AstDecl **parameters;
+            /*array*/ AstDecl **all_params;
             AstExpr *return_type;
 
             // To be filled later:
@@ -955,6 +955,7 @@ struct AstDecl
             AstExpr *value_expr;
             SpvStorageClass storage_class;
             AstVarKind kind;
+            char *semantic;
         } var;
 
         struct
@@ -972,6 +973,7 @@ struct AstDecl
         {
             AstExpr *type_expr;
             uint32_t index;
+            char *semantic;
         } struct_field;
 
         struct
@@ -1744,7 +1746,7 @@ static uint32_t typeAlignOf(Module *m, Type *type)
     case TYPE_INT: align = type->int_.bits / 8; break;
     case TYPE_FLOAT: align = type->float_.bits / 8; break;
 
-    case TYPE_VECTOR:{
+    case TYPE_VECTOR: {
         switch (type->vector.size)
         {
         case 2: align = typeAlignOf(m, type->vector.elem_type) * 2; break;
@@ -1756,8 +1758,7 @@ static uint32_t typeAlignOf(Module *m, Type *type)
         break;
     }
 
-    case TYPE_MATRIX:
-    {
+    case TYPE_MATRIX: {
         align = typeAlignOf(m, type->matrix.col_type);
         break;
     }
@@ -1811,8 +1812,7 @@ static uint32_t typeSizeOf(Module *m, Type *type)
         break;
     }
 
-    case TYPE_MATRIX:
-    {
+    case TYPE_MATRIX: {
         size = typeSizeOf(m, type->matrix.col_type) * type->matrix.col_count;
         break;
     }
@@ -1825,7 +1825,7 @@ static uint32_t typeSizeOf(Module *m, Type *type)
         {
             Type *field = type->struct_.fields[i];
             uint32_t field_align = typeAlignOf(m, field);
-            size = padToAlignment(size, field_align);// Add padding
+            size = padToAlignment(size, field_align); // Add padding
             type->struct_.field_offsets[i] = size;
             size += typeSizeOf(m, field);
         }
@@ -2886,12 +2886,20 @@ static AstDecl *parseTopLevel(Parser *p)
             Token *name_tok = parserConsume(p, TOKEN_IDENT);
             if (!name_tok) return NULL;
 
-            if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
-
             AstDecl *field_decl = NEW(compiler, AstDecl);
             field_decl->kind = DECL_STRUCT_FIELD;
             field_decl->name = name_tok->str;
             field_decl->struct_field.type_expr = type_expr;
+
+            if (parserPeek(p, 0)->kind == TOKEN_COLON)
+            {
+                parserNext(p, 1);
+                Token *semantic_tok = parserConsume(p, TOKEN_IDENT);
+                if (!semantic_tok) return NULL;
+                field_decl->struct_field.semantic = semantic_tok->str;
+            }
+
+            if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
 
             arrPush(decl->struct_.fields, field_decl);
         }
@@ -3077,7 +3085,15 @@ static AstDecl *parseTopLevel(Parser *p)
                 param_decl->var.storage_class = storage_class;
                 param_decl->var.kind = var_kind;
 
-                arrPush(decl->func.parameters, param_decl);
+                if (parserPeek(p, 0)->kind == TOKEN_COLON)
+                {
+                    parserNext(p, 1);
+                    Token *semantic_tok = parserConsume(p, TOKEN_IDENT);
+                    if (!semantic_tok) return NULL;
+                    param_decl->var.semantic = semantic_tok->str;
+                }
+
+                arrPush(decl->func.all_params, param_decl);
 
                 if (parserPeek(p, 0)->kind != TOKEN_RPAREN)
                 {
@@ -3836,28 +3852,44 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
             }
         }
 
-        for (uint32_t i = 0; i < arrLength(decl->func.parameters); ++i)
+        for (uint32_t i = 0; i < arrLength(decl->func.all_params); ++i)
         {
-            AstDecl *param_decl = decl->func.parameters[i];
+            AstDecl *param_decl = decl->func.all_params[i];
 
-            if (param_decl->var.storage_class == SpvStorageClassInput)
+            if (decl->func.execution_model)
             {
-                arrPush(decl->func.inputs, param_decl);
-            }
-            else if (param_decl->var.storage_class == SpvStorageClassOutput)
-            {
-                arrPush(decl->func.outputs, param_decl);
-            }
-            else if (decl->func.execution_model)
-            {
-                param_decl->var.storage_class = SpvStorageClassInput;
-                param_decl->var.kind = VAR_INPUT;
-                arrPush(decl->func.inputs, param_decl);
+                if (!param_decl->var.semantic)
+                {
+                    addErr(
+                        compiler,
+                        &param_decl->loc,
+                        "entry point parameter needs a semantic string");
+                }
+
+                if (param_decl->var.storage_class == SpvStorageClassInput)
+                {
+                    arrPush(decl->func.inputs, param_decl);
+                }
+                else if (param_decl->var.storage_class == SpvStorageClassOutput)
+                {
+                    arrPush(decl->func.outputs, param_decl);
+                }
+                else
+                {
+                    param_decl->var.storage_class = SpvStorageClassInput;
+                    param_decl->var.kind = VAR_INPUT;
+                    arrPush(decl->func.inputs, param_decl);
+                }
             }
             else
             {
                 arrPush(decl->func.func_params, param_decl);
             }
+        }
+
+        if (decl->func.execution_model)
+        {
+            assert(arrLength(decl->func.func_params) == 0);
         }
 
         decl->scope = NEW(compiler, Scope);
