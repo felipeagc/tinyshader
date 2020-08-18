@@ -698,6 +698,8 @@ typedef enum IRInstKind {
 typedef enum IRBuiltinInstKind {
     IR_BUILTIN_DOT,
     IR_BUILTIN_MUL,
+    IR_BUILTIN_CREATE_SAMPLED_IMAGE,
+    IR_BUILTIN_SAMPLE_IMPLICIT_LOD,
 } IRBuiltinInstKind;
 
 struct IRInst
@@ -1029,6 +1031,7 @@ struct AstExpr
         {
             AstExpr *func_expr;
             /*array*/ AstExpr **params;
+            AstExpr *self_param;
         } func_call;
 
         struct
@@ -3423,6 +3426,8 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
         AstExpr *left = expr->access.base;
         analyzerAnalyzeExpr(a, left, NULL);
 
+        assert(arrLength(expr->access.chain) > 0);
+
         for (uint32_t i = 0; i < arrLength(expr->access.chain); ++i)
         {
             AstExpr *right = expr->access.chain[i];
@@ -3520,8 +3525,77 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
     }
 
     case EXPR_FUNC_CALL: {
-        analyzerAnalyzeExpr(a, expr->func_call.func_expr, NULL);
-        Type *func_type = expr->func_call.func_expr->type;
+        AstExpr *func_expr = expr->func_call.func_expr;
+
+        // Builtin method call
+        if (func_expr->kind == EXPR_ACCESS)
+        {
+            AstExpr *method_name_expr =
+                func_expr->access.chain[arrLength(func_expr->access.chain) - 1];
+            assert(method_name_expr->kind == EXPR_IDENT);
+            char *method_name = method_name_expr->ident.name;
+
+            arrPop(func_expr->access.chain); // Remove last element from access (the method name)
+
+            if (arrLength(func_expr->access.chain) == 0)
+            {
+                func_expr = func_expr->access.base;
+            }
+
+            expr->func_call.self_param = func_expr;
+            expr->func_call.func_expr = method_name_expr;
+
+            analyzerAnalyzeExpr(a, expr->func_call.self_param, NULL);
+            Type *self_type = expr->func_call.self_param->type;
+            if (!self_type)
+            {
+                break;
+            }
+
+            if (self_type->kind == TYPE_IMAGE && stringEquals(method_name, "Sample"))
+            {
+                Type *texture_component_type = self_type->image.sampled_type;
+
+                uint32_t func_param_count = 2;
+                Type **func_param_types = NEW_ARRAY(compiler, Type *, func_param_count);
+
+                func_param_types[0] = newBasicType(m, TYPE_SAMPLER);
+
+                Type *float_type = newFloatType(m, 32);
+                switch (self_type->image.dim)
+                {
+                case SpvDim1D: func_param_types[1] = newVectorType(m, float_type, 1); break;
+                case SpvDim2D: func_param_types[1] = newVectorType(m, float_type, 2); break;
+                case SpvDim3D:
+                case SpvDimCube: func_param_types[1] = newVectorType(m, float_type, 3); break;
+
+                default: assert(0); break;
+                }
+
+                if (func_param_count != arrLength(expr->func_call.params))
+                {
+                    addErr(compiler, &expr->loc, "wrong amount of parameters for function call");
+                    break;
+                }
+
+                for (uint32_t i = 0; i < arrLength(expr->func_call.params); ++i)
+                {
+                    AstExpr *param = expr->func_call.params[i];
+                    analyzerAnalyzeExpr(a, param, func_param_types[i]);
+                }
+
+                expr->type = texture_component_type;
+            }
+            else
+            {
+                addErr(compiler, &expr->loc, "invalid method call");
+            }
+
+            break;
+        }
+
+        analyzerAnalyzeExpr(a, func_expr, NULL);
+        Type *func_type = func_expr->type;
         if (!func_type)
         {
             break;
@@ -3531,7 +3605,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
         {
             // Type constructor
 
-            Type *constructed_type = expr->func_call.func_expr->as_type;
+            Type *constructed_type = func_expr->as_type;
             assert(constructed_type);
 
             expr->type = constructed_type;
@@ -3693,7 +3767,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
 
                 expr->type = b->type;
             }
-            else if(a->type->kind == TYPE_VECTOR && b->type->kind == TYPE_VECTOR)
+            else if (a->type->kind == TYPE_VECTOR && b->type->kind == TYPE_VECTOR)
             {
                 // Vector dot product
                 if (b->type != a->type)
@@ -3722,6 +3796,9 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
 
             break;
         }
+
+        case IR_BUILTIN_CREATE_SAMPLED_IMAGE:
+        case IR_BUILTIN_SAMPLE_IMPLICIT_LOD: assert(0); break;
         }
 
         break;
@@ -3744,9 +3821,11 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
         Type *sampled_type = expr->texture.sampled_type_expr->as_type;
         assert(sampled_type);
 
-        if ((sampled_type->kind != TYPE_FLOAT) && (sampled_type->kind != TYPE_INT))
+        if (!(sampled_type->kind == TYPE_VECTOR || sampled_type->kind == TYPE_INT ||
+              sampled_type->kind == TYPE_FLOAT))
         {
-            addErr(compiler, &expr->loc, "invalid sampled type for texture");
+            addErr(compiler, &expr->loc, "invalid scalar type for sampled type for texture");
+            break;
         }
 
         expr->type = type_type;
@@ -4664,7 +4743,7 @@ irBuildBuiltinCall(IRModule *m, IRBuiltinInstKind kind, IRInst **params, uint32_
             // Vector times matrix, yes, it's backwards
             inst->type = b->type;
         }
-        else if(a->type->kind == TYPE_VECTOR && b->type->kind == TYPE_VECTOR)
+        else if (a->type->kind == TYPE_VECTOR && b->type->kind == TYPE_VECTOR)
         {
             // Vector dot product
             inst->type = a->type->vector.elem_type;
@@ -4679,6 +4758,24 @@ irBuildBuiltinCall(IRModule *m, IRBuiltinInstKind kind, IRInst **params, uint32_
             assert(0);
         }
 
+        break;
+    }
+
+    case IR_BUILTIN_SAMPLE_IMPLICIT_LOD: {
+        assert(param_count == 2);
+        IRInst *img_param = params[0];
+        Type *img_type = img_param->type;
+        assert(img_type->kind == TYPE_SAMPLED_IMAGE);
+        inst->type = img_type->sampled_image.image_type->image.sampled_type;
+        break;
+    }
+
+    case IR_BUILTIN_CREATE_SAMPLED_IMAGE: {
+        assert(param_count == 2);
+        IRInst *img_param = params[0];
+        Type *img_type = img_param->type;
+        assert(img_type->kind == TYPE_IMAGE);
+        inst->type = newSampledImageType(m->mod, img_type);
         break;
     }
     }
@@ -4918,7 +5015,7 @@ static void irModuleEncodeTypes(IRModule *m)
         case TYPE_IMAGE: {
             uint32_t params[8] = {
                 type->id,
-                type->image.sampled_type->id,
+                getScalarType(type->image.sampled_type)->id,
                 type->image.dim,
                 type->image.depth,
                 type->image.arrayed,
@@ -5154,7 +5251,7 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
                     uint32_t params[4] = {inst->type->id, inst->id, b->id, a->id};
                     irModuleEncodeInst(m, SpvOpVectorTimesMatrix, params, 4);
                 }
-                else if(a->type->kind == TYPE_VECTOR && b->type->kind == TYPE_VECTOR)
+                else if (a->type->kind == TYPE_VECTOR && b->type->kind == TYPE_VECTOR)
                 {
                     // Vector dot product
                     uint32_t params[4] = {inst->type->id, inst->id, a->id, b->id};
@@ -5171,6 +5268,22 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
                     assert(0);
                 }
 
+                break;
+            }
+
+            case IR_BUILTIN_CREATE_SAMPLED_IMAGE: {
+                IRInst *image = param_values[0];
+                IRInst *sampler = param_values[1];
+                uint32_t params[4] = {inst->type->id, inst->id, image->id, sampler->id};
+                irModuleEncodeInst(m, SpvOpSampledImage, params, 4);
+                break;
+            }
+
+            case IR_BUILTIN_SAMPLE_IMPLICIT_LOD: {
+                IRInst *sampled_image = param_values[0];
+                IRInst *coordinate = param_values[1];
+                uint32_t params[4] = {inst->type->id, inst->id, sampled_image->id, coordinate->id};
+                irModuleEncodeInst(m, SpvOpImageSampleImplicitLod, params, 4);
                 break;
             }
             }
@@ -5534,6 +5647,52 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
     }
 
     case EXPR_FUNC_CALL: {
+        if (expr->func_call.self_param)
+        {
+            // Method call
+            AstExpr *method_name_expr = expr->func_call.func_expr;
+            assert(method_name_expr->kind == EXPR_IDENT);
+            char *method_name = method_name_expr->ident.name;
+
+            Type *self_type = expr->func_call.self_param->type;
+
+            irModuleBuildExpr(m, expr->func_call.self_param);
+            assert(expr->func_call.self_param->value);
+
+            uint32_t param_count =  arrLength(expr->func_call.params);
+            IRInst **param_values = NEW_ARRAY(compiler, IRInst *, param_count);
+
+            IRInst *self_value = irLoadVal(m, expr->func_call.self_param->value);
+
+            for (uint32_t i = 0; i < arrLength(expr->func_call.params); ++i)
+            {
+                AstExpr *param = expr->func_call.params[i];
+                irModuleBuildExpr(m, param);
+                assert(param->value);
+                param_values[i] = irLoadVal(m, param->value);
+            }
+
+            if (self_type->kind == TYPE_IMAGE && stringEquals(method_name, "Sample"))
+            {
+                IRInst **sampled_image_params = NEW_ARRAY(compiler, IRInst *, 2);
+                sampled_image_params[0] = self_value;
+                sampled_image_params[1] = param_values[0];
+                IRInst *sampled_image = irBuildBuiltinCall(
+                    m, IR_BUILTIN_CREATE_SAMPLED_IMAGE, sampled_image_params, 2);
+
+                IRInst **sample_params = NEW_ARRAY(compiler, IRInst *, 2);
+                sample_params[0] = sampled_image;
+                sample_params[1] = param_values[1];
+                expr->value = irBuildBuiltinCall(
+                    m, IR_BUILTIN_SAMPLE_IMPLICIT_LOD, sample_params, 2);
+            }
+            else
+            {
+                assert(0);
+            }
+            break;
+        }
+
         Type *func_type = expr->func_call.func_expr->type;
         assert(func_type);
 
