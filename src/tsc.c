@@ -566,36 +566,33 @@ typedef struct Token
 } Token;
 
 //
-// Type
+// IR
 //
 
-typedef enum TypeKind {
-    TYPE_VOID,
-    TYPE_TYPE,
+typedef enum IRTypeKind {
+    IR_TYPE_VOID,
 
-    TYPE_BOOL,
-    TYPE_FLOAT,
-    TYPE_INT,
+    IR_TYPE_BOOL,
+    IR_TYPE_FLOAT,
+    IR_TYPE_INT,
 
-    TYPE_VECTOR,
-    TYPE_MATRIX,
+    IR_TYPE_VECTOR,
+    IR_TYPE_MATRIX,
 
-    TYPE_POINTER,
-    TYPE_FUNC,
-    TYPE_STRUCT,
+    IR_TYPE_POINTER,
+    IR_TYPE_FUNC,
+    IR_TYPE_STRUCT,
 
-    TYPE_SAMPLER,
-    TYPE_IMAGE,
-    TYPE_SAMPLED_IMAGE,
-} TypeKind;
+    IR_TYPE_SAMPLER,
+    IR_TYPE_IMAGE,
+    IR_TYPE_SAMPLED_IMAGE,
+} IRTypeKind;
 
-typedef struct Type
+typedef struct IRType
 {
-    TypeKind kind;
+    IRTypeKind kind;
     char *string;
     uint32_t id;
-    uint32_t size;
-    uint32_t align;
 
     union
     {
@@ -611,37 +608,36 @@ typedef struct Type
         struct
         {
             SpvStorageClass storage_class;
-            struct Type *sub;
+            struct IRType *sub;
         } ptr;
         struct
         {
             uint32_t size;
-            struct Type *elem_type;
+            struct IRType *elem_type;
         } vector;
         struct
         {
             uint32_t col_count;
-            struct Type *col_type;
+            struct IRType *col_type;
         } matrix;
         struct
         {
-            struct Type *return_type;
+            struct IRType *return_type;
 
-            struct Type **params;
+            struct IRType **params;
             uint32_t param_count;
         } func;
         struct
         {
             char *name;
 
-            AstDecl **field_decls;
-            struct Type **fields;
+            struct IRType **fields;
             uint32_t *field_offsets;
             uint32_t field_count;
         } struct_;
         struct
         {
-            struct Type *sampled_type;
+            struct IRType *sampled_type;
             SpvDim dim;
             uint32_t depth;
             uint32_t arrayed;
@@ -651,14 +647,10 @@ typedef struct Type
         } image;
         struct
         {
-            struct Type *image_type;
+            struct IRType *image_type;
         } sampled_image;
     };
-} Type;
-
-//
-// IR
-//
+} IRType;
 
 typedef struct IRModule IRModule;
 typedef struct IRInst IRInst;
@@ -691,6 +683,8 @@ typedef enum IRInstKind {
     IR_INST_COMPOSITE_EXTRACT,
     IR_INST_VECTOR_SHUFFLE,
 
+    IR_INST_SAMPLE_IMPLICIT_LOD,
+
     IR_INST_UNARY,
     IR_INST_BINARY,
 } IRInstKind;
@@ -699,14 +693,13 @@ typedef enum IRBuiltinInstKind {
     IR_BUILTIN_DOT,
     IR_BUILTIN_MUL,
     IR_BUILTIN_CREATE_SAMPLED_IMAGE,
-    IR_BUILTIN_SAMPLE_IMPLICIT_LOD,
 } IRBuiltinInstKind;
 
 struct IRInst
 {
     IRInstKind kind;
     uint32_t id;
-    Type *type;
+    IRType *type;
     /*array*/ IRDecoration *decorations;
 
     union
@@ -783,7 +776,7 @@ struct IRInst
         struct
         {
             SpvOp op;
-            Type *dst_type;
+            IRType *dst_type;
             IRInst *value;
             bool redundant;
         } cast;
@@ -811,6 +804,12 @@ struct IRInst
 
         struct
         {
+            IRInst *image_sampler;
+            IRInst *coords;
+        } sample;
+
+        struct
+        {
             IRInst *right;
             SpvOp op;
         } unary;
@@ -829,6 +828,8 @@ struct IRModule
     TscCompiler *compiler;
     Module *mod;
 
+    HashMap type_cache;
+
     /*array*/ IRInst **entry_points;
     /*array*/ IRInst **constants;
     /*array*/ IRInst **functions;
@@ -843,6 +844,92 @@ struct IRModule
 //
 // AST
 //
+
+typedef enum AstTypeKind {
+    TYPE_VOID,
+    TYPE_TYPE,
+
+    TYPE_BOOL,
+    TYPE_FLOAT,
+    TYPE_INT,
+
+    TYPE_VECTOR,
+    TYPE_MATRIX,
+
+    TYPE_POINTER,
+    TYPE_FUNC,
+    TYPE_STRUCT,
+
+    TYPE_SAMPLER,
+    TYPE_IMAGE,
+    TYPE_SAMPLED_IMAGE,
+} AstTypeKind;
+
+typedef struct AstType
+{
+    AstTypeKind kind;
+    char *string;
+    uint32_t size;
+    uint32_t align;
+
+    union
+    {
+        struct
+        {
+            uint32_t bits;
+        } float_;
+        struct
+        {
+            uint32_t bits;
+            bool is_signed;
+        } int_;
+        struct
+        {
+            SpvStorageClass storage_class;
+            struct AstType *sub;
+        } ptr;
+        struct
+        {
+            uint32_t size;
+            struct AstType *elem_type;
+        } vector;
+        struct
+        {
+            uint32_t col_count;
+            struct AstType *col_type;
+        } matrix;
+        struct
+        {
+            struct AstType *return_type;
+
+            struct AstType **params;
+            uint32_t param_count;
+        } func;
+        struct
+        {
+            char *name;
+
+            AstDecl **field_decls;
+            struct AstType **fields;
+            uint32_t *field_offsets;
+            uint32_t field_count;
+        } struct_;
+        struct
+        {
+            struct AstType *sampled_type;
+            SpvDim dim;
+            uint32_t depth;
+            uint32_t arrayed;
+            uint32_t multisampled;
+            uint32_t sampled;
+            SpvImageFormat format;
+        } image;
+        struct
+        {
+            struct AstType *image_type;
+        } sampled_image;
+    };
+} AstType;
 
 typedef struct AstAttribute
 {
@@ -933,8 +1020,8 @@ struct AstDecl
     AstDeclKind kind;
     Location loc;
     char *name;
-    Type *type;
-    Type *as_type;
+    AstType *type;
+    AstType *as_type;
     IRInst *value;
     Scope *scope;
     /*array*/ AstAttribute *attributes;
@@ -998,8 +1085,8 @@ struct AstExpr
     AstExprKind kind;
     Location loc;
     IRInst *value;
-    Type *type;
-    Type *as_type;
+    AstType *type;
+    AstType *as_type;
     bool assignable;
     Scope *inhabited_scope;
     Scope *scope;
@@ -1111,7 +1198,6 @@ struct Module
     /*array*/ File **files;
 
     HashMap type_cache;
-    uint32_t set_bound;
 };
 
 //
@@ -1286,8 +1372,383 @@ static void moduleDestroy(Module *m)
 }
 // }}}
 
+// IR type functions {{{
+static char *irTypeToString(TscCompiler *compiler, IRType *type)
+{
+    if (type->string) return type->string;
+
+    char *prefix = NULL;
+    char *storage_class = NULL;
+    char *sub = NULL;
+    char *postfix = NULL;
+
+    switch (type->kind)
+    {
+    case IR_TYPE_VOID: prefix = "void"; break;
+
+    case IR_TYPE_BOOL: prefix = "bool"; break;
+
+    case IR_TYPE_FLOAT:
+        sbReset(&compiler->sb);
+        sbSprintf(&compiler->sb, "float%u", type->float_.bits);
+        prefix = sbBuild(&compiler->sb, &compiler->alloc);
+        break;
+
+    case IR_TYPE_INT:
+        sbReset(&compiler->sb);
+
+        if (type->int_.is_signed)
+            sbAppend(&compiler->sb, "int");
+        else
+            sbAppend(&compiler->sb, "uint");
+
+        sbSprintf(&compiler->sb, "%u", type->int_.bits);
+        prefix = sbBuild(&compiler->sb, &compiler->alloc);
+        break;
+
+    case IR_TYPE_VECTOR:
+        sbReset(&compiler->sb);
+        sbSprintf(&compiler->sb, "vec%u", type->vector.size);
+        prefix = sbBuild(&compiler->sb, &compiler->alloc);
+
+        sub = irTypeToString(compiler, type->vector.elem_type);
+        break;
+    case IR_TYPE_MATRIX:
+        sbReset(&compiler->sb);
+        sbSprintf(&compiler->sb, "mat%u", type->matrix.col_count);
+        prefix = sbBuild(&compiler->sb, &compiler->alloc);
+
+        sub = irTypeToString(compiler, type->matrix.col_type);
+        break;
+
+    case IR_TYPE_POINTER: {
+        prefix = "ptr";
+
+        switch (type->ptr.storage_class)
+        {
+        case SpvStorageClassInput: storage_class = "input"; break;
+        case SpvStorageClassOutput: storage_class = "output"; break;
+        case SpvStorageClassUniformConstant: storage_class = "constant"; break;
+        case SpvStorageClassUniform: storage_class = "uniform"; break;
+        case SpvStorageClassStorageBuffer: storage_class = "storage"; break;
+        case SpvStorageClassFunction: storage_class = "function"; break;
+
+        default: assert(0); break;
+        }
+
+        assert(type->ptr.sub);
+        sub = irTypeToString(compiler, type->ptr.sub);
+        break;
+    }
+
+    case IR_TYPE_FUNC: {
+        prefix = "func";
+
+        char *return_type = irTypeToString(compiler, type->func.return_type);
+        char **params = bumpZeroAlloc(&compiler->alloc, sizeof(char *) * type->func.param_count);
+        for (uint32_t i = 0; i < type->func.param_count; ++i)
+        {
+            params[i] = irTypeToString(compiler, type->func.params[i]);
+        }
+
+        sbReset(&compiler->sb);
+        sbAppend(&compiler->sb, return_type);
+        sbAppend(&compiler->sb, "$");
+        sbSprintf(&compiler->sb, "%u", type->func.param_count);
+        for (uint32_t i = 0; i < type->func.param_count; ++i)
+        {
+            if (i != 0) sbAppend(&compiler->sb, "_");
+            sbAppend(&compiler->sb, params[i]);
+        }
+        sub = sbBuild(&compiler->sb, &compiler->alloc);
+
+        break;
+    }
+
+    case IR_TYPE_STRUCT: {
+        sbReset(&compiler->sb);
+        sbSprintf(&compiler->sb, "struct%u%s", strlen(type->struct_.name), type->struct_.name);
+        prefix = sbBuild(&compiler->sb, &compiler->alloc);
+        break;
+    }
+
+    case IR_TYPE_SAMPLER: {
+        prefix = "sampler";
+        break;
+    }
+
+    case IR_TYPE_IMAGE: {
+        prefix = "image";
+
+        sub = irTypeToString(compiler, type->image.sampled_type);
+
+        switch (type->image.dim)
+        {
+        case SpvDimCube: postfix = "Cube"; break;
+        case SpvDim1D: postfix = "1D"; break;
+        case SpvDim2D: postfix = "2D"; break;
+        case SpvDim3D: postfix = "3D"; break;
+        default: assert(0); break;
+        }
+
+        break;
+    }
+
+    case IR_TYPE_SAMPLED_IMAGE: {
+        prefix = "sampledImage";
+        sub = irTypeToString(compiler, type->sampled_image.image_type);
+        break;
+    }
+    }
+
+    sbReset(&compiler->sb);
+
+    assert(prefix);
+    sbAppend(&compiler->sb, prefix);
+
+    if (storage_class)
+    {
+        sbAppend(&compiler->sb, "_");
+        sbAppend(&compiler->sb, storage_class);
+    }
+
+    if (sub)
+    {
+        sbAppend(&compiler->sb, "_");
+        sbAppend(&compiler->sb, sub);
+    }
+
+    if (postfix)
+    {
+        sbAppend(&compiler->sb, "_");
+        sbAppend(&compiler->sb, postfix);
+    }
+
+    type->string = sbBuild(&compiler->sb, &compiler->alloc);
+    return type->string;
+}
+
+static IRType *irGetCachedType(IRModule *m, IRType *type)
+{
+    char *type_string = irTypeToString(m->compiler, type);
+    assert(type_string);
+    assert(strlen(type_string) > 0);
+
+    IRType *found_type = NULL;
+    if (hashGet(&m->type_cache, type_string, (void **)&found_type))
+    {
+        assert(found_type);
+        return found_type;
+    }
+
+    hashSet(&m->type_cache, type_string, type);
+
+    return type;
+}
+
+static IRType *irNewBasicType(IRModule *m, IRTypeKind kind)
+{
+    IRType *ty = NEW(m->compiler, IRType);
+    ty->kind = kind;
+    return irGetCachedType(m, ty);
+}
+
+static IRType *irNewPointerType(IRModule *m, SpvStorageClass storage_class, IRType *sub)
+{
+    IRType *ty = NEW(m->compiler, IRType);
+    ty->kind = IR_TYPE_POINTER;
+    ty->ptr.storage_class = storage_class;
+    ty->ptr.sub = sub;
+    return irGetCachedType(m, ty);
+}
+
+static IRType *irNewVectorType(IRModule *m, IRType *elem_type, uint32_t size)
+{
+    IRType *ty = NEW(m->compiler, IRType);
+    ty->kind = IR_TYPE_VECTOR;
+    ty->vector.elem_type = elem_type;
+    ty->vector.size = size;
+    return irGetCachedType(m, ty);
+}
+
+static IRType *irNewMatrixType(IRModule *m, IRType *col_type, uint32_t col_count)
+{
+    IRType *ty = NEW(m->compiler, IRType);
+    ty->kind = IR_TYPE_MATRIX;
+    ty->matrix.col_type = col_type;
+    ty->matrix.col_count = col_count;
+    return irGetCachedType(m, ty);
+}
+
+static IRType *irNewFloatType(IRModule *m, uint32_t bits)
+{
+    IRType *ty = NEW(m->compiler, IRType);
+    ty->kind = IR_TYPE_FLOAT;
+    ty->float_.bits = bits;
+    return irGetCachedType(m, ty);
+}
+
+static IRType *irNewIntType(IRModule *m, uint32_t bits, bool is_signed)
+{
+    IRType *ty = NEW(m->compiler, IRType);
+    ty->kind = IR_TYPE_INT;
+    ty->int_.bits = bits;
+    ty->int_.is_signed = is_signed;
+    return irGetCachedType(m, ty);
+}
+
+static IRType *
+irNewFuncType(IRModule *m, IRType *return_type, IRType **params, uint32_t param_count)
+{
+    IRType *ty = NEW(m->compiler, IRType);
+    ty->kind = IR_TYPE_FUNC;
+    ty->func.return_type = return_type;
+    if (param_count > 0)
+    {
+        ty->func.param_count = param_count;
+        ty->func.params = NEW_ARRAY(m->compiler, IRType *, param_count);
+        memcpy(ty->func.params, params, sizeof(IRType *) * param_count);
+    }
+    return irGetCachedType(m, ty);
+}
+
+static IRType *irNewStructType(
+    IRModule *m, char *name, IRType **fields, uint32_t *field_offsets, uint32_t field_count)
+{
+    IRType *ty = NEW(m->compiler, IRType);
+    ty->kind = IR_TYPE_STRUCT;
+    ty->struct_.name = name;
+
+    if (field_count > 0)
+    {
+        ty->struct_.field_count = field_count;
+
+        ty->struct_.fields = NEW_ARRAY(m->compiler, IRType *, field_count);
+        memcpy(ty->struct_.fields, fields, sizeof(IRType *) * field_count);
+
+        ty->struct_.field_offsets = NEW_ARRAY(m->compiler, uint32_t, field_count);
+        memcpy(ty->struct_.field_offsets, field_offsets, sizeof(uint32_t) * field_count);
+    }
+
+    return irGetCachedType(m, ty);
+}
+
+static IRType *irNewImageType(IRModule *m, IRType *sampled_type, SpvDim dim)
+{
+    IRType *ty = NEW(m->compiler, IRType);
+    ty->kind = IR_TYPE_IMAGE;
+    ty->image.sampled_type = sampled_type;
+    ty->image.dim = dim;
+    ty->image.depth = 0;
+    ty->image.arrayed = 0;
+    ty->image.multisampled = 0;
+    ty->image.sampled = 1;
+    ty->image.format = SpvImageFormatUnknown;
+    return irGetCachedType(m, ty);
+}
+
+static IRType *irNewSampledImageType(IRModule *m, IRType *image_type)
+{
+    IRType *ty = NEW(m->compiler, IRType);
+    ty->kind = IR_TYPE_SAMPLED_IMAGE;
+    ty->sampled_image.image_type = image_type;
+    return irGetCachedType(m, ty);
+}
+
+static bool irIsTypeCastable(IRType *src_type, IRType *dst_type, SpvOp *op)
+{
+    if (src_type == dst_type)
+    {
+        *op = SpvOpNop;
+        return true;
+    }
+    else if (src_type->kind == IR_TYPE_INT)
+    {
+        if (src_type->int_.is_signed)
+        {
+            if (dst_type->kind == IR_TYPE_INT)
+            {
+                if (dst_type->int_.is_signed)
+                {
+                    *op = SpvOpSConvert;
+                    return true;
+                }
+                else
+                {
+                    return false;
+                }
+            }
+            else if (dst_type->kind == IR_TYPE_FLOAT)
+            {
+                *op = SpvOpConvertSToF;
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+        else
+        {
+            if (dst_type->kind == IR_TYPE_INT)
+            {
+                if (dst_type->int_.is_signed)
+                {
+                    return false;
+                }
+                else
+                {
+                    *op = SpvOpUConvert;
+                    return true;
+                }
+            }
+            else if (dst_type->kind == IR_TYPE_FLOAT)
+            {
+                *op = SpvOpConvertUToF;
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+    }
+    else if (src_type->kind == IR_TYPE_FLOAT)
+    {
+        if (dst_type->kind == IR_TYPE_INT)
+        {
+            if (dst_type->int_.is_signed)
+            {
+                *op = SpvOpConvertFToS;
+                return true;
+            }
+            else
+            {
+                *op = SpvOpConvertFToU;
+                return true;
+            }
+        }
+        else if (dst_type->kind == IR_TYPE_FLOAT)
+        {
+            *op = SpvOpFConvert;
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+    else
+    {
+        return false;
+    }
+
+    assert(0);
+}
+// }}}
+
 // Type functions {{{
-static char *typeToString(TscCompiler *compiler, Type *type)
+static char *typeToString(TscCompiler *compiler, AstType *type)
 {
     if (type->string) return type->string;
 
@@ -1444,13 +1905,13 @@ static char *typeToString(TscCompiler *compiler, Type *type)
     return type->string;
 }
 
-static Type *getCachedType(Module *m, Type *type)
+static AstType *getCachedType(Module *m, AstType *type)
 {
     char *type_string = typeToString(m->compiler, type);
     assert(type_string);
     assert(strlen(type_string) > 0);
 
-    Type *found_type = NULL;
+    AstType *found_type = NULL;
     if (hashGet(&m->type_cache, type_string, (void **)&found_type))
     {
         assert(found_type);
@@ -1462,75 +1923,75 @@ static Type *getCachedType(Module *m, Type *type)
     return type;
 }
 
-static Type *newBasicType(Module *m, TypeKind kind)
+static AstType *newBasicType(Module *m, AstTypeKind kind)
 {
-    Type *ty = NEW(m->compiler, Type);
+    AstType *ty = NEW(m->compiler, AstType);
     ty->kind = kind;
     return getCachedType(m, ty);
 }
 
-static Type *newPointerType(Module *m, SpvStorageClass storage_class, Type *sub)
+static AstType *newPointerType(Module *m, SpvStorageClass storage_class, AstType *sub)
 {
-    Type *ty = NEW(m->compiler, Type);
+    AstType *ty = NEW(m->compiler, AstType);
     ty->kind = TYPE_POINTER;
     ty->ptr.storage_class = storage_class;
     ty->ptr.sub = sub;
     return getCachedType(m, ty);
 }
 
-static Type *newVectorType(Module *m, Type *elem_type, uint32_t size)
+static AstType *newVectorType(Module *m, AstType *elem_type, uint32_t size)
 {
-    Type *ty = NEW(m->compiler, Type);
+    AstType *ty = NEW(m->compiler, AstType);
     ty->kind = TYPE_VECTOR;
     ty->vector.elem_type = elem_type;
     ty->vector.size = size;
     return getCachedType(m, ty);
 }
 
-static Type *newMatrixType(Module *m, Type *col_type, uint32_t col_count)
+static AstType *newMatrixType(Module *m, AstType *col_type, uint32_t col_count)
 {
-    Type *ty = NEW(m->compiler, Type);
+    AstType *ty = NEW(m->compiler, AstType);
     ty->kind = TYPE_MATRIX;
     ty->matrix.col_type = col_type;
     ty->matrix.col_count = col_count;
     return getCachedType(m, ty);
 }
 
-static Type *newFloatType(Module *m, uint32_t bits)
+static AstType *newFloatType(Module *m, uint32_t bits)
 {
-    Type *ty = NEW(m->compiler, Type);
+    AstType *ty = NEW(m->compiler, AstType);
     ty->kind = TYPE_FLOAT;
     ty->float_.bits = bits;
     return getCachedType(m, ty);
 }
 
-static Type *newIntType(Module *m, uint32_t bits, bool is_signed)
+static AstType *newIntType(Module *m, uint32_t bits, bool is_signed)
 {
-    Type *ty = NEW(m->compiler, Type);
+    AstType *ty = NEW(m->compiler, AstType);
     ty->kind = TYPE_INT;
     ty->int_.bits = bits;
     ty->int_.is_signed = is_signed;
     return getCachedType(m, ty);
 }
 
-static Type *newFuncType(Module *m, Type *return_type, Type **params, uint32_t param_count)
+static AstType *newFuncType(Module *m, AstType *return_type, AstType **params, uint32_t param_count)
 {
-    Type *ty = NEW(m->compiler, Type);
+    AstType *ty = NEW(m->compiler, AstType);
     ty->kind = TYPE_FUNC;
     ty->func.return_type = return_type;
     if (param_count > 0)
     {
         ty->func.param_count = param_count;
-        ty->func.params = NEW_ARRAY(m->compiler, Type *, param_count);
-        memcpy(ty->func.params, params, sizeof(Type *) * param_count);
+        ty->func.params = NEW_ARRAY(m->compiler, AstType *, param_count);
+        memcpy(ty->func.params, params, sizeof(AstType *) * param_count);
     }
     return getCachedType(m, ty);
 }
 
-static Type *
-newStructType(Module *m, char *name, Type **fields, AstDecl **field_decls, uint32_t field_count)
+static AstType *
+newStructType(Module *m, char *name, AstType **fields, AstDecl **field_decls, uint32_t field_count)
 {
-    Type *ty = NEW(m->compiler, Type);
+    AstType *ty = NEW(m->compiler, AstType);
     ty->kind = TYPE_STRUCT;
     ty->struct_.name = name;
 
@@ -1538,8 +1999,8 @@ newStructType(Module *m, char *name, Type **fields, AstDecl **field_decls, uint3
     {
         ty->struct_.field_count = field_count;
 
-        ty->struct_.fields = NEW_ARRAY(m->compiler, Type *, field_count);
-        memcpy(ty->struct_.fields, fields, sizeof(Type *) * field_count);
+        ty->struct_.fields = NEW_ARRAY(m->compiler, AstType *, field_count);
+        memcpy(ty->struct_.fields, fields, sizeof(AstType *) * field_count);
 
         ty->struct_.field_decls = NEW_ARRAY(m->compiler, AstDecl *, field_count);
         memcpy(ty->struct_.field_decls, field_decls, sizeof(AstDecl *) * field_count);
@@ -1548,9 +2009,9 @@ newStructType(Module *m, char *name, Type **fields, AstDecl **field_decls, uint3
     return getCachedType(m, ty);
 }
 
-static Type *newImageType(Module *m, Type *sampled_type, SpvDim dim)
+static AstType *newImageType(Module *m, AstType *sampled_type, SpvDim dim)
 {
-    Type *ty = NEW(m->compiler, Type);
+    AstType *ty = NEW(m->compiler, AstType);
     ty->kind = TYPE_IMAGE;
     ty->image.sampled_type = sampled_type;
     ty->image.dim = dim;
@@ -1562,19 +2023,18 @@ static Type *newImageType(Module *m, Type *sampled_type, SpvDim dim)
     return getCachedType(m, ty);
 }
 
-static Type *newSampledImageType(Module *m, Type *image_type)
+static AstType *newSampledImageType(Module *m, AstType *image_type)
 {
-    Type *ty = NEW(m->compiler, Type);
+    AstType *ty = NEW(m->compiler, AstType);
     ty->kind = TYPE_SAMPLED_IMAGE;
     ty->sampled_image.image_type = image_type;
     return getCachedType(m, ty);
 }
 
-static bool isTypeCastable(Type *src_type, Type *dst_type, SpvOp *op)
+static bool isTypeCastable(AstType *src_type, AstType *dst_type)
 {
     if (src_type == dst_type)
     {
-        *op = SpvOpNop;
         return true;
     }
     else if (src_type->kind == TYPE_INT)
@@ -1585,7 +2045,6 @@ static bool isTypeCastable(Type *src_type, Type *dst_type, SpvOp *op)
             {
                 if (dst_type->int_.is_signed)
                 {
-                    *op = SpvOpSConvert;
                     return true;
                 }
                 else
@@ -1595,7 +2054,6 @@ static bool isTypeCastable(Type *src_type, Type *dst_type, SpvOp *op)
             }
             else if (dst_type->kind == TYPE_FLOAT)
             {
-                *op = SpvOpConvertSToF;
                 return true;
             }
             else
@@ -1613,13 +2071,11 @@ static bool isTypeCastable(Type *src_type, Type *dst_type, SpvOp *op)
                 }
                 else
                 {
-                    *op = SpvOpUConvert;
                     return true;
                 }
             }
             else if (dst_type->kind == TYPE_FLOAT)
             {
-                *op = SpvOpConvertUToF;
                 return true;
             }
             else
@@ -1634,18 +2090,15 @@ static bool isTypeCastable(Type *src_type, Type *dst_type, SpvOp *op)
         {
             if (dst_type->int_.is_signed)
             {
-                *op = SpvOpConvertFToS;
                 return true;
             }
             else
             {
-                *op = SpvOpConvertFToU;
                 return true;
             }
         }
         else if (dst_type->kind == TYPE_FLOAT)
         {
-            *op = SpvOpFConvert;
             return true;
         }
         else
@@ -1661,7 +2114,7 @@ static bool isTypeCastable(Type *src_type, Type *dst_type, SpvOp *op)
     assert(0);
 }
 
-static Type *getScalarType(Type *type)
+static AstType *getScalarType(AstType *type)
 {
     switch (type->kind)
     {
@@ -1681,7 +2134,7 @@ static Type *getScalarType(Type *type)
 }
 
 // Returns a type that can be used in a comparison operation
-static Type *getComparableType(Type *type)
+static AstType *getComparableType(AstType *type)
 {
     switch (type->kind)
     {
@@ -1698,7 +2151,7 @@ static Type *getComparableType(Type *type)
 }
 
 // Returns a type that can be used in a logical operation
-static Type *getLogicalType(Type *type)
+static AstType *getLogicalType(AstType *type)
 {
     switch (type->kind)
     {
@@ -1713,7 +2166,7 @@ static Type *getLogicalType(Type *type)
     return NULL;
 }
 
-static Type *getElemType(Type *type)
+static AstType *getElemType(AstType *type)
 {
     switch (type->kind)
     {
@@ -1741,7 +2194,7 @@ static uint32_t padToAlignment(uint32_t current, uint32_t align)
     return current;
 }
 
-static uint32_t typeAlignOf(Module *m, Type *type)
+static uint32_t typeAlignOf(Module *m, AstType *type)
 {
     if (type->align > 0) return type->align;
 
@@ -1769,7 +2222,7 @@ static uint32_t typeAlignOf(Module *m, Type *type)
     }
 
     case TYPE_STRUCT: {
-        for (Type **field = type->struct_.fields;
+        for (AstType **field = type->struct_.fields;
              field != type->struct_.fields + type->struct_.field_count;
              ++field)
         {
@@ -1795,7 +2248,7 @@ static uint32_t typeAlignOf(Module *m, Type *type)
     return type->align;
 }
 
-static uint32_t typeSizeOf(Module *m, Type *type)
+static uint32_t typeSizeOf(Module *m, AstType *type)
 {
     if (type->size > 0) return type->size;
 
@@ -1828,7 +2281,7 @@ static uint32_t typeSizeOf(Module *m, Type *type)
 
         for (size_t i = 0; i < type->struct_.field_count; ++i)
         {
-            Type *field = type->struct_.fields[i];
+            AstType *field = type->struct_.fields[i];
             uint32_t field_align = typeAlignOf(m, field);
             size = padToAlignment(size, field_align); // Add padding
             type->struct_.field_offsets[i] = size;
@@ -1850,6 +2303,88 @@ static uint32_t typeSizeOf(Module *m, Type *type)
 
     type->size = size;
     return type->size;
+}
+
+IRType *convertTypeToIR(Module *module, IRModule *ir_module, AstType *type)
+{
+    switch (type->kind)
+    {
+    case TYPE_TYPE: assert(0); break;
+
+    case TYPE_VOID: {
+        return irNewBasicType(ir_module, IR_TYPE_VOID);
+    }
+
+    case TYPE_BOOL: {
+        return irNewBasicType(ir_module, IR_TYPE_BOOL);
+    }
+
+    case TYPE_FLOAT: {
+        return irNewFloatType(ir_module, type->float_.bits);
+    }
+
+    case TYPE_INT: {
+        return irNewIntType(ir_module, type->int_.bits, type->int_.is_signed);
+    }
+
+    case TYPE_STRUCT: {
+        typeSizeOf(module, type);
+        assert(type->struct_.field_offsets != NULL);
+        IRType **field_types = NEW_ARRAY(module->compiler, IRType *, type->struct_.field_count);
+        for (uint32_t i = 0; i < type->struct_.field_count; ++i)
+        {
+            field_types[i] = convertTypeToIR(module, ir_module, type->struct_.fields[i]);
+        }
+        return irNewStructType(
+            ir_module,
+            type->struct_.name,
+            field_types,
+            type->struct_.field_offsets,
+            type->struct_.field_count);
+    }
+
+    case TYPE_VECTOR: {
+        IRType *elem_type = convertTypeToIR(module, ir_module, type->vector.elem_type);
+        return irNewVectorType(ir_module, elem_type, type->vector.size);
+    }
+
+    case TYPE_IMAGE: {
+        IRType *sampled_type =
+            convertTypeToIR(module, ir_module, getScalarType(type->image.sampled_type));
+        return irNewImageType(ir_module, sampled_type, type->image.dim);
+    }
+
+    case TYPE_SAMPLER: {
+        return irNewBasicType(ir_module, IR_TYPE_SAMPLER);
+    }
+
+    case TYPE_FUNC: {
+        IRType *return_type = convertTypeToIR(module, ir_module, type->func.return_type);
+        IRType **param_types = NEW_ARRAY(module->compiler, IRType *, type->func.param_count);
+        for (uint32_t i = 0; i < type->func.param_count; ++i)
+        {
+            param_types[i] = convertTypeToIR(module, ir_module, type->func.params[i]);
+        }
+        return irNewFuncType(ir_module, return_type, param_types, type->func.param_count);
+    }
+
+    case TYPE_MATRIX: {
+        IRType *col_type = convertTypeToIR(module, ir_module, type->matrix.col_type);
+        return irNewMatrixType(ir_module, col_type, type->matrix.col_count);
+    }
+
+    case TYPE_POINTER: {
+        IRType *elem_type = convertTypeToIR(module, ir_module, type->ptr.sub);
+        return irNewPointerType(ir_module, type->ptr.storage_class, elem_type);
+    }
+
+    case TYPE_SAMPLED_IMAGE: {
+        IRType *image_type = convertTypeToIR(module, ir_module, type->sampled_image.image_type);
+        return irNewSampledImageType(ir_module, image_type);
+    }
+    }
+
+    return NULL;
 }
 // }}}
 
@@ -3190,7 +3725,7 @@ static void parserParse(Parser *p, TscCompiler *compiler, File *file)
 // }}}
 
 // Analyzer functions {{{
-static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type);
+static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_type);
 static void analyzerAnalyzeStmt(Analyzer *a, AstStmt *stmt);
 static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl);
 
@@ -3250,7 +3785,7 @@ static void analyzerTryRegisterDecl(Analyzer *a, AstDecl *decl)
     }
 }
 
-static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
+static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_type)
 {
     TscCompiler *compiler = a->compiler;
     Scope *scope = analyzerCurrentScope(a);
@@ -3294,7 +3829,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
         }
 
         case TOKEN_VECTOR_TYPE: {
-            Type *elem_type = NULL;
+            AstType *elem_type = NULL;
 
             switch (expr->primary.token->vector_type.elem_type)
             {
@@ -3325,7 +3860,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
         }
 
         case TOKEN_MATRIX_TYPE: {
-            Type *elem_type = NULL;
+            AstType *elem_type = NULL;
 
             switch (expr->primary.token->matrix_type.elem_type)
             {
@@ -3349,7 +3884,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
 
             assert(elem_type);
 
-            Type *col_type = newVectorType(
+            AstType *col_type = newVectorType(
                 a->module, elem_type, (uint32_t)expr->primary.token->matrix_type.dim1);
             expr->as_type =
                 newMatrixType(a->module, col_type, (uint32_t)expr->primary.token->matrix_type.dim2);
@@ -3546,7 +4081,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
             expr->func_call.func_expr = method_name_expr;
 
             analyzerAnalyzeExpr(a, expr->func_call.self_param, NULL);
-            Type *self_type = expr->func_call.self_param->type;
+            AstType *self_type = expr->func_call.self_param->type;
             if (!self_type)
             {
                 break;
@@ -3554,14 +4089,14 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
 
             if (self_type->kind == TYPE_IMAGE && stringEquals(method_name, "Sample"))
             {
-                Type *texture_component_type = self_type->image.sampled_type;
+                AstType *texture_component_type = self_type->image.sampled_type;
 
                 uint32_t func_param_count = 2;
-                Type **func_param_types = NEW_ARRAY(compiler, Type *, func_param_count);
+                AstType **func_param_types = NEW_ARRAY(compiler, AstType *, func_param_count);
 
                 func_param_types[0] = newBasicType(m, TYPE_SAMPLER);
 
-                Type *float_type = newFloatType(m, 32);
+                AstType *float_type = newFloatType(m, 32);
                 switch (self_type->image.dim)
                 {
                 case SpvDim1D: func_param_types[1] = newVectorType(m, float_type, 1); break;
@@ -3595,7 +4130,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
         }
 
         analyzerAnalyzeExpr(a, func_expr, NULL);
-        Type *func_type = func_expr->type;
+        AstType *func_type = func_expr->type;
         if (!func_type)
         {
             break;
@@ -3605,7 +4140,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
         {
             // Type constructor
 
-            Type *constructed_type = func_expr->as_type;
+            AstType *constructed_type = func_expr->as_type;
             assert(constructed_type);
 
             expr->type = constructed_type;
@@ -3637,8 +4172,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
                 analyzerAnalyzeExpr(a, params[0], NULL);
                 if (!params[0]->type) break;
 
-                SpvOp op;
-                if (!isTypeCastable(params[0]->type, constructed_type, &op))
+                if (!isTypeCastable(params[0]->type, constructed_type))
                 {
                     addErr(compiler, &params[0]->loc, "value is not castable to this type");
                     break;
@@ -3797,8 +4331,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
             break;
         }
 
-        case IR_BUILTIN_CREATE_SAMPLED_IMAGE:
-        case IR_BUILTIN_SAMPLE_IMPLICIT_LOD: assert(0); break;
+        case IR_BUILTIN_CREATE_SAMPLED_IMAGE: assert(0); break;
         }
 
         break;
@@ -3811,14 +4344,14 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
     }
 
     case EXPR_TEXTURE_TYPE: {
-        Type *type_type = newBasicType(m, TYPE_TYPE);
+        AstType *type_type = newBasicType(m, TYPE_TYPE);
         analyzerAnalyzeExpr(a, expr->texture.sampled_type_expr, type_type);
         if (!expr->texture.sampled_type_expr->type)
         {
             break;
         }
 
-        Type *sampled_type = expr->texture.sampled_type_expr->as_type;
+        AstType *sampled_type = expr->texture.sampled_type_expr->as_type;
         assert(sampled_type);
 
         if (!(sampled_type->kind == TYPE_VECTOR || sampled_type->kind == TYPE_INT ||
@@ -3834,14 +4367,14 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
     }
 
     case EXPR_SAMPLED_TEXTURE_TYPE: {
-        Type *type_type = newBasicType(m, TYPE_TYPE);
+        AstType *type_type = newBasicType(m, TYPE_TYPE);
         analyzerAnalyzeExpr(a, expr->texture.sampled_type_expr, type_type);
         if (!expr->texture.sampled_type_expr->type)
         {
             break;
         }
 
-        Type *sampled_type = expr->texture.sampled_type_expr->as_type;
+        AstType *sampled_type = expr->texture.sampled_type_expr->as_type;
         assert(sampled_type);
 
         if ((sampled_type->kind != TYPE_FLOAT) && (sampled_type->kind != TYPE_INT))
@@ -3850,7 +4383,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
         }
 
         expr->type = type_type;
-        Type *image_type = newImageType(m, sampled_type, expr->texture.dim);
+        AstType *image_type = newImageType(m, sampled_type, expr->texture.dim);
         expr->as_type = newSampledImageType(m, image_type);
         break;
     }
@@ -3861,8 +4394,8 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
         case UNOP_NEG: {
             analyzerAnalyzeExpr(a, expr->unary.right, NULL);
             if (!expr->unary.right->type) break;
-            Type *right_type = expr->unary.right->type;
-            Type *scalar_type = getScalarType(right_type);
+            AstType *right_type = expr->unary.right->type;
+            AstType *scalar_type = getScalarType(right_type);
 
             if (!scalar_type)
             {
@@ -3881,8 +4414,8 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
         case UNOP_NOT: {
             analyzerAnalyzeExpr(a, expr->unary.right, NULL);
             if (!expr->unary.right->type) break;
-            Type *right_type = expr->unary.right->type;
-            Type *logical_type = getLogicalType(right_type);
+            AstType *right_type = expr->unary.right->type;
+            AstType *logical_type = getLogicalType(right_type);
 
             if (!logical_type)
             {
@@ -3914,11 +4447,11 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
             analyzerAnalyzeExpr(a, expr->binary.right, NULL);
             if (!expr->binary.left->type || !expr->binary.right->type) break;
 
-            Type *left_type = expr->binary.left->type;
-            Type *right_type = expr->binary.right->type;
+            AstType *left_type = expr->binary.left->type;
+            AstType *right_type = expr->binary.right->type;
 
-            Type *left_scalar = getScalarType(left_type);
-            Type *right_scalar = getScalarType(right_type);
+            AstType *left_scalar = getScalarType(left_type);
+            AstType *right_scalar = getScalarType(right_type);
             if ((!left_scalar) || (!right_scalar) || (left_type != right_type))
             {
                 addErr(compiler, &expr->loc, "invalid types for binary arithmentic operation");
@@ -3939,11 +4472,11 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, Type *expected_type)
             analyzerAnalyzeExpr(a, expr->binary.right, NULL);
             if (!expr->binary.left->type || !expr->binary.right->type) break;
 
-            Type *left_type = expr->binary.left->type;
-            Type *right_type = expr->binary.right->type;
+            AstType *left_type = expr->binary.left->type;
+            AstType *right_type = expr->binary.right->type;
 
-            Type *left_comparable = getComparableType(left_type);
-            Type *right_comparable = getComparableType(right_type);
+            AstType *left_comparable = getComparableType(left_type);
+            AstType *right_comparable = getComparableType(right_type);
 
             if ((!left_comparable) || (!right_comparable) || (left_type != right_type))
             {
@@ -3992,7 +4525,7 @@ static void analyzerAnalyzeStmt(Analyzer *a, AstStmt *stmt)
 
     case STMT_RETURN: {
         assert(a->scope_func);
-        Type *return_type = a->scope_func->type->func.return_type;
+        AstType *return_type = a->scope_func->type->func.return_type;
 
         if (return_type->kind == TYPE_VOID && stmt->return_.value)
         {
@@ -4103,7 +4636,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
         scopeInit(decl->scope, scope, decl);
 
         analyzerAnalyzeExpr(a, decl->func.return_type, newBasicType(m, TYPE_TYPE));
-        Type *return_type = decl->func.return_type->as_type;
+        AstType *return_type = decl->func.return_type->as_type;
 
         if (!return_type)
         {
@@ -4112,10 +4645,10 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
         }
 
         bool param_types_valid = true;
-        Type **param_types = NULL;
+        AstType **param_types = NULL;
         if (arrLength(decl->func.func_params) > 0)
         {
-            param_types = NEW_ARRAY(compiler, Type *, arrLength(decl->func.func_params));
+            param_types = NEW_ARRAY(compiler, AstType *, arrLength(decl->func.func_params));
         }
 
         analyzerPushScope(a, decl->scope);
@@ -4307,7 +4840,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
 
     case DECL_STRUCT: {
         uint32_t field_count = arrLength(decl->struct_.fields);
-        Type **field_types = NEW_ARRAY(compiler, Type *, field_count);
+        AstType **field_types = NEW_ARRAY(compiler, AstType *, field_count);
 
         decl->scope = NEW(compiler, Scope);
         scopeInit(decl->scope, scope, NULL);
@@ -4400,7 +4933,7 @@ static void irAddEntryPoint(
     arrPush(m->entry_points, inst);
 }
 
-static IRInst *irAddFunction(IRModule *m, Type *func_type)
+static IRInst *irAddFunction(IRModule *m, IRType *func_type)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->id = irModuleReserveId(m);
@@ -4412,7 +4945,7 @@ static IRInst *irAddFunction(IRModule *m, Type *func_type)
     return inst;
 }
 
-static IRInst *irAddFuncParam(IRModule *m, IRInst *func, Type *type)
+static IRInst *irAddFuncParam(IRModule *m, IRInst *func, IRType *type)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->id = irModuleReserveId(m);
@@ -4435,13 +4968,13 @@ static IRInst *irAddBlock(IRModule *m, IRInst *func)
     return inst;
 }
 
-static IRInst *irAddGlobal(IRModule *m, Type *type, SpvStorageClass storage_class)
+static IRInst *irAddGlobal(IRModule *m, IRType *type, SpvStorageClass storage_class)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->id = irModuleReserveId(m);
     inst->kind = IR_INST_VARIABLE;
     inst->var.storage_class = storage_class;
-    inst->type = newPointerType(m->mod, inst->var.storage_class, type);
+    inst->type = irNewPointerType(m, inst->var.storage_class, type);
 
     arrPush(m->globals, inst);
 
@@ -4472,9 +5005,9 @@ static bool irBlockHasTerminator(IRInst *block)
     return false;
 }
 
-static IRInst *irBuildConstFloat(IRModule *m, Type *type, double value)
+static IRInst *irBuildConstFloat(IRModule *m, IRType *type, double value)
 {
-    assert(type->kind == TYPE_FLOAT);
+    assert(type->kind == IR_TYPE_FLOAT);
 
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_CONSTANT;
@@ -4505,9 +5038,9 @@ static IRInst *irBuildConstFloat(IRModule *m, Type *type, double value)
     return inst;
 }
 
-static IRInst *irBuildConstInt(IRModule *m, Type *type, uint64_t value)
+static IRInst *irBuildConstInt(IRModule *m, IRType *type, uint64_t value)
 {
-    assert(type->kind == TYPE_INT);
+    assert(type->kind == IR_TYPE_INT);
 
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_CONSTANT;
@@ -4554,12 +5087,12 @@ static IRInst *irBuildConstInt(IRModule *m, Type *type, uint64_t value)
     return inst;
 }
 
-static IRInst *irBuildAlloca(IRModule *m, Type *type)
+static IRInst *irBuildAlloca(IRModule *m, IRType *type)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_VARIABLE;
     inst->var.storage_class = SpvStorageClassFunction;
-    inst->type = newPointerType(m->mod, inst->var.storage_class, type);
+    inst->type = irNewPointerType(m, inst->var.storage_class, type);
 
     IRInst *block = irGetCurrentBlock(m);
     arrPush(block->block.insts, inst);
@@ -4584,7 +5117,7 @@ static IRInst *irBuildLoad(IRModule *m, IRInst *pointer)
     inst->kind = IR_INST_LOAD;
 
     assert(pointer->type);
-    assert(pointer->type->kind == TYPE_POINTER);
+    assert(pointer->type->kind == IR_TYPE_POINTER);
 
     inst->type = pointer->type->ptr.sub;
     inst->load.pointer = pointer;
@@ -4596,14 +5129,14 @@ static IRInst *irBuildLoad(IRModule *m, IRInst *pointer)
 }
 
 static IRInst *
-irBuildAccessChain(IRModule *m, Type *type, IRInst *base, IRInst **indices, uint32_t index_count)
+irBuildAccessChain(IRModule *m, IRType *type, IRInst *base, IRInst **indices, uint32_t index_count)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_ACCESS_CHAIN;
 
-    inst->type = newPointerType(m->mod, base->type->ptr.storage_class, type);
+    inst->type = irNewPointerType(m, base->type->ptr.storage_class, type);
 
-    assert(base->type->kind == TYPE_POINTER);
+    assert(base->type->kind == IR_TYPE_POINTER);
 
     inst->access_chain.base = base;
     inst->access_chain.indices = indices;
@@ -4621,11 +5154,11 @@ static IRInst *irBuildVectorShuffle(
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_VECTOR_SHUFFLE;
 
-    assert(vector_a->type->kind == TYPE_VECTOR);
-    assert(vector_b->type->kind == TYPE_VECTOR);
+    assert(vector_a->type->kind == IR_TYPE_VECTOR);
+    assert(vector_b->type->kind == IR_TYPE_VECTOR);
     assert(vector_a->type->vector.elem_type == vector_b->type->vector.elem_type);
 
-    inst->type = newVectorType(m->mod, vector_a->type->vector.elem_type, index_count);
+    inst->type = irNewVectorType(m, vector_a->type->vector.elem_type, index_count);
 
     inst->vector_shuffle.vector_a = vector_a;
     inst->vector_shuffle.vector_b = vector_b;
@@ -4644,7 +5177,7 @@ irBuildCompositeExtract(IRModule *m, IRInst *value, uint32_t *indices, uint32_t 
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_COMPOSITE_EXTRACT;
 
-    if (value->type->kind == TYPE_VECTOR)
+    if (value->type->kind == IR_TYPE_VECTOR)
     {
         if (index_count == 1)
         {
@@ -4652,7 +5185,7 @@ irBuildCompositeExtract(IRModule *m, IRInst *value, uint32_t *indices, uint32_t 
         }
         else
         {
-            inst->type = newVectorType(m->mod, value->type->vector.elem_type, index_count);
+            inst->type = irNewVectorType(m, value->type->vector.elem_type, index_count);
         }
     }
     else
@@ -4671,7 +5204,7 @@ irBuildCompositeExtract(IRModule *m, IRInst *value, uint32_t *indices, uint32_t 
 }
 
 static IRInst *
-irBuildCompositeConstruct(IRModule *m, Type *type, IRInst **fields, uint32_t field_count)
+irBuildCompositeConstruct(IRModule *m, IRType *type, IRInst **fields, uint32_t field_count)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_COMPOSITE_CONSTRUCT;
@@ -4719,7 +5252,7 @@ irBuildBuiltinCall(IRModule *m, IRBuiltinInstKind kind, IRInst **params, uint32_
         IRInst *a = params[0];
         IRInst *b = params[1];
 
-        assert(a->type->kind == TYPE_VECTOR);
+        assert(a->type->kind == IR_TYPE_VECTOR);
         assert(b->type == a->type);
 
         inst->type = a->type->vector.elem_type;
@@ -4733,22 +5266,22 @@ irBuildBuiltinCall(IRModule *m, IRBuiltinInstKind kind, IRInst **params, uint32_
         IRInst *a = params[0];
         IRInst *b = params[1];
 
-        if (a->type->kind == TYPE_VECTOR && b->type->kind == TYPE_MATRIX)
+        if (a->type->kind == IR_TYPE_VECTOR && b->type->kind == IR_TYPE_MATRIX)
         {
             // Matrix times vector, yes, it's backwards
             inst->type = a->type;
         }
-        else if (a->type->kind == TYPE_MATRIX && b->type->kind == TYPE_VECTOR)
+        else if (a->type->kind == IR_TYPE_MATRIX && b->type->kind == IR_TYPE_VECTOR)
         {
             // Vector times matrix, yes, it's backwards
             inst->type = b->type;
         }
-        else if (a->type->kind == TYPE_VECTOR && b->type->kind == TYPE_VECTOR)
+        else if (a->type->kind == IR_TYPE_VECTOR && b->type->kind == IR_TYPE_VECTOR)
         {
             // Vector dot product
             inst->type = a->type->vector.elem_type;
         }
-        else if (a->type->kind == TYPE_MATRIX && b->type->kind == TYPE_MATRIX)
+        else if (a->type->kind == IR_TYPE_MATRIX && b->type->kind == IR_TYPE_MATRIX)
         {
             // Matrix times matrix
             inst->type = a->type;
@@ -4761,21 +5294,12 @@ irBuildBuiltinCall(IRModule *m, IRBuiltinInstKind kind, IRInst **params, uint32_
         break;
     }
 
-    case IR_BUILTIN_SAMPLE_IMPLICIT_LOD: {
-        assert(param_count == 2);
-        IRInst *img_param = params[0];
-        Type *img_type = img_param->type;
-        assert(img_type->kind == TYPE_SAMPLED_IMAGE);
-        inst->type = img_type->sampled_image.image_type->image.sampled_type;
-        break;
-    }
-
     case IR_BUILTIN_CREATE_SAMPLED_IMAGE: {
         assert(param_count == 2);
         IRInst *img_param = params[0];
-        Type *img_type = img_param->type;
-        assert(img_type->kind == TYPE_IMAGE);
-        inst->type = newSampledImageType(m->mod, img_type);
+        IRType *img_type = img_param->type;
+        assert(img_type->kind == IR_TYPE_IMAGE);
+        inst->type = irNewSampledImageType(m, img_type);
         break;
     }
     }
@@ -4792,16 +5316,33 @@ irBuildBuiltinCall(IRModule *m, IRBuiltinInstKind kind, IRInst **params, uint32_
     return inst;
 }
 
-static IRInst *irBuildCast(IRModule *m, Type *dst_type, IRInst *value)
+static IRInst *
+irBuildSampleImplicitLod(IRModule *m, IRType *type, IRInst *image_sampler, IRInst *coords)
+{
+    IRInst *inst = NEW(m->compiler, IRInst);
+    inst->kind = IR_INST_SAMPLE_IMPLICIT_LOD;
+    inst->type = type;
+    assert(inst->type);
+
+    inst->sample.image_sampler = image_sampler;
+    inst->sample.coords = coords;
+
+    IRInst *block = irGetCurrentBlock(m);
+    arrPush(block->block.insts, inst);
+
+    return inst;
+}
+
+static IRInst *irBuildCast(IRModule *m, IRType *dst_type, IRInst *value)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_CAST;
     inst->type = dst_type;
 
-    Type *src_type = value->type;
+    IRType *src_type = value->type;
     assert(src_type);
 
-    bool castable = isTypeCastable(src_type, dst_type, &inst->cast.op);
+    bool castable = irIsTypeCastable(src_type, dst_type, &inst->cast.op);
     assert(castable);
 
     if (inst->cast.op == SpvOpNop)
@@ -4818,7 +5359,7 @@ static IRInst *irBuildCast(IRModule *m, Type *dst_type, IRInst *value)
     return inst;
 }
 
-static IRInst *irBuildUnary(IRModule *m, SpvOp op, Type *type, IRInst *right)
+static IRInst *irBuildUnary(IRModule *m, SpvOp op, IRType *type, IRInst *right)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_UNARY;
@@ -4834,7 +5375,7 @@ static IRInst *irBuildUnary(IRModule *m, SpvOp op, Type *type, IRInst *right)
     return inst;
 }
 
-static IRInst *irBuildBinary(IRModule *m, SpvOp op, Type *type, IRInst *left, IRInst *right)
+static IRInst *irBuildBinary(IRModule *m, SpvOp op, IRType *type, IRInst *left, IRInst *right)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_BINARY;
@@ -4875,9 +5416,9 @@ static void irModuleEncodeInst(IRModule *m, SpvOp opcode, uint32_t *params, size
 
 static void irModuleReserveTypeIds(IRModule *m)
 {
-    for (uint32_t i = 0; i < arrLength(m->mod->type_cache.values); ++i)
+    for (uint32_t i = 0; i < arrLength(m->type_cache.values); ++i)
     {
-        Type *type = (Type *)m->mod->type_cache.values[i];
+        IRType *type = (IRType *)m->type_cache.values[i];
         type->id = irModuleReserveId(m);
     }
 }
@@ -4904,12 +5445,11 @@ static void irModuleEncodeDecorations(IRModule *m)
         }
     }
 
-    for (uint32_t i = 0; i < arrLength(m->mod->type_cache.values); ++i)
+    for (uint32_t i = 0; i < arrLength(m->type_cache.values); ++i)
     {
-        Type *type = (Type *)m->mod->type_cache.values[i];
-        if (type->kind == TYPE_STRUCT)
+        IRType *type = (IRType *)m->type_cache.values[i];
+        if (type->kind == IR_TYPE_STRUCT)
         {
-            typeSizeOf(m->mod, type);
             assert(type->struct_.field_offsets != NULL);
             assert(type->id > 0);
 
@@ -4927,50 +5467,50 @@ static void irModuleEncodeDecorations(IRModule *m)
 
 static void irModuleEncodeTypes(IRModule *m)
 {
-    for (uint32_t i = 0; i < arrLength(m->mod->type_cache.values); ++i)
+    for (uint32_t i = 0; i < arrLength(m->type_cache.values); ++i)
     {
-        Type *type = (Type *)m->mod->type_cache.values[i];
+        IRType *type = (IRType *)m->type_cache.values[i];
 
         switch (type->kind)
         {
-        case TYPE_VOID: {
+        case IR_TYPE_VOID: {
             irModuleEncodeInst(m, SpvOpTypeVoid, &type->id, 1);
             break;
         }
 
-        case TYPE_BOOL: {
+        case IR_TYPE_BOOL: {
             irModuleEncodeInst(m, SpvOpTypeBool, &type->id, 1);
             break;
         }
 
-        case TYPE_FLOAT: {
+        case IR_TYPE_FLOAT: {
             uint32_t params[2] = {type->id, type->float_.bits};
             irModuleEncodeInst(m, SpvOpTypeFloat, params, 2);
             break;
         }
 
-        case TYPE_INT: {
+        case IR_TYPE_INT: {
             uint32_t params[3] = {type->id, type->int_.bits, (uint32_t)type->int_.is_signed};
             irModuleEncodeInst(m, SpvOpTypeInt, params, 3);
             break;
         }
 
-        case TYPE_POINTER: {
+        case IR_TYPE_POINTER: {
             uint32_t params[3] = {type->id, type->ptr.storage_class, type->ptr.sub->id};
             irModuleEncodeInst(m, SpvOpTypePointer, params, 3);
             break;
         }
 
-        case TYPE_FUNC: {
+        case IR_TYPE_FUNC: {
             uint32_t param_count = 2 + type->func.param_count;
-            uint32_t *params = NEW_ARRAY(m->mod->compiler, uint32_t, param_count);
+            uint32_t *params = NEW_ARRAY(m->compiler, uint32_t, param_count);
 
             params[0] = type->id;
             params[1] = type->func.return_type->id;
 
             for (uint32_t j = 0; j < type->func.param_count; ++j)
             {
-                Type *param_type = type->func.params[j];
+                IRType *param_type = type->func.params[j];
                 params[2 + j] = param_type->id;
             }
 
@@ -4978,21 +5518,21 @@ static void irModuleEncodeTypes(IRModule *m)
             break;
         }
 
-        case TYPE_VECTOR: {
+        case IR_TYPE_VECTOR: {
             uint32_t params[3] = {type->id, type->vector.elem_type->id, type->vector.size};
             irModuleEncodeInst(m, SpvOpTypeVector, params, 3);
             break;
         }
 
-        case TYPE_MATRIX: {
+        case IR_TYPE_MATRIX: {
             uint32_t params[3] = {type->id, type->matrix.col_type->id, type->matrix.col_count};
             irModuleEncodeInst(m, SpvOpTypeMatrix, params, 3);
             break;
         }
 
-        case TYPE_STRUCT: {
+        case IR_TYPE_STRUCT: {
             uint32_t word_count = 1 + type->struct_.field_count;
-            uint32_t *params = NEW_ARRAY(m->mod->compiler, uint32_t, word_count);
+            uint32_t *params = NEW_ARRAY(m->compiler, uint32_t, word_count);
             params[0] = type->id;
 
             for (uint32_t i = 0; i < type->struct_.field_count; ++i)
@@ -5004,7 +5544,7 @@ static void irModuleEncodeTypes(IRModule *m)
             break;
         }
 
-        case TYPE_SAMPLER: {
+        case IR_TYPE_SAMPLER: {
             uint32_t params[1] = {
                 type->id,
             };
@@ -5012,10 +5552,10 @@ static void irModuleEncodeTypes(IRModule *m)
             break;
         }
 
-        case TYPE_IMAGE: {
+        case IR_TYPE_IMAGE: {
             uint32_t params[8] = {
                 type->id,
-                getScalarType(type->image.sampled_type)->id,
+                type->image.sampled_type->id,
                 type->image.dim,
                 type->image.depth,
                 type->image.arrayed,
@@ -5027,7 +5567,7 @@ static void irModuleEncodeTypes(IRModule *m)
             break;
         }
 
-        case TYPE_SAMPLED_IMAGE: {
+        case IR_TYPE_SAMPLED_IMAGE: {
             uint32_t params[2] = {
                 type->id,
                 type->sampled_image.image_type->id,
@@ -5035,8 +5575,6 @@ static void irModuleEncodeTypes(IRModule *m)
             irModuleEncodeInst(m, SpvOpTypeSampledImage, params, 2);
             break;
         }
-
-        case TYPE_TYPE: break;
         }
     }
 }
@@ -5100,7 +5638,7 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
         case IR_INST_VARIABLE: {
             inst->id = irModuleReserveId(m);
 
-            Type *ptr_type = inst->type;
+            IRType *ptr_type = inst->type;
             SpvStorageClass storage_class = inst->var.storage_class;
             IRInst *initializer = inst->var.initializer;
 
@@ -5135,8 +5673,8 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
         case IR_INST_LOAD: {
             inst->id = irModuleReserveId(m);
 
-            Type *loaded_type = inst->load.pointer->type;
-            assert(loaded_type->kind == TYPE_POINTER);
+            IRType *loaded_type = inst->load.pointer->type;
+            assert(loaded_type->kind == IR_TYPE_POINTER);
             loaded_type = loaded_type->ptr.sub;
 
             uint32_t params[3] = {loaded_type->id, inst->id, inst->load.pointer->id};
@@ -5239,25 +5777,25 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
                 IRInst *a = param_values[0];
                 IRInst *b = param_values[1];
 
-                if (a->type->kind == TYPE_VECTOR && b->type->kind == TYPE_MATRIX)
+                if (a->type->kind == IR_TYPE_VECTOR && b->type->kind == IR_TYPE_MATRIX)
                 {
                     // Matrix times vector, yes, it's backwards
                     uint32_t params[4] = {inst->type->id, inst->id, b->id, a->id};
                     irModuleEncodeInst(m, SpvOpMatrixTimesVector, params, 4);
                 }
-                else if (a->type->kind == TYPE_MATRIX && b->type->kind == TYPE_VECTOR)
+                else if (a->type->kind == IR_TYPE_MATRIX && b->type->kind == IR_TYPE_VECTOR)
                 {
                     // Vector times matrix, yes, it's backwards
                     uint32_t params[4] = {inst->type->id, inst->id, b->id, a->id};
                     irModuleEncodeInst(m, SpvOpVectorTimesMatrix, params, 4);
                 }
-                else if (a->type->kind == TYPE_VECTOR && b->type->kind == TYPE_VECTOR)
+                else if (a->type->kind == IR_TYPE_VECTOR && b->type->kind == IR_TYPE_VECTOR)
                 {
                     // Vector dot product
                     uint32_t params[4] = {inst->type->id, inst->id, a->id, b->id};
                     irModuleEncodeInst(m, SpvOpDot, params, 4);
                 }
-                else if (a->type->kind == TYPE_MATRIX && b->type->kind == TYPE_MATRIX)
+                else if (a->type->kind == IR_TYPE_MATRIX && b->type->kind == IR_TYPE_MATRIX)
                 {
                     // Matrix times matrix
                     uint32_t params[4] = {inst->type->id, inst->id, b->id, a->id};
@@ -5278,16 +5816,18 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
                 irModuleEncodeInst(m, SpvOpSampledImage, params, 4);
                 break;
             }
-
-            case IR_BUILTIN_SAMPLE_IMPLICIT_LOD: {
-                IRInst *sampled_image = param_values[0];
-                IRInst *coordinate = param_values[1];
-                uint32_t params[4] = {inst->type->id, inst->id, sampled_image->id, coordinate->id};
-                irModuleEncodeInst(m, SpvOpImageSampleImplicitLod, params, 4);
-                break;
-            }
             }
 
+            break;
+        }
+
+        case IR_INST_SAMPLE_IMPLICIT_LOD: {
+            inst->id = irModuleReserveId(m);
+
+            IRInst *sampled_image = inst->sample.image_sampler;
+            IRInst *coordinate = inst->sample.coords;
+            uint32_t params[4] = {inst->type->id, inst->id, sampled_image->id, coordinate->id};
+            irModuleEncodeInst(m, SpvOpImageSampleImplicitLod, params, 4);
             break;
         }
 
@@ -5533,10 +6073,12 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
     switch (expr->kind)
     {
     case EXPR_PRIMARY: {
+        IRType *ir_type = convertTypeToIR(m->mod, m, expr->type);
+
         switch (expr->primary.token->kind)
         {
         case TOKEN_FLOAT_LIT: {
-            expr->value = irBuildConstFloat(m, expr->type, expr->primary.token->double_);
+            expr->value = irBuildConstFloat(m, ir_type, expr->primary.token->double_);
             break;
         }
 
@@ -5544,12 +6086,12 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
             switch (expr->type->kind)
             {
             case TYPE_FLOAT: {
-                expr->value = irBuildConstFloat(m, expr->type, (double)expr->primary.token->int_);
+                expr->value = irBuildConstFloat(m, ir_type, (double)expr->primary.token->int_);
                 break;
             }
 
             case TYPE_INT: {
-                expr->value = irBuildConstInt(m, expr->type, (uint64_t)expr->primary.token->int_);
+                expr->value = irBuildConstInt(m, ir_type, (uint64_t)expr->primary.token->int_);
                 break;
             }
 
@@ -5571,7 +6113,7 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
     }
 
     case EXPR_ACCESS: {
-        Type *index_type = newIntType(m->mod, 32, false);
+        IRType *index_type = irNewIntType(m, 32, false);
 
         AstExpr *base = expr->access.base;
         assert(base->type);
@@ -5600,12 +6142,15 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
                 indices[i] = irBuildConstInt(m, index_type, field_decl->struct_field.index);
             }
 
-            Type *last_type = expr->access.chain[index_count - 1]->type;
-            value = irBuildAccessChain(m, last_type, base->value, indices, index_count);
+            AstType *last_type = expr->access.chain[index_count - 1]->type;
+            IRType *ir_last_type = convertTypeToIR(m->mod, m, last_type);
+            value = irBuildAccessChain(m, ir_last_type, base->value, indices, index_count);
         }
 
         for (uint32_t i = index_count; i < arrLength(expr->access.chain); ++i)
         {
+            // Must be a vector swizzle
+
             AstExpr *field_ident = expr->access.chain[i];
             assert(field_ident->kind == EXPR_IDENT);
             assert(!field_ident->ident.decl);
@@ -5629,7 +6174,8 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
                     // It's a variable
                     IRInst **ir_indices = NEW_ARRAY(compiler, IRInst *, 1);
                     ir_indices[0] = irBuildConstInt(m, index_type, shuffle_indices[0]);
-                    value = irBuildAccessChain(m, field_ident->type, value, ir_indices, 1);
+                    IRType *accessed_type = convertTypeToIR(m->mod, m, field_ident->type);
+                    value = irBuildAccessChain(m, accessed_type, value, ir_indices, 1);
                 }
             }
             else
@@ -5654,12 +6200,12 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
             assert(method_name_expr->kind == EXPR_IDENT);
             char *method_name = method_name_expr->ident.name;
 
-            Type *self_type = expr->func_call.self_param->type;
+            AstType *self_type = expr->func_call.self_param->type;
 
             irModuleBuildExpr(m, expr->func_call.self_param);
             assert(expr->func_call.self_param->value);
 
-            uint32_t param_count =  arrLength(expr->func_call.params);
+            uint32_t param_count = arrLength(expr->func_call.params);
             IRInst **param_values = NEW_ARRAY(compiler, IRInst *, param_count);
 
             IRInst *self_value = irLoadVal(m, expr->func_call.self_param->value);
@@ -5677,14 +6223,12 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
                 IRInst **sampled_image_params = NEW_ARRAY(compiler, IRInst *, 2);
                 sampled_image_params[0] = self_value;
                 sampled_image_params[1] = param_values[0];
-                IRInst *sampled_image = irBuildBuiltinCall(
-                    m, IR_BUILTIN_CREATE_SAMPLED_IMAGE, sampled_image_params, 2);
+                IRInst *sampled_image =
+                    irBuildBuiltinCall(m, IR_BUILTIN_CREATE_SAMPLED_IMAGE, sampled_image_params, 2);
 
-                IRInst **sample_params = NEW_ARRAY(compiler, IRInst *, 2);
-                sample_params[0] = sampled_image;
-                sample_params[1] = param_values[1];
-                expr->value = irBuildBuiltinCall(
-                    m, IR_BUILTIN_SAMPLE_IMPLICIT_LOD, sample_params, 2);
+                IRType *result_type = convertTypeToIR(m->mod, m, expr->type);
+                IRInst *coords = param_values[1];
+                expr->value = irBuildSampleImplicitLod(m, result_type, sampled_image, coords);
             }
             else
             {
@@ -5693,13 +6237,14 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
             break;
         }
 
-        Type *func_type = expr->func_call.func_expr->type;
+        AstType *func_type = expr->func_call.func_expr->type;
         assert(func_type);
 
         if (func_type->kind == TYPE_TYPE)
         {
-            Type *constructed_type = expr->func_call.func_expr->as_type;
+            AstType *constructed_type = expr->func_call.func_expr->as_type;
             assert(constructed_type);
+            IRType *ir_constructed_type = convertTypeToIR(m->mod, m, constructed_type);
 
             uint32_t param_count = arrLength(expr->func_call.params);
             AstExpr **params = expr->func_call.params;
@@ -5718,7 +6263,7 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
                     }
 
                     expr->value = irBuildCompositeConstruct(
-                        m, constructed_type, fields, constructed_type->vector.size);
+                        m, ir_constructed_type, fields, constructed_type->vector.size);
                 }
                 else if (param_count == 1)
                 {
@@ -5734,7 +6279,7 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
                     }
 
                     expr->value = irBuildCompositeConstruct(
-                        m, constructed_type, fields, constructed_type->vector.size);
+                        m, ir_constructed_type, fields, constructed_type->vector.size);
                 }
                 else
                 {
@@ -5745,7 +6290,7 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
             {
                 irModuleBuildExpr(m, params[0]);
                 assert(params[0]->value);
-                expr->value = irBuildCast(m, constructed_type, irLoadVal(m, params[0]->value));
+                expr->value = irBuildCast(m, ir_constructed_type, irLoadVal(m, params[0]->value));
             }
             else
             {
@@ -5801,7 +6346,7 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
             irModuleBuildExpr(m, expr->unary.right);
             IRInst *right_val = irLoadVal(m, expr->unary.right->value);
 
-            Type *scalar_type = getScalarType(expr->type);
+            AstType *scalar_type = getScalarType(expr->type);
             SpvOp op = {0};
 
             switch (scalar_type->kind)
@@ -5811,7 +6356,8 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
             default: assert(0); break;
             }
 
-            expr->value = irBuildUnary(m, op, expr->type, right_val);
+            IRType *ir_type = convertTypeToIR(m->mod, m, expr->type);
+            expr->value = irBuildUnary(m, op, ir_type, right_val);
             break;
         }
 
@@ -5819,7 +6365,8 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
             irModuleBuildExpr(m, expr->unary.right);
             IRInst *right_val = irLoadVal(m, expr->unary.right->value);
 
-            expr->value = irBuildUnary(m, SpvOpNot, expr->type, right_val);
+            IRType *ir_type = convertTypeToIR(m->mod, m, expr->type);
+            expr->value = irBuildUnary(m, SpvOpNot, ir_type, right_val);
             break;
         }
         }
@@ -5832,7 +6379,7 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
         irModuleBuildExpr(m, expr->binary.right);
         IRInst *right_val = irLoadVal(m, expr->binary.right->value);
 
-        Type *elem_type = getElemType(expr->binary.left->type);
+        AstType *elem_type = getElemType(expr->binary.left->type);
         assert(elem_type);
         SpvOp op = {0};
 
@@ -5975,7 +6522,8 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
         }
         }
 
-        expr->value = irBuildBinary(m, op, expr->type, left_val, right_val);
+        IRType *ir_type = convertTypeToIR(m->mod, m, expr->type);
+        expr->value = irBuildBinary(m, op, ir_type, left_val, right_val);
 
         break;
     }
@@ -6065,7 +6613,8 @@ static void irModuleBuildDecl(IRModule *m, AstDecl *decl)
         for (uint32_t i = 0; i < arrLength(decl->func.var_decls); ++i)
         {
             AstDecl *var = decl->func.var_decls[i];
-            var->value = irBuildAlloca(m, var->type);
+            IRType *ir_type = convertTypeToIR(m->mod, m, var->type);
+            var->value = irBuildAlloca(m, ir_type);
         }
 
         for (uint32_t i = 0; i < arrLength(decl->func.stmts); ++i)
@@ -6108,10 +6657,21 @@ static void irModuleBuildDecl(IRModule *m, AstDecl *decl)
     }
 }
 
-static void irModuleCodegen(IRModule *m, TscCompiler *compiler, Module *mod)
+static void irModuleInit(IRModule *m, TscCompiler *compiler)
 {
     memset(m, 0, sizeof(*m));
     m->compiler = compiler;
+
+    hashInit(&m->type_cache, 0);
+}
+
+static void irModuleDestroy(IRModule *m)
+{
+    hashDestroy(&m->type_cache);
+}
+
+static void irModuleCodegen(IRModule *m, Module *mod)
+{
     m->mod = mod;
 
     irModuleReserveId(m); // 0th ID
@@ -6128,25 +6688,30 @@ static void irModuleCodegen(IRModule *m, TscCompiler *compiler, Module *mod)
             {
             case DECL_FUNC: {
                 assert(decl->type);
-                decl->value = irAddFunction(m, decl->type);
+
+                IRType *ir_type = convertTypeToIR(m->mod, m, decl->type);
+                decl->value = irAddFunction(m, ir_type);
 
                 for (uint32_t k = 0; k < arrLength(decl->func.func_params); ++k)
                 {
                     AstDecl *param = decl->func.func_params[k];
-                    param->value = irAddFuncParam(m, decl->value, param->type);
+                    IRType *ir_param_type = convertTypeToIR(m->mod, m, param->type);
+                    param->value = irAddFuncParam(m, decl->value, ir_param_type);
                 }
 
                 for (uint32_t k = 0; k < arrLength(decl->func.inputs); ++k)
                 {
                     AstDecl *input = decl->func.inputs[k];
-                    input->value = irAddGlobal(m, input->type, input->var.storage_class);
+                    IRType *ir_param_type = convertTypeToIR(m->mod, m, input->type);
+                    input->value = irAddGlobal(m, ir_param_type, input->var.storage_class);
                     input->value->decorations = input->decorations;
                 }
 
                 for (uint32_t k = 0; k < arrLength(decl->func.outputs); ++k)
                 {
                     AstDecl *output = decl->func.outputs[k];
-                    output->value = irAddGlobal(m, output->type, output->var.storage_class);
+                    IRType *ir_param_type = convertTypeToIR(m->mod, m, output->type);
+                    output->value = irAddGlobal(m, ir_param_type, output->var.storage_class);
                     output->value->decorations = output->decorations;
                 }
 
@@ -6154,7 +6719,8 @@ static void irModuleCodegen(IRModule *m, TscCompiler *compiler, Module *mod)
             }
 
             case DECL_VAR: {
-                decl->value = irAddGlobal(m, decl->type, decl->var.storage_class);
+                IRType *ir_type = convertTypeToIR(m->mod, m, decl->type);
+                decl->value = irAddGlobal(m, ir_type, decl->var.storage_class);
                 decl->value->decorations = decl->decorations;
                 break;
             }
@@ -6242,16 +6808,18 @@ void tscCompile(TscCompiler *compiler, TscCompilerInput *input, TscCompilerOutpu
     analyzerAnalyze(&analyzer, compiler, module);
     if (handleErrors(compiler, output)) return;
 
-    IRModule irModule = {0};
-    irModuleCodegen(&irModule, compiler, module);
+    IRModule *ir_module = NEW(compiler, IRModule);
+    irModuleInit(ir_module, compiler);
+    irModuleCodegen(ir_module, module);
 
-    output->spirv_byte_size = arrLength(irModule.stream) * 4;
+    output->spirv_byte_size = arrLength(ir_module->stream) * 4;
     output->spirv = malloc(output->spirv_byte_size);
-    memcpy(output->spirv, irModule.stream, output->spirv_byte_size);
+    memcpy(output->spirv, ir_module->stream, output->spirv_byte_size);
 
-    arrFree(irModule.stream);
+    arrFree(ir_module->stream);
 
     moduleDestroy(module);
+    irModuleDestroy(ir_module);
 }
 
 void tscCompilerOutputDestroy(TscCompilerOutput *output)
