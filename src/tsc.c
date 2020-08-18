@@ -987,7 +987,6 @@ typedef enum AstExprKind {
     EXPR_ACCESS,
     EXPR_SAMPLER_TYPE,
     EXPR_TEXTURE_TYPE,
-    EXPR_SAMPLED_TEXTURE_TYPE,
     EXPR_FUNC_CALL,
     EXPR_BUILTIN_CALL,
     EXPR_UNARY,
@@ -1277,10 +1276,6 @@ TscCompiler *tscCompilerCreate()
     hashSet(&compiler->keyword_table, "Texture2D", (void *)TOKEN_TEXTURE_2D);
     hashSet(&compiler->keyword_table, "Texture3D", (void *)TOKEN_TEXTURE_3D);
     hashSet(&compiler->keyword_table, "TextureCube", (void *)TOKEN_TEXTURE_CUBE);
-    hashSet(&compiler->keyword_table, "SampledTexture1D", (void *)TOKEN_SAMPLED_TEXTURE_1D);
-    hashSet(&compiler->keyword_table, "SampledTexture2D", (void *)TOKEN_SAMPLED_TEXTURE_2D);
-    hashSet(&compiler->keyword_table, "SampledTexture3D", (void *)TOKEN_SAMPLED_TEXTURE_3D);
-    hashSet(&compiler->keyword_table, "SampledTextureCube", (void *)TOKEN_SAMPLED_TEXTURE_CUBE);
 
     hashSet(&compiler->keyword_table, "uint", (void *)TOKEN_UINT);
     hashSet(&compiler->keyword_table, "int", (void *)TOKEN_INT);
@@ -3488,10 +3483,6 @@ static AstDecl *parseTopLevel(Parser *p)
     }
 
     case TOKEN_CONSTANT_BUFFER:
-    case TOKEN_SAMPLED_TEXTURE_1D:
-    case TOKEN_SAMPLED_TEXTURE_2D:
-    case TOKEN_SAMPLED_TEXTURE_3D:
-    case TOKEN_SAMPLED_TEXTURE_CUBE:
     case TOKEN_TEXTURE_1D:
     case TOKEN_TEXTURE_2D:
     case TOKEN_TEXTURE_3D:
@@ -3517,10 +3508,6 @@ static AstDecl *parseTopLevel(Parser *p)
             break;
         }
 
-        case TOKEN_SAMPLED_TEXTURE_1D:
-        case TOKEN_SAMPLED_TEXTURE_2D:
-        case TOKEN_SAMPLED_TEXTURE_3D:
-        case TOKEN_SAMPLED_TEXTURE_CUBE:
         case TOKEN_TEXTURE_1D:
         case TOKEN_TEXTURE_2D:
         case TOKEN_TEXTURE_3D:
@@ -3548,22 +3535,6 @@ static AstDecl *parseTopLevel(Parser *p)
                 break;
             case TOKEN_TEXTURE_CUBE:
                 type_expr->kind = EXPR_TEXTURE_TYPE;
-                type_expr->texture.dim = SpvDimCube;
-                break;
-            case TOKEN_SAMPLED_TEXTURE_1D:
-                type_expr->kind = EXPR_SAMPLED_TEXTURE_TYPE;
-                type_expr->texture.dim = SpvDim1D;
-                break;
-            case TOKEN_SAMPLED_TEXTURE_2D:
-                type_expr->kind = EXPR_SAMPLED_TEXTURE_TYPE;
-                type_expr->texture.dim = SpvDim2D;
-                break;
-            case TOKEN_SAMPLED_TEXTURE_3D:
-                type_expr->kind = EXPR_SAMPLED_TEXTURE_TYPE;
-                type_expr->texture.dim = SpvDim3D;
-                break;
-            case TOKEN_SAMPLED_TEXTURE_CUBE:
-                type_expr->kind = EXPR_SAMPLED_TEXTURE_TYPE;
                 type_expr->texture.dim = SpvDimCube;
                 break;
 
@@ -4363,28 +4334,6 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
         expr->type = type_type;
         expr->as_type = newImageType(m, sampled_type, expr->texture.dim);
-        break;
-    }
-
-    case EXPR_SAMPLED_TEXTURE_TYPE: {
-        AstType *type_type = newBasicType(m, TYPE_TYPE);
-        analyzerAnalyzeExpr(a, expr->texture.sampled_type_expr, type_type);
-        if (!expr->texture.sampled_type_expr->type)
-        {
-            break;
-        }
-
-        AstType *sampled_type = expr->texture.sampled_type_expr->as_type;
-        assert(sampled_type);
-
-        if ((sampled_type->kind != TYPE_FLOAT) && (sampled_type->kind != TYPE_INT))
-        {
-            addErr(compiler, &expr->loc, "invalid sampled type for texture");
-        }
-
-        expr->type = type_type;
-        AstType *image_type = newImageType(m, sampled_type, expr->texture.dim);
-        expr->as_type = newSampledImageType(m, image_type);
         break;
     }
 
@@ -6529,8 +6478,7 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
     }
 
     case EXPR_SAMPLER_TYPE:
-    case EXPR_TEXTURE_TYPE:
-    case EXPR_SAMPLED_TEXTURE_TYPE: {
+    case EXPR_TEXTURE_TYPE: {
         break;
     }
     }
