@@ -728,6 +728,8 @@ struct IRInst
         {
             /*array*/ IRInst **params;
             /*array*/ IRInst **blocks;
+            /*array*/ IRInst **inputs;
+            /*array*/ IRInst **outputs;
         } func;
 
         struct
@@ -844,7 +846,9 @@ struct IRModule
     /*array*/ IRInst **entry_points;
     /*array*/ IRInst **constants;
     /*array*/ IRInst **functions;
-    /*array*/ IRInst **globals;
+    /*array*/ IRInst **globals;     /* This only counts uniforms/storage variables */
+    /*array*/ IRInst **all_globals; /* This counts uniforms/storage variables and all inputs/outputs
+                                       of every stage */
 
     IRInst *current_block;
 
@@ -4625,15 +4629,48 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
             param_types = NEW_ARRAY(compiler, AstType *, arrLength(decl->func.func_params));
         }
 
+        uint32_t input_loc = 0;
+        uint32_t output_loc = 0;
+
         analyzerPushScope(a, decl->scope);
         for (uint32_t i = 0; i < arrLength(decl->func.inputs); ++i)
         {
             AstDecl *param_decl = decl->func.inputs[i];
 
-            IRDecoration dec = {0};
-            dec.kind = SpvDecorationLocation;
-            dec.value = i;
-            arrPush(param_decl->decorations, dec);
+            if (param_decl->var.semantic)
+            {
+                if (stringEquals(param_decl->var.semantic, "SV_Position") &&
+                    *decl->func.execution_model == SpvExecutionModelFragment)
+                {
+                    IRDecoration dec = {0};
+                    dec.kind = SpvDecorationBuiltIn;
+                    dec.value = SpvBuiltInFragCoord;
+                    arrPush(param_decl->decorations, dec);
+                }
+                else if (stringEquals(param_decl->var.semantic, "SV_InstanceID") &&
+                    *decl->func.execution_model == SpvExecutionModelVertex)
+                {
+                    IRDecoration dec = {0};
+                    dec.kind = SpvDecorationBuiltIn;
+                    dec.value = SpvBuiltInInstanceIndex;
+                    arrPush(param_decl->decorations, dec);
+                }
+                else if (stringEquals(param_decl->var.semantic, "SV_VertexID") &&
+                    *decl->func.execution_model == SpvExecutionModelVertex)
+                {
+                    IRDecoration dec = {0};
+                    dec.kind = SpvDecorationBuiltIn;
+                    dec.value = SpvBuiltInVertexIndex;
+                    arrPush(param_decl->decorations, dec);
+                }
+                else
+                {
+                    IRDecoration dec = {0};
+                    dec.kind = SpvDecorationLocation;
+                    dec.value = input_loc++;
+                    arrPush(param_decl->decorations, dec);
+                }
+            }
 
             analyzerTryRegisterDecl(a, param_decl);
             analyzerAnalyzeDecl(a, param_decl);
@@ -4643,10 +4680,24 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
         {
             AstDecl *param_decl = decl->func.outputs[i];
 
-            IRDecoration dec = {0};
-            dec.kind = SpvDecorationLocation;
-            dec.value = i;
-            arrPush(param_decl->decorations, dec);
+            if (param_decl->var.semantic)
+            {
+                if (stringEquals(param_decl->var.semantic, "SV_Position") &&
+                    *decl->func.execution_model == SpvExecutionModelVertex)
+                {
+                    IRDecoration dec = {0};
+                    dec.kind = SpvDecorationBuiltIn;
+                    dec.value = SpvBuiltInPosition;
+                    arrPush(param_decl->decorations, dec);
+                }
+                else
+                {
+                    IRDecoration dec = {0};
+                    dec.kind = SpvDecorationLocation;
+                    dec.value = output_loc++;
+                    arrPush(param_decl->decorations, dec);
+                }
+            }
 
             analyzerTryRegisterDecl(a, param_decl);
             analyzerAnalyzeDecl(a, param_decl);
@@ -4971,6 +5022,35 @@ static IRInst *irAddGlobal(IRModule *m, IRType *type, SpvStorageClass storage_cl
     inst->type = irNewPointerType(m, inst->var.storage_class, type);
 
     arrPush(m->globals, inst);
+    arrPush(m->all_globals, inst);
+
+    return inst;
+}
+
+static IRInst *irAddInput(IRModule *m, IRInst *func, IRType *type)
+{
+    IRInst *inst = NEW(m->compiler, IRInst);
+    inst->id = irModuleReserveId(m);
+    inst->kind = IR_INST_VARIABLE;
+    inst->var.storage_class = SpvStorageClassInput;
+    inst->type = irNewPointerType(m, inst->var.storage_class, type);
+
+    arrPush(func->func.inputs, inst);
+    arrPush(m->all_globals, inst);
+
+    return inst;
+}
+
+static IRInst *irAddOutput(IRModule *m, IRInst *func, IRType *type)
+{
+    IRInst *inst = NEW(m->compiler, IRInst);
+    inst->id = irModuleReserveId(m);
+    inst->kind = IR_INST_VARIABLE;
+    inst->var.storage_class = SpvStorageClassOutput;
+    inst->type = irNewPointerType(m, inst->var.storage_class, type);
+
+    arrPush(func->func.outputs, inst);
+    arrPush(m->all_globals, inst);
 
     return inst;
 }
@@ -5419,9 +5499,9 @@ static void irModuleReserveTypeIds(IRModule *m)
 
 static void irModuleEncodeDecorations(IRModule *m)
 {
-    for (uint32_t i = 0; i < arrLength(m->globals); ++i)
+    for (uint32_t i = 0; i < arrLength(m->all_globals); ++i)
     {
-        IRInst *inst = m->globals[i];
+        IRInst *inst = m->all_globals[i];
         assert(inst->kind == IR_INST_VARIABLE);
         assert(inst->id);
 
@@ -5951,9 +6031,9 @@ static void irModuleEncodeConstants(IRModule *m)
 
 static void irModuleEncodeGlobals(IRModule *m)
 {
-    for (uint32_t i = 0; i < arrLength(m->globals); ++i)
+    for (uint32_t i = 0; i < arrLength(m->all_globals); ++i)
     {
-        IRInst *inst = m->globals[i];
+        IRInst *inst = m->all_globals[i];
         assert(inst->kind == IR_INST_VARIABLE);
 
         uint32_t params[3] = {inst->type->id, inst->id, inst->var.storage_class};
@@ -6586,29 +6666,35 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
 
 static void irModuleBuildDecl(IRModule *m, AstDecl *decl)
 {
-    TscCompiler *compiler = m->compiler;
-
     switch (decl->kind)
     {
     case DECL_FUNC: {
         if (decl->func.execution_model)
         {
             IRInst **globals = NULL;
-            uint32_t global_count = 0;
 
-            if (arrLength(m->globals) > 0)
+            for (uint32_t i = 0; i < arrLength(m->globals); ++i)
             {
-                global_count = arrLength(m->globals);
-                globals = NEW_ARRAY(compiler, IRInst *, global_count);
+                arrPush(globals, m->globals[i]);
+            }
 
-                for (uint32_t i = 0; i < global_count; ++i)
-                {
-                    globals[i] = m->globals[i];
-                }
+            for (uint32_t i = 0; i < arrLength(decl->value->func.inputs); ++i)
+            {
+                arrPush(globals, decl->value->func.inputs[i]);
+            }
+
+            for (uint32_t i = 0; i < arrLength(decl->value->func.outputs); ++i)
+            {
+                arrPush(globals, decl->value->func.outputs[i]);
             }
 
             irAddEntryPoint(
-                m, decl->name, decl->value, *decl->func.execution_model, globals, global_count);
+                m,
+                decl->name,
+                decl->value,
+                *decl->func.execution_model,
+                globals,
+                arrLength(globals));
         }
 
         IRInst *entry_block = irAddBlock(m, decl->value);
@@ -6707,7 +6793,7 @@ static void irModuleCodegen(IRModule *m, Module *mod)
                 {
                     AstDecl *input = decl->func.inputs[k];
                     IRType *ir_param_type = convertTypeToIR(m->mod, m, input->type);
-                    input->value = irAddGlobal(m, ir_param_type, input->var.storage_class);
+                    input->value = irAddInput(m, decl->value, ir_param_type);
                     input->value->decorations = input->decorations;
                 }
 
@@ -6715,7 +6801,7 @@ static void irModuleCodegen(IRModule *m, Module *mod)
                 {
                     AstDecl *output = decl->func.outputs[k];
                     IRType *ir_param_type = convertTypeToIR(m->mod, m, output->type);
-                    output->value = irAddGlobal(m, ir_param_type, output->var.storage_class);
+                    output->value = irAddOutput(m, decl->value, ir_param_type);
                     output->value->decorations = output->decorations;
                 }
 
