@@ -1,15 +1,15 @@
 cmake_minimum_required(VERSION 3.1)
-project(tsc VERSION 1.0 LANGUAGES C)
+project(tinyshader VERSION 1.0 LANGUAGES C)
 
 add_library(
-	tsc
+	tinyshader
 
-	src/tsc.c
-	src/tsc.h
+	src/tinyshader.c
+	src/tinyshader.h
 	src/spirv.h)
 
-target_compile_options(tsc PRIVATE -Wall -Wextra -Wno-unused-function)
+target_compile_options(tinyshader PRIVATE -Wall -Wextra -Wno-unused-function)
 
-add_executable(tscc src/tscc.c)
+add_executable(tsc src/tsc.c)
 
-target_link_libraries(tscc PRIVATE tsc)
+target_link_libraries(tsc PRIVATE tinyshader)
