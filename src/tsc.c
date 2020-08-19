@@ -569,6 +569,25 @@ typedef struct Token
 // IR
 //
 
+typedef struct IRDecoration
+{
+    SpvDecoration kind;
+    union
+    {
+        uint32_t value;
+    };
+} IRDecoration;
+
+typedef struct IRMemberDecoration
+{
+    SpvDecoration kind;
+    uint32_t member_index;
+    union
+    {
+        uint32_t value;
+    };
+} IRMemberDecoration;
+
 typedef enum IRTypeKind {
     IR_TYPE_VOID,
 
@@ -632,8 +651,9 @@ typedef struct IRType
             char *name;
 
             struct IRType **fields;
-            uint32_t *field_offsets;
             uint32_t field_count;
+            IRMemberDecoration *field_decorations;
+            uint32_t field_decoration_count;
         } struct_;
         struct
         {
@@ -654,15 +674,6 @@ typedef struct IRType
 
 typedef struct IRModule IRModule;
 typedef struct IRInst IRInst;
-
-typedef struct IRDecoration
-{
-    SpvDecoration kind;
-    union
-    {
-        uint32_t value;
-    };
-} IRDecoration;
 
 typedef enum IRInstKind {
     IR_INST_ENTRY_POINT,
@@ -911,7 +922,7 @@ typedef struct AstType
 
             AstDecl **field_decls;
             struct AstType **fields;
-            uint32_t *field_offsets;
+            /*array*/ IRMemberDecoration *field_decorations;
             uint32_t field_count;
         } struct_;
         struct
@@ -1248,7 +1259,7 @@ TscCompiler *tscCompilerCreate()
     TscCompiler *compiler = malloc(sizeof(TscCompiler));
     memset(compiler, 0, sizeof(*compiler));
 
-    bumpInit(&compiler->alloc, 1 << 14);
+    bumpInit(&compiler->alloc, 1 << 16);
     sbInit(&compiler->sb);
 
     hashInit(&compiler->keyword_table, 32);
@@ -1608,7 +1619,12 @@ irNewFuncType(IRModule *m, IRType *return_type, IRType **params, uint32_t param_
 }
 
 static IRType *irNewStructType(
-    IRModule *m, char *name, IRType **fields, uint32_t *field_offsets, uint32_t field_count)
+    IRModule *m,
+    char *name,
+    IRType **fields,
+    uint32_t field_count,
+    IRMemberDecoration *field_decorations,
+    uint32_t field_decoration_count)
 {
     IRType *ty = NEW(m->compiler, IRType);
     ty->kind = IR_TYPE_STRUCT;
@@ -1621,8 +1637,14 @@ static IRType *irNewStructType(
         ty->struct_.fields = NEW_ARRAY(m->compiler, IRType *, field_count);
         memcpy(ty->struct_.fields, fields, sizeof(IRType *) * field_count);
 
-        ty->struct_.field_offsets = NEW_ARRAY(m->compiler, uint32_t, field_count);
-        memcpy(ty->struct_.field_offsets, field_offsets, sizeof(uint32_t) * field_count);
+        ty->struct_.field_decoration_count = field_decoration_count;
+
+        ty->struct_.field_decorations =
+            NEW_ARRAY(m->compiler, IRMemberDecoration, field_decoration_count);
+        memcpy(
+            ty->struct_.field_decorations,
+            field_decorations,
+            sizeof(IRMemberDecoration) * field_decoration_count);
     }
 
     return irGetCachedType(m, ty);
@@ -2271,15 +2293,18 @@ static uint32_t typeSizeOf(Module *m, AstType *type)
     }
 
     case TYPE_STRUCT: {
-        assert(type->struct_.field_offsets == NULL);
-        type->struct_.field_offsets = NEW_ARRAY(m->compiler, uint32_t, type->struct_.field_count);
-
         for (size_t i = 0; i < type->struct_.field_count; ++i)
         {
             AstType *field = type->struct_.fields[i];
             uint32_t field_align = typeAlignOf(m, field);
             size = padToAlignment(size, field_align); // Add padding
-            type->struct_.field_offsets[i] = size;
+
+            IRMemberDecoration member_dec = {0};
+            member_dec.kind = SpvDecorationOffset;
+            member_dec.member_index = i;
+            member_dec.value = size;
+            arrPush(type->struct_.field_decorations, member_dec);
+
             size += typeSizeOf(m, field);
         }
 
@@ -2324,7 +2349,6 @@ IRType *convertTypeToIR(Module *module, IRModule *ir_module, AstType *type)
 
     case TYPE_STRUCT: {
         typeSizeOf(module, type);
-        assert(type->struct_.field_offsets != NULL);
         IRType **field_types = NEW_ARRAY(module->compiler, IRType *, type->struct_.field_count);
         for (uint32_t i = 0; i < type->struct_.field_count; ++i)
         {
@@ -2334,8 +2358,9 @@ IRType *convertTypeToIR(Module *module, IRModule *ir_module, AstType *type)
             ir_module,
             type->struct_.name,
             field_types,
-            type->struct_.field_offsets,
-            type->struct_.field_count);
+            type->struct_.field_count,
+            type->struct_.field_decorations,
+            arrLength(type->struct_.field_decorations));
     }
 
     case TYPE_VECTOR: {
@@ -4810,6 +4835,26 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
         decl->as_type =
             newStructType(m, decl->name, field_types, decl->struct_.fields, field_count);
 
+        for (uint32_t i = 0; i < arrLength(decl->struct_.fields); ++i)
+        {
+            if (field_types[i]->kind == TYPE_MATRIX)
+            {
+                IRMemberDecoration member_dec = {0};
+                member_dec.kind = SpvDecorationRowMajor;
+                member_dec.member_index = i;
+                arrPush(decl->as_type->struct_.field_decorations, member_dec);
+
+                uint32_t row_stride =
+                    field_types[i]->matrix.col_count *
+                    typeSizeOf(m, field_types[i]->matrix.col_type->vector.elem_type);
+
+                member_dec.kind = SpvDecorationMatrixStride;
+                member_dec.member_index = i;
+                member_dec.value = row_stride;
+                arrPush(decl->as_type->struct_.field_decorations, member_dec);
+            }
+        }
+
         break;
     }
     }
@@ -5399,14 +5444,25 @@ static void irModuleEncodeDecorations(IRModule *m)
         IRType *type = (IRType *)m->type_cache.values[i];
         if (type->kind == IR_TYPE_STRUCT)
         {
-            assert(type->struct_.field_offsets != NULL);
             assert(type->id > 0);
 
-            for (uint32_t j = 0; j < type->struct_.field_count; ++j)
+            for (uint32_t j = 0; j < type->struct_.field_decoration_count; ++j)
             {
-                uint32_t field_offset = type->struct_.field_offsets[j];
+                IRMemberDecoration *member_dec = &type->struct_.field_decorations[j];
+                uint32_t params[4];
+                params[0] = type->id;
+                params[1] = member_dec->member_index;
+
+                params[2] = member_dec->kind;
+                params[3] = member_dec->value;
+
                 uint32_t param_count = 4;
-                uint32_t params[4] = {type->id, j, SpvDecorationOffset, field_offset};
+                switch (member_dec->kind)
+                {
+                case SpvDecorationRowMajor:
+                case SpvDecorationColMajor: param_count = 3; break;
+                default: break;
+                }
 
                 irModuleEncodeInst(m, SpvOpMemberDecorate, params, param_count);
             }
