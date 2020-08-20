@@ -9,18 +9,25 @@
 extern "C" {
 #endif
 
+typedef enum TsShaderStage {
+    TS_SHADER_STAGE_VERTEX,
+    TS_SHADER_STAGE_FRAGMENT,
+} TsShaderStage;
+
 typedef struct TsCompilerInput {
   char *path; // optional
   char *input;
   size_t input_size;
+
+  const char *entry_point;
+  TsShaderStage stage;
 } TsCompilerInput;
 
 typedef struct TsCompilerOutput {
   uint8_t *spirv;
   size_t spirv_byte_size;
 
-  char **errors;
-  size_t error_count;
+  char *error;
 } TsCompilerOutput;
 
 typedef struct TsCompiler TsCompiler;

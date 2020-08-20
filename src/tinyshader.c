@@ -652,6 +652,8 @@ typedef struct IRType
 
             struct IRType **fields;
             uint32_t field_count;
+            IRDecoration *decorations;
+            uint32_t decoration_count;
             IRMemberDecoration *field_decorations;
             uint32_t field_decoration_count;
         } struct_;
@@ -926,6 +928,7 @@ typedef struct AstType
 
             AstDecl **field_decls;
             struct AstType **fields;
+            /*array*/ IRDecoration *decorations;
             /*array*/ IRMemberDecoration *field_decorations;
             uint32_t field_count;
         } struct_;
@@ -1057,6 +1060,8 @@ struct AstDecl
             /*array*/ AstDecl **func_params;
             /*array*/ AstDecl **inputs;
             /*array*/ AstDecl **outputs;
+
+            bool called; // if this function was called or if it's an entry point
         } func;
 
         struct
@@ -1211,6 +1216,9 @@ struct Module
     Scope *scope;
     /*array*/ File **files;
 
+    const char *entry_point; // Requested entry point name
+    TsShaderStage stage;
+
     HashMap type_cache;
 };
 
@@ -1364,10 +1372,12 @@ static void scopeClone(Scope *new_scope, Scope *old_scope, AstDecl *new_owner)
 // }}}
 
 // Module functions {{{
-static void moduleInit(Module *m, TsCompiler *compiler)
+static void moduleInit(Module *m, TsCompiler *compiler, const char *entry_point, TsShaderStage stage)
 {
     memset(m, 0, sizeof(*m));
     m->compiler = compiler;
+    m->entry_point = entry_point;
+    m->stage = stage;
 
     hashInit(&m->type_cache, 0);
 
@@ -1627,6 +1637,8 @@ static IRType *irNewStructType(
     char *name,
     IRType **fields,
     uint32_t field_count,
+    IRDecoration *decorations,
+    uint32_t decoration_count,
     IRMemberDecoration *field_decorations,
     uint32_t field_decoration_count)
 {
@@ -1649,6 +1661,11 @@ static IRType *irNewStructType(
             ty->struct_.field_decorations,
             field_decorations,
             sizeof(IRMemberDecoration) * field_decoration_count);
+
+        ty->struct_.decoration_count = decoration_count;
+
+        ty->struct_.decorations = NEW_ARRAY(m->compiler, IRDecoration, decoration_count);
+        memcpy(ty->struct_.decorations, decorations, sizeof(IRDecoration) * decoration_count);
     }
 
     return irGetCachedType(m, ty);
@@ -2363,6 +2380,8 @@ IRType *convertTypeToIR(Module *module, IRModule *ir_module, AstType *type)
             type->struct_.name,
             field_types,
             type->struct_.field_count,
+            type->struct_.decorations,
+            arrLength(type->struct_.decorations),
             type->struct_.field_decorations,
             arrLength(type->struct_.field_decorations));
     }
@@ -3940,6 +3959,11 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             break;
         }
 
+        if (decl->kind == DECL_FUNC)
+        {
+            decl->func.called = true;
+        }
+
         if (decl->kind == DECL_VAR)
         {
             if (decl->var.kind != VAR_FUNCTION_PARAM)
@@ -4554,19 +4578,19 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
     switch (decl->kind)
     {
     case DECL_FUNC: {
-        for (uint32_t i = 0; i < arrLength(decl->attributes); ++i)
+        if (stringEquals(m->entry_point, decl->name))
         {
-            AstAttribute *attrib = &decl->attributes[i];
+            decl->func.execution_model = NEW(compiler, SpvExecutionModel);
+            decl->func.called = true;
 
-            if (stringEquals("vk::vertex", attrib->name))
+            switch (m->stage)
             {
-                decl->func.execution_model = NEW(compiler, SpvExecutionModel);
+            case TS_SHADER_STAGE_VERTEX:
                 *decl->func.execution_model = SpvExecutionModelVertex;
-            }
-            else if (stringEquals("vk::fragment", attrib->name))
-            {
-                decl->func.execution_model = NEW(compiler, SpvExecutionModel);
+                break;
+            case TS_SHADER_STAGE_FRAGMENT:
                 *decl->func.execution_model = SpvExecutionModelFragment;
+                break;
             }
         }
 
@@ -4647,7 +4671,8 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                     dec.value = SpvBuiltInFragCoord;
                     arrPush(param_decl->decorations, dec);
                 }
-                else if (stringEquals(param_decl->var.semantic, "SV_InstanceID") &&
+                else if (
+                    stringEquals(param_decl->var.semantic, "SV_InstanceID") &&
                     *decl->func.execution_model == SpvExecutionModelVertex)
                 {
                     IRDecoration dec = {0};
@@ -4655,7 +4680,8 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                     dec.value = SpvBuiltInInstanceIndex;
                     arrPush(param_decl->decorations, dec);
                 }
-                else if (stringEquals(param_decl->var.semantic, "SV_VertexID") &&
+                else if (
+                    stringEquals(param_decl->var.semantic, "SV_VertexID") &&
                     *decl->func.execution_model == SpvExecutionModelVertex)
                 {
                     IRDecoration dec = {0};
@@ -4774,7 +4800,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
         {
             IRDecoration dec = {0};
             dec.kind = SpvDecorationBlock;
-            arrPush(decl->decorations, dec);
+            arrPush(decl->type->struct_.decorations, dec);
         }
 
         // Add decorations
@@ -5512,7 +5538,7 @@ static void irModuleEncodeDecorations(IRModule *m)
             uint32_t params[3] = {inst->id, dec->kind, dec->value};
             switch (dec->kind)
             {
-            case SpvDecorationBlock: param_count = 2; break;
+            case SpvDecorationBlock: assert(0); break;
             default: break;
             }
             irModuleEncodeInst(m, SpvOpDecorate, params, param_count);
@@ -5525,6 +5551,20 @@ static void irModuleEncodeDecorations(IRModule *m)
         if (type->kind == IR_TYPE_STRUCT)
         {
             assert(type->id > 0);
+
+            for (uint32_t j = 0; j < type->struct_.decoration_count; ++j)
+            {
+                IRDecoration *dec = &type->struct_.decorations[j];
+                uint32_t param_count = 3;
+                uint32_t params[3] = {type->id, dec->kind, dec->value};
+
+                switch (dec->kind)
+                {
+                case SpvDecorationBlock: param_count = 2; break;
+                default: break;
+                }
+                irModuleEncodeInst(m, SpvOpDecorate, params, param_count);
+            }
 
             for (uint32_t j = 0; j < type->struct_.field_decoration_count; ++j)
             {
@@ -6117,6 +6157,9 @@ static void irModuleEncodeModule(IRModule *m)
 
     irModuleEncodeEntryPoints(m);
 
+    uint32_t params[2] = {SpvSourceLanguageHLSL, 500};
+    irModuleEncodeInst(m, SpvOpSource, params, 2);
+
     irModuleReserveTypeIds(m);
 
     irModuleEncodeDecorations(m);
@@ -6669,6 +6712,8 @@ static void irModuleBuildDecl(IRModule *m, AstDecl *decl)
     switch (decl->kind)
     {
     case DECL_FUNC: {
+        if (!decl->func.called) break;
+
         if (decl->func.execution_model)
         {
             IRInst **globals = NULL;
@@ -6700,11 +6745,29 @@ static void irModuleBuildDecl(IRModule *m, AstDecl *decl)
         IRInst *entry_block = irAddBlock(m, decl->value);
         irPositionAtEnd(m, entry_block);
 
+        IRInst **old_inputs = NEW_ARRAY(m->compiler, IRInst*, arrLength(decl->func.inputs));
+
+        for (uint32_t i = 0; i < arrLength(decl->func.inputs); ++i)
+        {
+            AstDecl *var = decl->func.inputs[i];
+            old_inputs[i] = var->value;
+
+            IRType *ir_type = convertTypeToIR(m->mod, m, var->type);
+            var->value = irBuildAlloca(m, ir_type);
+        }
+
         for (uint32_t i = 0; i < arrLength(decl->func.var_decls); ++i)
         {
             AstDecl *var = decl->func.var_decls[i];
             IRType *ir_type = convertTypeToIR(m->mod, m, var->type);
             var->value = irBuildAlloca(m, ir_type);
+        }
+
+        for (uint32_t i = 0; i < arrLength(decl->func.inputs); ++i)
+        {
+            AstDecl *var = decl->func.inputs[i];
+            IRInst*loaded = irBuildLoad(m, old_inputs[i]);
+            irBuildStore(m, var->value, loaded);
         }
 
         for (uint32_t i = 0; i < arrLength(decl->func.stmts); ++i)
@@ -6779,6 +6842,8 @@ static void irModuleCodegen(IRModule *m, Module *mod)
             case DECL_FUNC: {
                 assert(decl->type);
 
+                if (!decl->func.called) break;
+
                 IRType *ir_type = convertTypeToIR(m->mod, m, decl->type);
                 decl->value = irAddFunction(m, ir_type);
 
@@ -6839,20 +6904,21 @@ static bool handleErrors(TsCompiler *compiler, TsCompilerOutput *output)
 {
     if (arrLength(compiler->errors) > 0)
     {
-        output->error_count = arrLength(compiler->errors);
-        output->errors = malloc(sizeof(char *) * output->error_count);
-        for (uint32_t i = 0; i < output->error_count; ++i)
+        sbReset(&compiler->sb);
+
+        for (uint32_t i = 0; i < arrLength(compiler->errors); ++i)
         {
             Error *err = &compiler->errors[i];
-            sbReset(&compiler->sb);
             if (err->loc.file && err->loc.file->path)
             {
                 sbAppend(&compiler->sb, err->loc.file->path);
                 sbAppend(&compiler->sb, ":");
             }
-            sbSprintf(&compiler->sb, "%u:%u: error: %s", err->loc.line, err->loc.col, err->message);
-            output->errors[i] = sbBuildMalloc(&compiler->sb);
+            sbSprintf(
+                &compiler->sb, "%u:%u: error: %s\n", err->loc.line, err->loc.col, err->message);
         }
+
+        output->error = sbBuildMalloc(&compiler->sb);
 
         return true;
     }
@@ -6866,6 +6932,8 @@ void tsCompile(TsCompiler *compiler, TsCompilerInput *input, TsCompilerOutput *o
     assert(input);
     assert(output);
 
+    assert(input->entry_point);
+
     {
         File *file = NEW(compiler, File);
         file->path = input->path;
@@ -6876,7 +6944,7 @@ void tsCompile(TsCompiler *compiler, TsCompilerInput *input, TsCompilerOutput *o
     }
 
     Module *module = NEW(compiler, Module);
-    moduleInit(module, compiler);
+    moduleInit(module, compiler, input->entry_point, input->stage);
 
     while (arrLength(compiler->file_queue) > 0)
     {
@@ -6915,12 +6983,5 @@ void tsCompile(TsCompiler *compiler, TsCompilerInput *input, TsCompilerOutput *o
 void tsCompilerOutputDestroy(TsCompilerOutput *output)
 {
     if (output->spirv) free(output->spirv);
-    if (output->errors)
-    {
-        for (uint32_t i = 0; i < output->error_count; ++i)
-        {
-            free(output->errors[i]);
-        }
-        free(output->errors);
-    }
+    if (output->error) free(output->error);
 }

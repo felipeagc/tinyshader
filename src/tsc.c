@@ -23,40 +23,28 @@ static char *loadFile(const char *path, size_t *out_size)
     return data;
 }
 
-int main(int argc, char *argv[])
+static void compileStage(char *out_file_name, char *input_path, char *file_data, size_t file_size, char *entry_point, TsShaderStage stage)
 {
-    if (argc != 2)
-    {
-        printf("Usage: %s <file>\n", argv[0]);
-        exit(1);
-    }
-
-    char *path = argv[1];
-
-    size_t file_size = 0;
-    char *file_data = loadFile(path, &file_size);
-
     TsCompiler *compiler = tsCompilerCreate();
 
     TsCompilerInput input = {
         .input = file_data,
         .input_size = file_size,
-        .path = path,
+        .path = input_path,
+        .entry_point = entry_point,
+        .stage = stage,
     };
 
     TsCompilerOutput output = {0};
     tsCompile(compiler, &input, &output);
-    if (output.error_count > 0)
+    if (output.error)
     {
-        for (char **err = output.errors; err != output.errors + output.error_count; ++err)
-        {
-            fprintf(stderr, "%s\n", *err);
-        }
+        fprintf(stderr, "%s", output.error);
 
         exit(1);
     }
 
-    FILE *f = fopen("a.spv", "wb");
+    FILE *f = fopen(out_file_name, "wb");
     if (!f)
     {
         fprintf(stderr, "failed to open output file\n");
@@ -70,6 +58,23 @@ int main(int argc, char *argv[])
     tsCompilerOutputDestroy(&output);
 
     tsCompilerDestroy(compiler);
+}
+
+int main(int argc, char *argv[])
+{
+    if (argc != 2)
+    {
+        printf("Usage: %s <file>\n", argv[0]);
+        exit(1);
+    }
+
+    char *path = argv[1];
+
+    size_t file_size = 0;
+    char *file_data = loadFile(path, &file_size);
+
+    compileStage("vert.spv", path, file_data, file_size, "vertex", TS_SHADER_STAGE_VERTEX);
+    compileStage("frag.spv", path, file_data, file_size, "pixel", TS_SHADER_STAGE_FRAGMENT);
 
     free(file_data);
 
