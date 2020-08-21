@@ -1480,6 +1480,22 @@ static void analyzerAnalyzeStmt(Analyzer *a, AstStmt *stmt)
         analyzerPopScope(a, stmt->block.scope);
         break;
     }
+
+    case STMT_IF: {
+        analyzerAnalyzeExpr(a, stmt->if_.cond, NULL);
+        if (stmt->if_.cond->type && !ts__getComparableType(stmt->if_.cond->type))
+        {
+            ts__addErr(compiler, &stmt->if_.cond->loc, "expression is not comparable");
+        }
+
+        analyzerAnalyzeStmt(a, stmt->if_.if_stmt);
+        if (stmt->if_.else_stmt)
+        {
+            analyzerAnalyzeStmt(a, stmt->if_.else_stmt);
+        }
+
+        break;
+    }
     }
 }
 

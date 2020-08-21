@@ -909,6 +909,32 @@ static AstStmt *parseStmt(Parser *p)
         return stmt;
     }
 
+    case TOKEN_IF: {
+        parserNext(p, 1);
+        AstStmt *stmt = NEW(compiler, AstStmt);
+        stmt->kind = STMT_IF;
+
+        if (!parserConsume(p, TOKEN_LPAREN)) return NULL;
+
+        stmt->if_.cond = parseExpr(p);
+        if(!stmt->if_.cond) return NULL;
+
+        if (!parserConsume(p, TOKEN_RPAREN)) return NULL;
+
+        stmt->if_.if_stmt = parseStmt(p);
+        if (!stmt->if_.if_stmt) return NULL;
+
+        if (parserPeek(p, 0)->kind == TOKEN_ELSE)
+        {
+            parserNext(p, 1);
+
+            stmt->if_.else_stmt = parseStmt(p);
+            if (!stmt->if_.else_stmt) return NULL;
+        }
+
+        return stmt;
+    }
+
     case TOKEN_LCURLY: {
         parserNext(p, 1);
 

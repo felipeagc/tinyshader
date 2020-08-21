@@ -536,6 +536,10 @@ static IRInst *irAddBlock(IRModule *m, IRInst *func)
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_BLOCK;
 
+    inst->id = irModuleReserveId(m);
+
+    inst->block.func = func;
+
     assert(func->kind == IR_INST_FUNCTION);
     arrPush(func->func.blocks, inst);
 
@@ -601,6 +605,8 @@ static bool irBlockHasTerminator(IRInst *block)
     IRInst *last_inst = block->block.insts[arrLength(block->block.insts) - 1];
     switch (last_inst->kind)
     {
+    case IR_INST_COND_BRANCH:
+    case IR_INST_BRANCH:
     case IR_INST_RETURN: return true;
     default: return false;
     }
@@ -687,6 +693,18 @@ static IRInst *irBuildConstInt(IRModule *m, IRType *type, uint64_t value)
 
     arrPush(m->constants, inst);
 
+    return inst;
+}
+
+static IRInst *irBuildConstBool(IRModule *m, bool value)
+{
+    IRInst *inst = NEW(m->compiler, IRInst);
+    inst->kind = IR_INST_CONSTANT_BOOL;
+
+    inst->type = irNewBasicType(m, IR_TYPE_BOOL);
+    inst->constant_bool.value = value;
+
+    arrPush(m->constants, inst);
     return inst;
 }
 
@@ -1011,6 +1029,34 @@ static void irBuildReturn(IRModule *m, IRInst *value)
     arrPush(block->block.insts, inst);
 }
 
+static void irBuildBr(IRModule *m, IRInst *target)
+{
+    IRInst *inst = NEW(m->compiler, IRInst);
+    inst->kind = IR_INST_BRANCH;
+    inst->branch.target = target;
+
+    IRInst *block = irGetCurrentBlock(m);
+    arrPush(block->block.insts, inst);
+}
+
+static void irBuildCondBr(
+    IRModule *m,
+    IRInst *cond,
+    IRInst *true_target,
+    IRInst *false_target,
+    IRInst *merge_target)
+{
+    IRInst *inst = NEW(m->compiler, IRInst);
+    inst->kind = IR_INST_COND_BRANCH;
+    inst->cond_branch.cond = cond;
+    inst->cond_branch.true_target = true_target;
+    inst->cond_branch.false_target = false_target;
+    inst->cond_branch.merge_target = merge_target;
+
+    IRInst *block = irGetCurrentBlock(m);
+    arrPush(block->block.insts, inst);
+}
+
 static void
 irModuleEncodeInst(IRModule *m, SpvOp opcode, uint32_t *params, size_t params_count)
 {
@@ -1262,8 +1308,6 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
 {
     assert(irBlockHasTerminator(block));
 
-    block->id = irModuleReserveId(m);
-
     {
         uint32_t params[1] = {block->id};
         irModuleEncodeInst(m, SpvOpLabel, params, 1);
@@ -1306,6 +1350,31 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             else
             {
                 irModuleEncodeInst(m, SpvOpReturn, NULL, 0);
+            }
+            break;
+        }
+
+        case IR_INST_BRANCH: {
+            uint32_t params[1] = {inst->branch.target->id};
+            irModuleEncodeInst(m, SpvOpBranch, params, 1);
+            break;
+        }
+
+        case IR_INST_COND_BRANCH: {
+            {
+                uint32_t params[2] = {
+                    inst->cond_branch.merge_target->id,
+                    SpvSelectionControlMaskNone,
+                };
+                irModuleEncodeInst(m, SpvOpSelectionMerge, params, 2);
+            }
+            {
+                uint32_t params[3] = {
+                    inst->cond_branch.cond->id,
+                    inst->cond_branch.true_target->id,
+                    inst->cond_branch.false_target->id,
+                };
+                irModuleEncodeInst(m, SpvOpBranchConditional, params, 3);
             }
             break;
         }
@@ -1559,6 +1628,7 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
 
         case IR_INST_FUNC_PARAM:
         case IR_INST_CONSTANT:
+        case IR_INST_CONSTANT_BOOL:
         case IR_INST_FUNCTION:
         case IR_INST_ENTRY_POINT:
         case IR_INST_BLOCK: assert(0); break;
@@ -1571,20 +1641,41 @@ static void irModuleEncodeConstants(IRModule *m)
     for (uint32_t i = 0; i < arrLength(m->constants); ++i)
     {
         IRInst *inst = m->constants[i];
-        assert(inst->kind == IR_INST_CONSTANT);
-        inst->id = irModuleReserveId(m);
+        switch (inst->kind)
+        {
+        case IR_INST_CONSTANT: {
+            inst->id = irModuleReserveId(m);
 
-        uint32_t value_words = ROUND_TO_4(inst->constant.value_size_bytes) / 4;
-        assert((value_words * 4) >= inst->constant.value_size_bytes);
-        assert(value_words > 0);
+            uint32_t value_words = ROUND_TO_4(inst->constant.value_size_bytes) / 4;
+            assert((value_words * 4) >= inst->constant.value_size_bytes);
+            assert(value_words > 0);
 
-        uint32_t *params = NEW_ARRAY(m->compiler, uint32_t, 2 + value_words);
-        params[0] = inst->type->id;
-        params[1] = inst->id;
-        assert(params[0] != params[1]);
-        memcpy(&params[2], inst->constant.value, inst->constant.value_size_bytes);
+            uint32_t *params = NEW_ARRAY(m->compiler, uint32_t, 2 + value_words);
+            params[0] = inst->type->id;
+            params[1] = inst->id;
+            assert(params[0] != params[1]);
+            memcpy(&params[2], inst->constant.value, inst->constant.value_size_bytes);
 
-        irModuleEncodeInst(m, SpvOpConstant, params, 2 + value_words);
+            irModuleEncodeInst(m, SpvOpConstant, params, 2 + value_words);
+            break;
+        }
+
+        case IR_INST_CONSTANT_BOOL: {
+            inst->id = irModuleReserveId(m);
+            uint32_t params[2] = {inst->type->id, inst->id};
+            if (inst->constant_bool.value)
+            {
+                irModuleEncodeInst(m, SpvOpConstantTrue, params, 2);
+            }
+            else
+            {
+                irModuleEncodeInst(m, SpvOpConstantFalse, params, 2);
+            }
+            break;
+        }
+
+        default: assert(0); break;
+        }
     }
 }
 
@@ -1723,6 +1814,40 @@ static IRInst *irLoadVal(IRModule *m, IRInst *value)
     return value;
 }
 
+static IRInst *irBoolVal(IRModule *m, IRInst *value)
+{
+    IRType *bool_type = irNewBasicType(m, IR_TYPE_BOOL);
+
+    switch (value->type->kind)
+    {
+    case IR_TYPE_INT: {
+        return irBuildBinary(
+            m,
+            SpvOpINotEqual,
+            bool_type,
+            value,
+            irBuildConstInt(m, value->type, 0));
+    }
+
+    case IR_TYPE_FLOAT: {
+        return irBuildBinary(
+            m,
+            SpvOpFOrdNotEqual,
+            bool_type,
+            value,
+            irBuildConstFloat(m, value->type, 0.0));
+    }
+
+    case IR_TYPE_BOOL: {
+        return value;
+    }
+
+    default: assert(0); break;
+    }
+
+    return NULL;
+}
+
 static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
 {
     TsCompiler *compiler = m->compiler;
@@ -1758,6 +1883,16 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
 
             default: assert(0);
             }
+            break;
+        }
+
+        case TOKEN_TRUE: {
+            expr->value = irBuildConstBool(m, true);
+            break;
+        }
+
+        case TOKEN_FALSE: {
+            expr->value = irBuildConstBool(m, false);
             break;
         }
 
@@ -2250,13 +2385,64 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
 
         break;
     }
-    
+
     case STMT_BLOCK: {
         for (uint32_t i = 0; i < arrLength(stmt->block.stmts); ++i)
         {
             AstStmt *sub_stmt = stmt->block.stmts[i];
             irModuleBuildStmt(m, sub_stmt);
         }
+        break;
+    }
+
+    case STMT_IF: {
+        irModuleBuildExpr(m, stmt->if_.cond);
+        IRInst *cond = stmt->if_.cond->value;
+        assert(cond);
+        cond = irLoadVal(m, cond);
+        cond = irBoolVal(m, cond);
+
+        IRInst *current_block = irGetCurrentBlock(m);
+        IRInst *func = current_block->block.func;
+
+        IRInst *then_block = irAddBlock(m, func);
+        IRInst *else_block = NULL;
+        if (stmt->if_.else_stmt)
+        {
+            else_block = irAddBlock(m, func);
+        }
+        IRInst *merge_block = irAddBlock(m, func);
+        if (!else_block) else_block = merge_block;
+
+        irBuildCondBr(m, cond, then_block, else_block, merge_block);
+
+        // Then
+        {
+            irPositionAtEnd(m, then_block);
+
+            irModuleBuildStmt(m, stmt->if_.if_stmt);
+
+            if (!irBlockHasTerminator(irGetCurrentBlock(m)))
+            {
+                irBuildBr(m, merge_block);
+            }
+        }
+
+        // Else
+        if (stmt->if_.else_stmt)
+        {
+            irPositionAtEnd(m, else_block);
+
+            irModuleBuildStmt(m, stmt->if_.else_stmt);
+
+            if (!irBlockHasTerminator(irGetCurrentBlock(m)))
+            {
+                irBuildBr(m, merge_block);
+            }
+        }
+
+        irPositionAtEnd(m, merge_block);
+
         break;
     }
     }

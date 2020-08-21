@@ -369,11 +369,14 @@ typedef enum IRInstKind {
     IR_INST_FUNC_PARAM,
     IR_INST_VARIABLE,
     IR_INST_CONSTANT,
+    IR_INST_CONSTANT_BOOL,
     IR_INST_RETURN,
     IR_INST_STORE,
     IR_INST_LOAD,
     IR_INST_ACCESS_CHAIN,
     IR_INST_FUNC_CALL,
+    IR_INST_BRANCH,
+    IR_INST_COND_BRANCH,
 
     IR_INST_BUILTIN_CALL,
     IR_INST_CAST,
@@ -421,6 +424,7 @@ struct IRInst
 
         struct
         {
+            IRInst *func;
             /*array*/ IRInst **insts;
         } block;
 
@@ -435,6 +439,11 @@ struct IRInst
             void *value;
             size_t value_size_bytes;
         } constant;
+
+        struct 
+        {
+            bool value;
+        } constant_bool;
 
         struct
         {
@@ -525,6 +534,19 @@ struct IRInst
             IRInst *right;
             SpvOp op;
         } binary;
+
+        struct
+        {
+            IRInst *target;
+        } branch;
+
+        struct
+        {
+            IRInst *cond;
+            IRInst *true_target;
+            IRInst *false_target;
+            IRInst *merge_target;
+        } cond_branch;
     };
 };
 
@@ -679,6 +701,7 @@ typedef enum AstStmtKind {
     STMT_VAR_ASSIGN,
     STMT_RETURN,
     STMT_BLOCK,
+    STMT_IF,
 } AstStmtKind;
 
 typedef enum AstDeclKind {
@@ -726,6 +749,13 @@ struct AstStmt
             /*array*/ AstStmt **stmts;
             Scope *scope;
         } block;
+        
+        struct 
+        {
+            AstExpr *cond;
+            AstStmt *if_stmt;
+            AstStmt *else_stmt;
+        } if_;
     };
 };
 
