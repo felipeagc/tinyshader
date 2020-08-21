@@ -2250,6 +2250,15 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
 
         break;
     }
+    
+    case STMT_BLOCK: {
+        for (uint32_t i = 0; i < arrLength(stmt->block.stmts); ++i)
+        {
+            AstStmt *sub_stmt = stmt->block.stmts[i];
+            irModuleBuildStmt(m, sub_stmt);
+        }
+        break;
+    }
     }
 }
 

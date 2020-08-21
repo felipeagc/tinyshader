@@ -909,6 +909,26 @@ static AstStmt *parseStmt(Parser *p)
         return stmt;
     }
 
+    case TOKEN_LCURLY: {
+        parserNext(p, 1);
+
+        AstStmt *stmt = NEW(compiler, AstStmt);
+        stmt->kind = STMT_BLOCK;
+
+        while (parserPeek(p, 0)->kind != TOKEN_RCURLY)
+        {
+            AstStmt *sub_stmt = parseStmt(p);
+            if (sub_stmt)
+            {
+                arrPush(stmt->block.stmts, sub_stmt);
+            }
+        }
+
+        if (!parserConsume(p, TOKEN_RCURLY)) return NULL;
+
+        return stmt;
+    }
+
     default: {
         AstExpr *expr = parseExpr(p);
         if (!expr) return NULL;

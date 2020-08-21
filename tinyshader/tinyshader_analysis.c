@@ -1464,6 +1464,22 @@ static void analyzerAnalyzeStmt(Analyzer *a, AstStmt *stmt)
 
         break;
     }
+
+    case STMT_BLOCK: {
+        Scope *scope = analyzerCurrentScope(a);
+
+        stmt->block.scope = NEW(compiler, Scope);
+        scopeInit(stmt->block.scope, scope, NULL);
+
+        analyzerPushScope(a, stmt->block.scope);
+        for (uint32_t i = 0; i < arrLength(stmt->block.stmts); ++i)
+        {
+            AstStmt *sub_stmt = stmt->block.stmts[i];
+            analyzerAnalyzeStmt(a, sub_stmt);
+        }
+        analyzerPopScope(a, stmt->block.scope);
+        break;
+    }
     }
 }
 

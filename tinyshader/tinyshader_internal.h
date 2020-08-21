@@ -678,6 +678,7 @@ typedef enum AstStmtKind {
     STMT_EXPR,
     STMT_VAR_ASSIGN,
     STMT_RETURN,
+    STMT_BLOCK,
 } AstStmtKind;
 
 typedef enum AstDeclKind {
@@ -719,6 +720,12 @@ struct AstStmt
         {
             AstExpr *value;
         } return_;
+
+        struct
+        {
+            /*array*/ AstStmt **stmts;
+            Scope *scope;
+        } block;
     };
 };
 
