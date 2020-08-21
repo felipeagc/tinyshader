@@ -72,7 +72,7 @@ static char *irTypeToString(TsCompiler *compiler, IRType *type)
         prefix = "func";
 
         char *return_type = irTypeToString(compiler, type->func.return_type);
-        char **params = NEW_ARRAY(compiler, char * , type->func.param_count);
+        char **params = NEW_ARRAY(compiler, char *, type->func.param_count);
         for (uint32_t i = 0; i < type->func.param_count; ++i)
         {
             params[i] = irTypeToString(compiler, type->func.params[i]);
@@ -441,8 +441,8 @@ static IRType *convertTypeToIR(Module *module, IRModule *ir_module, AstType *typ
     }
 
     case TYPE_IMAGE: {
-        IRType *sampled_type =
-            convertTypeToIR(module, ir_module, ts__getScalarType(type->image.sampled_type));
+        IRType *sampled_type = convertTypeToIR(
+            module, ir_module, ts__getScalarType(type->image.sampled_type));
         return irNewImageType(ir_module, sampled_type, type->image.dim);
     }
 
@@ -517,12 +517,14 @@ static IRInst *irAddFunction(IRModule *m, IRType *func_type)
     return inst;
 }
 
-static IRInst *irAddFuncParam(IRModule *m, IRInst *func, IRType *type)
+static IRInst *
+irAddFuncParam(IRModule *m, IRInst *func, IRType *type, bool is_by_reference)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->id = irModuleReserveId(m);
     inst->kind = IR_INST_FUNC_PARAM;
     inst->type = type;
+    inst->func_param.is_by_reference = is_by_reference;
 
     arrPush(func->func.params, inst);
 
@@ -1705,7 +1707,9 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr);
 
 static bool isLvalue(IRInst *value)
 {
-    return value->kind == IR_INST_VARIABLE || value->kind == IR_INST_ACCESS_CHAIN;
+    return (
+        value->kind == IR_INST_VARIABLE || value->kind == IR_INST_ACCESS_CHAIN ||
+        (value->kind == IR_INST_FUNC_PARAM && value->func_param.is_by_reference));
 }
 
 static IRInst *irLoadVal(IRModule *m, IRInst *value)
@@ -1902,6 +1906,7 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
 
         if (func_type->kind == TYPE_TYPE)
         {
+            // Type constructor
             AstType *constructed_type = expr->func_call.func_expr->as_type;
             assert(constructed_type);
             IRType *ir_constructed_type = convertTypeToIR(m->mod, m, constructed_type);
@@ -1962,6 +1967,7 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
         }
         else
         {
+            // Actual function call
             assert(func_type->kind == TYPE_FUNC);
 
             irModuleBuildExpr(m, expr->func_call.func_expr);
@@ -1976,7 +1982,11 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
                 AstExpr *param = expr->func_call.params[i];
                 irModuleBuildExpr(m, param);
                 assert(param->value);
-                param_values[i] = irLoadVal(m, param->value);
+                param_values[i] = param->value;
+                if (func_type->func.params[i]->kind != TYPE_POINTER)
+                {
+                    param_values[i] = irLoadVal(m, param_values[i]);
+                }
             }
 
             expr->value = irBuildFuncCall(m, func_val, param_values, param_count);
@@ -2228,13 +2238,13 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
     }
 
     case STMT_VAR_ASSIGN: {
-        irModuleBuildExpr(m, stmt->var_assign.assigned_expr);
-        IRInst *assigned_value = stmt->var_assign.assigned_expr->value;
-
         irModuleBuildExpr(m, stmt->var_assign.value_expr);
         IRInst *to_store = stmt->var_assign.value_expr->value;
         assert(to_store);
         to_store = irLoadVal(m, to_store);
+
+        irModuleBuildExpr(m, stmt->var_assign.assigned_expr);
+        IRInst *assigned_value = stmt->var_assign.assigned_expr->value;
 
         irBuildStore(m, assigned_value, to_store);
 
@@ -2394,7 +2404,17 @@ uint32_t *ts__irModuleCodegen(Module *mod, size_t *word_count)
                 {
                     AstDecl *param = decl->func.func_params[k];
                     IRType *ir_param_type = convertTypeToIR(m->mod, m, param->type);
-                    param->value = irAddFuncParam(m, decl->value, ir_param_type);
+                    bool by_reference = false;
+                    if (param->var.kind == VAR_IN_PARAM ||
+                        param->var.kind == VAR_OUT_PARAM ||
+                        param->var.kind == VAR_INOUT_PARAM)
+                    {
+                        ir_param_type =
+                            irNewPointerType(m, SpvStorageClassFunction, ir_param_type);
+                        by_reference = true;
+                    }
+                    param->value =
+                        irAddFuncParam(m, decl->value, ir_param_type, by_reference);
                 }
 
                 for (uint32_t k = 0; k < arrLength(decl->func.inputs); ++k)
@@ -2425,12 +2445,10 @@ uint32_t *ts__irModuleCodegen(Module *mod, size_t *word_count)
                     {
                     case IR_TYPE_SAMPLER:
                     case IR_TYPE_IMAGE:
-                    case IR_TYPE_SAMPLED_IMAGE: 
+                    case IR_TYPE_SAMPLED_IMAGE:
                         storage_class = SpvStorageClassUniformConstant;
                         break;
-                    default: 
-                        storage_class = SpvStorageClassUniform;
-                        break;
+                    default: storage_class = SpvStorageClassUniform; break;
                     }
                 }
                 else

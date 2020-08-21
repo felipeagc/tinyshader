@@ -468,6 +468,11 @@ struct IRInst
 
         struct
         {
+            bool is_by_reference;
+        } func_param;
+
+        struct
+        {
             IRBuiltinInstKind kind;
             IRInst **params;
             uint32_t param_count;

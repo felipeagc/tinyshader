@@ -1106,7 +1106,12 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             for (uint32_t i = 0; i < func_type->func.param_count; ++i)
             {
                 AstExpr *param = expr->func_call.params[i];
-                analyzerAnalyzeExpr(a, param, func_type->func.params[i]);
+                AstType *param_expected = func_type->func.params[i];
+                if (param_expected->kind == TYPE_POINTER)
+                {
+                    param_expected = param_expected->ptr.sub;
+                }
+                analyzerAnalyzeExpr(a, param, param_expected);
             }
 
             expr->type = func_type->func.return_type;
@@ -1510,11 +1515,14 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                         "entry point parameter needs a semantic string");
                 }
 
-                if (param_decl->var.kind == VAR_IN_PARAM || param_decl->var.kind == VAR_PLAIN)
+                if (param_decl->var.kind == VAR_IN_PARAM ||
+                    param_decl->var.kind == VAR_PLAIN)
                 {
                     arrPush(decl->func.inputs, param_decl);
                 }
-                else if (param_decl->var.kind == VAR_OUT_PARAM)
+                else if (
+                    param_decl->var.kind == VAR_OUT_PARAM ||
+                    param_decl->var.kind == VAR_INOUT_PARAM)
                 {
                     arrPush(decl->func.outputs, param_decl);
                 }
@@ -1642,6 +1650,15 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                     &param_decl->loc,
                     "could not resolve type for function parameter");
                 param_types_valid = false;
+                continue;
+            }
+
+            if (param_decl->var.kind == VAR_IN_PARAM ||
+                param_decl->var.kind == VAR_OUT_PARAM ||
+                param_decl->var.kind == VAR_INOUT_PARAM)
+            {
+                param_types[i] =
+                    newPointerType(m, SpvStorageClassFunction, param_types[i]);
             }
         }
 
