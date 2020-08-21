@@ -621,6 +621,13 @@ static AstExpr *parsePrimaryExpr(Parser *p)
         return expr;
     }
 
+    case TOKEN_LPAREN: {
+        parserNext(p, 1);
+        AstExpr *expr = parseExpr(p);
+        if (!parserConsume(p, TOKEN_RPAREN)) return NULL;
+        return expr;
+    }
+
     default: {
         ts__addErr(p->compiler, &parserNext(p, 1)->loc, "expecting primary expression");
         break;
