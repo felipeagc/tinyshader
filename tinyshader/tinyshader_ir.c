@@ -1822,11 +1822,7 @@ static IRInst *irBoolVal(IRModule *m, IRInst *value)
     {
     case IR_TYPE_INT: {
         return irBuildBinary(
-            m,
-            SpvOpINotEqual,
-            bool_type,
-            value,
-            irBuildConstInt(m, value->type, 0));
+            m, SpvOpINotEqual, bool_type, value, irBuildConstInt(m, value->type, 0));
     }
 
     case IR_TYPE_FLOAT: {

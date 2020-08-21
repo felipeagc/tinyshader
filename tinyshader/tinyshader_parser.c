@@ -154,7 +154,8 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, File *file)
                 // Multiline comment
                 lexerNext(l, 2);
 
-                while ((lexerPeek(l, 0) != '*' || lexerPeek(l, 1) != '/') && !lexerIsAtEnd(l))
+                while ((lexerPeek(l, 0) != '*' || lexerPeek(l, 1) != '/') &&
+                       !lexerIsAtEnd(l))
                 {
                     if (lexerPeek(l, 0) == '\n')
                     {
@@ -371,7 +372,8 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, File *file)
                 l->token.str = ident;
 
                 void *result = NULL;
-                bool found_keyword = ts__hashGet(&compiler->keyword_table, ident, &result);
+                bool found_keyword =
+                    ts__hashGet(&compiler->keyword_table, ident, &result);
                 if (found_keyword)
                 {
                     l->token.kind = (TokenKind)result;
@@ -401,7 +403,8 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, File *file)
                                 }
                             }
 
-                            if ((prefix_len + 3) == type_str_len && type_str[prefix_len + 1] == 'x')
+                            if ((prefix_len + 3) == type_str_len &&
+                                type_str[prefix_len + 1] == 'x')
                             {
                                 // Matrix type
                                 uint8_t dim1 = (uint8_t)(type_str[prefix_len] - '0');
@@ -579,7 +582,8 @@ static AstExpr *parseIdentExpr(Parser *p)
     }
 
     default: {
-        ts__addErr(p->compiler, &parserNext(p, 1)->loc, "expecting identifier expression");
+        ts__addErr(
+            p->compiler, &parserNext(p, 1)->loc, "expecting identifier expression");
         break;
     }
     }
@@ -691,8 +695,8 @@ static AstExpr *parseAccessFuncCall(Parser *p)
 
     // Not a builtin function, must be an access or function call
 
-    while (!parserIsAtEnd(p) &&
-           (parserPeek(p, 0)->kind == TOKEN_LPAREN || parserPeek(p, 0)->kind == TOKEN_PERIOD))
+    while (!parserIsAtEnd(p) && (parserPeek(p, 0)->kind == TOKEN_LPAREN ||
+                                 parserPeek(p, 0)->kind == TOKEN_PERIOD))
     {
         if (parserPeek(p, 0)->kind == TOKEN_LPAREN)
         {
@@ -852,10 +856,12 @@ static AstExpr *parseComparison(Parser *p)
     AstExpr *expr = parseAddition(p);
     if (!expr) return NULL;
 
-    while (!parserIsAtEnd(p) &&
-           (parserPeek(p, 0)->kind == TOKEN_EQUAL || parserPeek(p, 0)->kind == TOKEN_NOTEQ ||
-            parserPeek(p, 0)->kind == TOKEN_LESS || parserPeek(p, 0)->kind == TOKEN_LESSEQ ||
-            parserPeek(p, 0)->kind == TOKEN_GREATER || parserPeek(p, 0)->kind == TOKEN_GREATEREQ))
+    while (!parserIsAtEnd(p) && (parserPeek(p, 0)->kind == TOKEN_EQUAL ||
+                                 parserPeek(p, 0)->kind == TOKEN_NOTEQ ||
+                                 parserPeek(p, 0)->kind == TOKEN_LESS ||
+                                 parserPeek(p, 0)->kind == TOKEN_LESSEQ ||
+                                 parserPeek(p, 0)->kind == TOKEN_GREATER ||
+                                 parserPeek(p, 0)->kind == TOKEN_GREATEREQ))
     {
         Token *op_tok = parserNext(p, 1);
 
@@ -924,7 +930,7 @@ static AstStmt *parseStmt(Parser *p)
         if (!parserConsume(p, TOKEN_LPAREN)) return NULL;
 
         stmt->if_.cond = parseExpr(p);
-        if(!stmt->if_.cond) return NULL;
+        if (!stmt->if_.cond) return NULL;
 
         if (!parserConsume(p, TOKEN_RPAREN)) return NULL;
 
@@ -1024,7 +1030,9 @@ static AstStmt *parseStmt(Parser *p)
         else
         {
             ts__addErr(
-                compiler, &parserNext(p, 1)->loc, "unexpected token, expecting ';' or identifier");
+                compiler,
+                &parserNext(p, 1)->loc,
+                "unexpected token, expecting ';' or identifier");
         }
 
         break;
@@ -1299,17 +1307,17 @@ static AstDecl *parseTopLevel(Parser *p)
                 if (parserPeek(p, 0)->kind == TOKEN_IN)
                 {
                     parserNext(p, 1);
-                    var_kind = VAR_IN_PARAM; 
+                    var_kind = VAR_IN_PARAM;
                 }
                 else if (parserPeek(p, 0)->kind == TOKEN_OUT)
                 {
                     parserNext(p, 1);
-                    var_kind = VAR_OUT_PARAM; 
+                    var_kind = VAR_OUT_PARAM;
                 }
                 else if (parserPeek(p, 0)->kind == TOKEN_INOUT)
                 {
                     parserNext(p, 1);
-                    var_kind = VAR_INOUT_PARAM; 
+                    var_kind = VAR_INOUT_PARAM;
                 }
 
                 AstExpr *type_expr = parseUnaryExpr(p);
@@ -1359,7 +1367,8 @@ static AstDecl *parseTopLevel(Parser *p)
         }
         else
         {
-            ts__addErr(compiler, &parserPeek(p, 0)->loc, "expecting top level declaration");
+            ts__addErr(
+                compiler, &parserPeek(p, 0)->loc, "expecting top level declaration");
             parserNext(p, 1);
         }
 
