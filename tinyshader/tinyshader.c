@@ -33,6 +33,7 @@ TsCompiler *tsCompilerCreate()
     ts__hashSet(&compiler->keyword_table, "struct", (void *)TOKEN_STRUCT);
     ts__hashSet(&compiler->keyword_table, "in", (void *)TOKEN_IN);
     ts__hashSet(&compiler->keyword_table, "out", (void *)TOKEN_OUT);
+    ts__hashSet(&compiler->keyword_table, "inout", (void *)TOKEN_INOUT);
     ts__hashSet(&compiler->keyword_table, "dot", (void *)TOKEN_DOT);
     ts__hashSet(&compiler->keyword_table, "mul", (void *)TOKEN_MUL_BUILTIN);
     ts__hashSet(&compiler->keyword_table, "ConstantBuffer", (void *)TOKEN_CONSTANT_BUFFER);

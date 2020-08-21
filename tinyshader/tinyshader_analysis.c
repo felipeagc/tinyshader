@@ -835,10 +835,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
         if (decl->kind == DECL_VAR)
         {
-            if (decl->var.kind != VAR_FUNCTION_PARAM)
-            {
-                expr->assignable = true;
-            }
+            expr->assignable = true;
         }
 
         expr->ident.decl = decl;
@@ -1513,19 +1510,13 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                         "entry point parameter needs a semantic string");
                 }
 
-                if (param_decl->var.storage_class == SpvStorageClassInput)
+                if (param_decl->var.kind == VAR_IN_PARAM || param_decl->var.kind == VAR_PLAIN)
                 {
                     arrPush(decl->func.inputs, param_decl);
                 }
-                else if (param_decl->var.storage_class == SpvStorageClassOutput)
+                else if (param_decl->var.kind == VAR_OUT_PARAM)
                 {
                     arrPush(decl->func.outputs, param_decl);
-                }
-                else
-                {
-                    param_decl->var.storage_class = SpvStorageClassInput;
-                    param_decl->var.kind = VAR_INPUT;
-                    arrPush(decl->func.inputs, param_decl);
                 }
             }
             else
@@ -1671,7 +1662,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
     }
 
     case DECL_VAR: {
-        if (decl->var.storage_class == SpvStorageClassFunction && !a->scope_func)
+        if (decl->var.kind == VAR_PLAIN && !a->scope_func)
         {
             ts__addErr(
                 compiler, &decl->loc, "variable declaration must be inside a function");
@@ -1691,7 +1682,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
 
         decl->type = decl->var.type_expr->as_type;
 
-        if ((decl->var.kind == VAR_FUNCTION) && a->scope_func)
+        if (decl->var.kind == VAR_PLAIN && a->scope_func)
         {
             arrPush(a->scope_func->func.var_decls, decl);
         }
@@ -1707,8 +1698,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
             }
         }
 
-        if (decl->var.storage_class == SpvStorageClassUniform &&
-            decl->type->kind == TYPE_STRUCT)
+        if (decl->var.kind == VAR_UNIFORM && decl->type->kind == TYPE_STRUCT)
         {
             IRDecoration dec = {0};
             dec.kind = SpvDecorationBlock;

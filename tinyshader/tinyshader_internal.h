@@ -183,6 +183,7 @@ typedef enum TokenKind {
     TOKEN_MUL_BUILTIN,
     TOKEN_IN,
     TOKEN_OUT,
+    TOKEN_INOUT,
     TOKEN_IMPORT,
     TOKEN_STRUCT,
     TOKEN_FOR,
@@ -639,14 +640,6 @@ typedef struct AstAttribute
     /*array*/ AstExpr **values;
 } AstAttribute;
 
-typedef enum AstVarKind {
-    VAR_FUNCTION = 0,
-    VAR_FUNCTION_PARAM,
-    VAR_INPUT,
-    VAR_OUTPUT,
-    VAR_GLOBAL,
-} AstVarKind;
-
 typedef enum AstUnaryOp {
     UNOP_NEG,
     UNOP_NOT,
@@ -666,6 +659,14 @@ typedef enum AstBinaryOp {
     BINOP_GREATER,
     BINOP_GREATEREQ,
 } AstBinaryOp;
+
+typedef enum AstVarKind {
+    VAR_PLAIN = 0,
+    VAR_UNIFORM,
+    VAR_IN_PARAM,
+    VAR_OUT_PARAM,
+    VAR_INOUT_PARAM,
+} AstVarKind;
 
 typedef enum AstStmtKind {
     STMT_DECL,
@@ -752,9 +753,8 @@ struct AstDecl
         {
             AstExpr *type_expr;
             AstExpr *value_expr;
-            SpvStorageClass storage_class;
-            AstVarKind kind;
             char *semantic;
+            AstVarKind kind;
         } var;
 
         struct

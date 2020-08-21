@@ -949,8 +949,6 @@ static AstStmt *parseStmt(Parser *p)
             decl->kind = DECL_VAR;
             decl->name = name_tok->str;
             decl->var.type_expr = expr;
-            decl->var.storage_class = SpvStorageClassFunction;
-            decl->var.kind = VAR_FUNCTION;
 
             if (parserPeek(p, 0)->kind == TOKEN_ASSIGN)
             {
@@ -1130,14 +1128,14 @@ static AstDecl *parseTopLevel(Parser *p)
     case TOKEN_TEXTURE_CUBE:
     case TOKEN_SAMPLER_STATE: {
         AstExpr *type_expr = NULL;
-        SpvStorageClass storage_class = {0};
+        AstVarKind var_kind = {0};
 
         switch (parserPeek(p, 0)->kind)
         {
         case TOKEN_CONSTANT_BUFFER: {
             parserNext(p, 1);
 
-            storage_class = SpvStorageClassUniform;
+            var_kind = VAR_UNIFORM;
 
             if (!parserConsume(p, TOKEN_LESS)) return NULL;
 
@@ -1155,7 +1153,7 @@ static AstDecl *parseTopLevel(Parser *p)
         case TOKEN_TEXTURE_CUBE: {
             Token *texture_kind_tok = parserNext(p, 1);
 
-            storage_class = SpvStorageClassUniformConstant;
+            var_kind = VAR_UNIFORM;
 
             type_expr = NEW(compiler, AstExpr);
             type_expr->loc = parserPeek(p, 0)->loc;
@@ -1197,7 +1195,7 @@ static AstDecl *parseTopLevel(Parser *p)
             type_expr->kind = EXPR_SAMPLER_TYPE;
             type_expr->loc = parserPeek(p, 0)->loc;
 
-            storage_class = SpvStorageClassUniformConstant;
+            var_kind = VAR_UNIFORM;
 
             parserNext(p, 1);
 
@@ -1216,8 +1214,7 @@ static AstDecl *parseTopLevel(Parser *p)
         decl->kind = DECL_VAR;
         decl->name = name_tok->str;
         decl->var.type_expr = type_expr;
-        decl->var.storage_class = storage_class;
-        decl->var.kind = VAR_GLOBAL;
+        decl->var.kind = var_kind;
         decl->attributes = attributes;
 
         return decl;
@@ -1244,20 +1241,22 @@ static AstDecl *parseTopLevel(Parser *p)
 
             while (parserPeek(p, 0)->kind != TOKEN_RPAREN)
             {
-                SpvStorageClass storage_class = SpvStorageClassFunction;
-                AstVarKind var_kind = VAR_FUNCTION_PARAM;
+                AstVarKind var_kind = VAR_PLAIN;
 
                 if (parserPeek(p, 0)->kind == TOKEN_IN)
                 {
                     parserNext(p, 1);
-                    storage_class = SpvStorageClassInput;
-                    var_kind = VAR_INPUT;
+                    var_kind = VAR_IN_PARAM; 
                 }
                 else if (parserPeek(p, 0)->kind == TOKEN_OUT)
                 {
                     parserNext(p, 1);
-                    storage_class = SpvStorageClassOutput;
-                    var_kind = VAR_OUTPUT;
+                    var_kind = VAR_OUT_PARAM; 
+                }
+                else if (parserPeek(p, 0)->kind == TOKEN_INOUT)
+                {
+                    parserNext(p, 1);
+                    var_kind = VAR_INOUT_PARAM; 
                 }
 
                 AstExpr *type_expr = parseUnaryExpr(p);
@@ -1270,7 +1269,6 @@ static AstDecl *parseTopLevel(Parser *p)
                 param_decl->kind = DECL_VAR;
                 param_decl->name = param_name_tok->str;
                 param_decl->var.type_expr = type_expr;
-                param_decl->var.storage_class = storage_class;
                 param_decl->var.kind = var_kind;
 
                 if (parserPeek(p, 0)->kind == TOKEN_COLON)

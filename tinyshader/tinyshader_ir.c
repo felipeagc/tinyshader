@@ -2418,7 +2418,26 @@ uint32_t *ts__irModuleCodegen(Module *mod, size_t *word_count)
 
             case DECL_VAR: {
                 IRType *ir_type = convertTypeToIR(m->mod, m, decl->type);
-                decl->value = irAddGlobal(m, ir_type, decl->var.storage_class);
+                SpvStorageClass storage_class;
+                if (decl->var.kind == VAR_UNIFORM)
+                {
+                    switch (ir_type->kind)
+                    {
+                    case IR_TYPE_SAMPLER:
+                    case IR_TYPE_IMAGE:
+                    case IR_TYPE_SAMPLED_IMAGE: 
+                        storage_class = SpvStorageClassUniformConstant;
+                        break;
+                    default: 
+                        storage_class = SpvStorageClassUniform;
+                        break;
+                    }
+                }
+                else
+                {
+                    assert(0);
+                }
+                decl->value = irAddGlobal(m, ir_type, storage_class);
                 decl->value->decorations = decl->decorations;
                 break;
             }
