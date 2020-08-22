@@ -1121,16 +1121,18 @@ static void irBuildBr(IRModule *m, IRInst *target)
 static void irBuildCondBr(
     IRModule *m,
     IRInst *cond,
-    IRInst *true_target,
-    IRInst *false_target,
-    IRInst *merge_target)
+    IRInst *true_block,
+    IRInst *false_block,
+    IRInst *merge_block,
+    IRInst *continue_block)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_COND_BRANCH;
     inst->cond_branch.cond = cond;
-    inst->cond_branch.true_target = true_target;
-    inst->cond_branch.false_target = false_target;
-    inst->cond_branch.merge_target = merge_target;
+    inst->cond_branch.true_block = true_block;
+    inst->cond_branch.false_block = false_block;
+    inst->cond_branch.merge_block = merge_block;
+    inst->cond_branch.continue_block = continue_block;
 
     IRInst *block = irGetCurrentBlock(m);
     arrPush(block->block.insts, inst);
@@ -1454,18 +1456,29 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
         }
 
         case IR_INST_COND_BRANCH: {
+            if (!inst->cond_branch.continue_block)
             {
                 uint32_t params[2] = {
-                    inst->cond_branch.merge_target->id,
+                    inst->cond_branch.merge_block->id,
                     SpvSelectionControlMaskNone,
                 };
                 irModuleEncodeInst(m, SpvOpSelectionMerge, params, 2);
             }
+            else
+            {
+                uint32_t params[3] = {
+                    inst->cond_branch.merge_block->id,
+                    inst->cond_branch.continue_block->id,
+                    SpvLoopControlMaskNone,
+                };
+                irModuleEncodeInst(m, SpvOpLoopMerge, params, 3);
+            }
+
             {
                 uint32_t params[3] = {
                     inst->cond_branch.cond->id,
-                    inst->cond_branch.true_target->id,
-                    inst->cond_branch.false_target->id,
+                    inst->cond_branch.true_block->id,
+                    inst->cond_branch.false_block->id,
                 };
                 irModuleEncodeInst(m, SpvOpBranchConditional, params, 3);
             }
@@ -2594,7 +2607,7 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
         IRInst *merge_block = irAddBlock(m, func);
         if (!else_block) else_block = merge_block;
 
-        irBuildCondBr(m, cond, then_block, else_block, merge_block);
+        irBuildCondBr(m, cond, then_block, else_block, merge_block, NULL);
 
         // Then
         {
@@ -2625,6 +2638,55 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
 
         break;
     }
+
+    case STMT_WHILE: {
+
+        IRInst *current_block = irGetCurrentBlock(m);
+        IRInst *func = current_block->block.func;
+
+        IRInst *check_block = irAddBlock(m, func);
+        IRInst *body_block = irAddBlock(m, func);
+        IRInst *continue_block = irAddBlock(m, func);
+        IRInst *merge_block = irAddBlock(m, func);
+
+        irBuildBr(m, check_block);
+
+        {
+            irPositionAtEnd(m, check_block);
+
+            irModuleBuildExpr(m, stmt->while_.cond);
+            IRInst *cond = stmt->while_.cond->value;
+            assert(cond);
+            cond = irLoadVal(m, cond);
+            cond = irBoolVal(m, cond);
+
+            if (!irBlockHasTerminator(irGetCurrentBlock(m)))
+            {
+                irBuildCondBr(m, cond, body_block, merge_block, merge_block, continue_block);
+            }
+        }
+
+        {
+            irPositionAtEnd(m, body_block);
+
+            irModuleBuildStmt(m, stmt->while_.stmt);
+
+            if (!irBlockHasTerminator(irGetCurrentBlock(m)))
+            {
+                irBuildBr(m, continue_block);
+            }
+        }
+
+        {
+            irPositionAtEnd(m, continue_block);
+            irBuildBr(m, check_block);
+        }
+
+        irPositionAtEnd(m, merge_block);
+
+        break;
+    }
+
     }
 }
 

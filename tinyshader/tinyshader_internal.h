@@ -578,9 +578,10 @@ struct IRInst
         struct
         {
             IRInst *cond;
-            IRInst *true_target;
-            IRInst *false_target;
-            IRInst *merge_target;
+            IRInst *true_block;
+            IRInst *false_block;
+            IRInst *merge_block;
+            IRInst *continue_block;
         } cond_branch;
     };
 };
@@ -739,6 +740,7 @@ typedef enum AstStmtKind {
     STMT_RETURN,
     STMT_BLOCK,
     STMT_IF,
+    STMT_WHILE,
 } AstStmtKind;
 
 typedef enum AstDeclKind {
@@ -793,6 +795,12 @@ struct AstStmt
             AstStmt *if_stmt;
             AstStmt *else_stmt;
         } if_;
+
+        struct
+        {
+            AstExpr *cond;
+            AstStmt *stmt;
+        } while_;
     };
 };
 

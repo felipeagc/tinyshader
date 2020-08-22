@@ -964,6 +964,24 @@ static AstStmt *parseStmt(Parser *p)
         return stmt;
     }
 
+    case TOKEN_WHILE: {
+        parserNext(p, 1);
+        AstStmt *stmt = NEW(compiler, AstStmt);
+        stmt->kind = STMT_WHILE;
+
+        if (!parserConsume(p, TOKEN_LPAREN)) return NULL;
+
+        stmt->while_.cond = parseExpr(p);
+        if (!stmt->while_.cond) return NULL;
+
+        if (!parserConsume(p, TOKEN_RPAREN)) return NULL;
+
+        stmt->while_.stmt = parseStmt(p);
+        if (!stmt->while_.stmt) return NULL;
+
+        return stmt;
+    }
+
     case TOKEN_LCURLY: {
         parserNext(p, 1);
 

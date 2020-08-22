@@ -1676,6 +1676,18 @@ static void analyzerAnalyzeStmt(Analyzer *a, AstStmt *stmt)
 
         break;
     }
+
+    case STMT_WHILE: {
+        analyzerAnalyzeExpr(a, stmt->while_.cond, NULL);
+        if (stmt->while_.cond->type && !ts__getComparableType(stmt->while_.cond->type))
+        {
+            ts__addErr(compiler, &stmt->while_.cond->loc, "expression is not comparable");
+        }
+
+        analyzerAnalyzeStmt(a, stmt->while_.stmt);
+        break;
+    }
+
     }
 }
 
