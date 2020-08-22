@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "spirv.h"
+#include "GLSL.std.450.h"
 #include "tinyshader.h"
 
 // Rounds to the next multiple of four
@@ -179,8 +180,6 @@ typedef enum TokenKind {
     TOKEN_OR,  // ||
 
     TOKEN_IDENT,
-    TOKEN_DOT,
-    TOKEN_MUL_BUILTIN,
     TOKEN_IN,
     TOKEN_OUT,
     TOKEN_INOUT,
@@ -207,6 +206,11 @@ typedef enum TokenKind {
     TOKEN_SAMPLED_TEXTURE_2D,
     TOKEN_SAMPLED_TEXTURE_3D,
     TOKEN_SAMPLED_TEXTURE_CUBE,
+
+    TOKEN_DOT_BUILTIN,
+    TOKEN_DEGREES_BUILTIN,
+    TOKEN_RADIANS_BUILTIN,
+    TOKEN_MUL_BUILTIN,
 
     TOKEN_INT_LIT,
     TOKEN_FLOAT_LIT,
@@ -393,6 +397,8 @@ typedef enum IRInstKind {
 typedef enum IRBuiltinInstKind {
     IR_BUILTIN_DOT,
     IR_BUILTIN_MUL,
+    IR_BUILTIN_DEGREES,
+    IR_BUILTIN_RADIANS,
     IR_BUILTIN_CREATE_SAMPLED_IMAGE,
 } IRBuiltinInstKind;
 
@@ -563,6 +569,8 @@ struct IRModule
     /*array*/ IRInst **globals;     /* This only counts uniforms/storage variables */
     /*array*/ IRInst **all_globals; /* This counts uniforms/storage variables and all
                                        inputs/outputs of every stage */
+
+    uint32_t glsl_ext_inst; // ID of the imported GLSL instruction set
 
     IRInst *current_block;
 

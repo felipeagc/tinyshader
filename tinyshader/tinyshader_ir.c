@@ -920,6 +920,15 @@ static IRInst *irBuildBuiltinCall(
         break;
     }
 
+    case IR_BUILTIN_RADIANS:
+    case IR_BUILTIN_DEGREES: {
+        assert(param_count == 1);
+        IRInst *a = params[0];
+        assert(a->type->kind == IR_TYPE_FLOAT);
+        inst->type = a->type;
+        break;
+    }
+
     case IR_BUILTIN_CREATE_SAMPLED_IMAGE: {
         assert(param_count == 2);
         IRInst *img_param = params[0];
@@ -1528,6 +1537,36 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
                 irModuleEncodeInst(m, SpvOpSampledImage, params, 4);
                 break;
             }
+
+            case IR_BUILTIN_RADIANS: {
+                inst->id = irModuleReserveId(m);
+
+                uint32_t params[5] = {
+                    inst->type->id,
+                    inst->id,
+                    m->glsl_ext_inst,
+                    GLSLstd450Radians,
+                    param_values[0]->id,
+                };
+
+                irModuleEncodeInst(m, SpvOpExtInst, params, 5);
+                break;
+            }
+
+            case IR_BUILTIN_DEGREES: {
+                inst->id = irModuleReserveId(m);
+
+                uint32_t params[5] = {
+                    inst->type->id,
+                    inst->id,
+                    m->glsl_ext_inst,
+                    GLSLstd450Degrees,
+                    param_values[0]->id,
+                };
+
+                irModuleEncodeInst(m, SpvOpExtInst, params, 5);
+                break;
+            }
             }
 
             break;
@@ -1752,7 +1791,7 @@ static void irModuleEncodeModule(IRModule *m)
         uint32_t params[5];
         memset(params, 0, sizeof(params));
 
-        params[0] = irModuleReserveId(m);
+        params[0] = m->glsl_ext_inst;
 
         char *str = "GLSL.std.450";
         memcpy(&params[1], str, 12);
@@ -2572,6 +2611,8 @@ uint32_t *ts__irModuleCodegen(Module *mod, size_t *word_count)
     m->mod = mod;
 
     irModuleReserveId(m); // 0th ID
+
+    m->glsl_ext_inst = irModuleReserveId(m);
 
     // Add functions / globals
     for (uint32_t i = 0; i < arrLength(m->mod->files); ++i)

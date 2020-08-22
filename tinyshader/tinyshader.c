@@ -34,14 +34,17 @@ TsCompiler *tsCompilerCreate()
     ts__hashSet(&compiler->keyword_table, "in", (void *)TOKEN_IN);
     ts__hashSet(&compiler->keyword_table, "out", (void *)TOKEN_OUT);
     ts__hashSet(&compiler->keyword_table, "inout", (void *)TOKEN_INOUT);
-    ts__hashSet(&compiler->keyword_table, "dot", (void *)TOKEN_DOT);
-    ts__hashSet(&compiler->keyword_table, "mul", (void *)TOKEN_MUL_BUILTIN);
     ts__hashSet(&compiler->keyword_table, "ConstantBuffer", (void *)TOKEN_CONSTANT_BUFFER);
     ts__hashSet(&compiler->keyword_table, "SamplerState", (void *)TOKEN_SAMPLER_STATE);
     ts__hashSet(&compiler->keyword_table, "Texture1D", (void *)TOKEN_TEXTURE_1D);
     ts__hashSet(&compiler->keyword_table, "Texture2D", (void *)TOKEN_TEXTURE_2D);
     ts__hashSet(&compiler->keyword_table, "Texture3D", (void *)TOKEN_TEXTURE_3D);
     ts__hashSet(&compiler->keyword_table, "TextureCube", (void *)TOKEN_TEXTURE_CUBE);
+
+    ts__hashSet(&compiler->keyword_table, "dot", (void *)TOKEN_DOT_BUILTIN);
+    ts__hashSet(&compiler->keyword_table, "mul", (void *)TOKEN_MUL_BUILTIN);
+    ts__hashSet(&compiler->keyword_table, "degrees", (void *)TOKEN_DEGREES_BUILTIN);
+    ts__hashSet(&compiler->keyword_table, "radians", (void *)TOKEN_RADIANS_BUILTIN);
 
     ts__hashSet(&compiler->keyword_table, "uint", (void *)TOKEN_UINT);
     ts__hashSet(&compiler->keyword_table, "int", (void *)TOKEN_INT);

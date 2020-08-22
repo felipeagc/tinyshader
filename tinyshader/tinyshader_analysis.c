@@ -1251,6 +1251,30 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             break;
         }
 
+        case IR_BUILTIN_RADIANS:
+        case IR_BUILTIN_DEGREES: {
+            if (param_count != 1)
+            {
+                ts__addErr(
+                    compiler, &expr->loc, "degrees/radians call needs 1 parameter");
+                break;
+            }
+
+            AstExpr *a = params[0];
+            if (!a->type) break;
+
+            if (a->type->kind != TYPE_FLOAT)
+            {
+                ts__addErr(
+                    compiler, &expr->loc, "degrees/radians call needs a float parameter");
+                break;
+            }
+
+            expr->type = a->type;
+
+            break;
+        }
+
         case IR_BUILTIN_CREATE_SAMPLED_IMAGE: assert(0); break;
         }
 
