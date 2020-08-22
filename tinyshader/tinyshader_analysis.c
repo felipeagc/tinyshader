@@ -1192,7 +1192,8 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
             if (a->type != b->type)
             {
-                ts__addErr(compiler, &expr->loc, "cross cannot operate on different types");
+                ts__addErr(
+                    compiler, &expr->loc, "cross cannot operate on different types");
                 break;
             }
 
@@ -1342,6 +1343,40 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
             expr->type = a->type;
 
+            break;
+        }
+
+        case IR_BUILTIN_SIN:
+        case IR_BUILTIN_COS:
+        case IR_BUILTIN_TAN:
+        case IR_BUILTIN_ASIN:
+        case IR_BUILTIN_ACOS:
+        case IR_BUILTIN_ATAN:
+        case IR_BUILTIN_SINH:
+        case IR_BUILTIN_COSH:
+        case IR_BUILTIN_TANH: {
+            if (param_count != 1)
+            {
+                ts__addErr(
+                    compiler, &expr->loc, "trigonometric functions take 1 parameter");
+                break;
+            }
+
+            AstExpr *a = params[0];
+
+            if (a->kind == EXPR_PRIMARY && a->type->kind == TYPE_INT)
+            {
+                a->type = newFloatType(m, 32);
+            }
+
+            if (a->type->kind != TYPE_FLOAT)
+            {
+                ts__addErr(
+                    compiler, &expr->loc, "trigonometric functions operate on floats");
+                break;
+            }
+
+            expr->type = a->type;
             break;
         }
 

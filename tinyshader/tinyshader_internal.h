@@ -207,13 +207,24 @@ typedef enum TokenKind {
     TOKEN_SAMPLED_TEXTURE_3D,
     TOKEN_SAMPLED_TEXTURE_CUBE,
 
-    TOKEN_DOT_BUILTIN,
-    TOKEN_CROSS_BUILTIN,
-    TOKEN_LENGTH_BUILTIN,
-    TOKEN_NORMALIZE_BUILTIN,
-    TOKEN_DEGREES_BUILTIN,
-    TOKEN_RADIANS_BUILTIN,
-    TOKEN_MUL_BUILTIN,
+    TOKEN_BUILTIN_DOT,
+    TOKEN_BUILTIN_CROSS,
+    TOKEN_BUILTIN_LENGTH,
+    TOKEN_BUILTIN_NORMALIZE,
+    TOKEN_BUILTIN_DEGREES,
+    TOKEN_BUILTIN_RADIANS,
+    TOKEN_BUILTIN_MUL,
+
+    TOKEN_BUILTIN_SIN,
+    TOKEN_BUILTIN_COS,
+    TOKEN_BUILTIN_TAN,
+    TOKEN_BUILTIN_ASIN,
+    TOKEN_BUILTIN_ACOS,
+    TOKEN_BUILTIN_ATAN,
+    TOKEN_BUILTIN_SINH,
+    TOKEN_BUILTIN_COSH,
+    TOKEN_BUILTIN_TANH,
+    TOKEN_BUILTIN_ATAN2,
 
     TOKEN_INT_LIT,
     TOKEN_FLOAT_LIT,
@@ -405,6 +416,17 @@ typedef enum IRBuiltinInstKind {
     IR_BUILTIN_MUL,
     IR_BUILTIN_DEGREES,
     IR_BUILTIN_RADIANS,
+
+    IR_BUILTIN_SIN,
+    IR_BUILTIN_COS,
+    IR_BUILTIN_TAN,
+    IR_BUILTIN_ASIN,
+    IR_BUILTIN_ACOS,
+    IR_BUILTIN_ATAN,
+    IR_BUILTIN_SINH,
+    IR_BUILTIN_COSH,
+    IR_BUILTIN_TANH,
+
     IR_BUILTIN_CREATE_SAMPLED_IMAGE,
 } IRBuiltinInstKind;
 
@@ -452,7 +474,7 @@ struct IRInst
             size_t value_size_bytes;
         } constant;
 
-        struct 
+        struct
         {
             bool value;
         } constant_bool;
@@ -763,8 +785,8 @@ struct AstStmt
             /*array*/ AstStmt **stmts;
             Scope *scope;
         } block;
-        
-        struct 
+
+        struct
         {
             AstExpr *cond;
             AstStmt *if_stmt;

@@ -654,13 +654,23 @@ static AstExpr *parseAccessFuncCall(Parser *p)
     // Check if it's a builtin function
     switch (parserPeek(p, 0)->kind)
     {
-    case TOKEN_DOT_BUILTIN: builtin_kind = IR_BUILTIN_DOT; break;
-    case TOKEN_CROSS_BUILTIN: builtin_kind = IR_BUILTIN_CROSS; break;
-    case TOKEN_LENGTH_BUILTIN: builtin_kind = IR_BUILTIN_LENGTH; break;
-    case TOKEN_NORMALIZE_BUILTIN: builtin_kind = IR_BUILTIN_NORMALIZE; break;
-    case TOKEN_MUL_BUILTIN: builtin_kind = IR_BUILTIN_MUL; break;
-    case TOKEN_DEGREES_BUILTIN: builtin_kind = IR_BUILTIN_DEGREES; break;
-    case TOKEN_RADIANS_BUILTIN: builtin_kind = IR_BUILTIN_RADIANS; break;
+    case TOKEN_BUILTIN_DOT: builtin_kind = IR_BUILTIN_DOT; break;
+    case TOKEN_BUILTIN_CROSS: builtin_kind = IR_BUILTIN_CROSS; break;
+    case TOKEN_BUILTIN_LENGTH: builtin_kind = IR_BUILTIN_LENGTH; break;
+    case TOKEN_BUILTIN_NORMALIZE: builtin_kind = IR_BUILTIN_NORMALIZE; break;
+    case TOKEN_BUILTIN_MUL: builtin_kind = IR_BUILTIN_MUL; break;
+    case TOKEN_BUILTIN_DEGREES: builtin_kind = IR_BUILTIN_DEGREES; break;
+    case TOKEN_BUILTIN_RADIANS: builtin_kind = IR_BUILTIN_RADIANS; break;
+
+    case TOKEN_BUILTIN_SIN: builtin_kind = IR_BUILTIN_SIN; break;
+    case TOKEN_BUILTIN_COS: builtin_kind = IR_BUILTIN_COS; break;
+    case TOKEN_BUILTIN_TAN: builtin_kind = IR_BUILTIN_TAN; break;
+    case TOKEN_BUILTIN_ASIN: builtin_kind = IR_BUILTIN_ASIN; break;
+    case TOKEN_BUILTIN_ACOS: builtin_kind = IR_BUILTIN_ACOS; break;
+    case TOKEN_BUILTIN_ATAN: builtin_kind = IR_BUILTIN_ATAN; break;
+    case TOKEN_BUILTIN_SINH: builtin_kind = IR_BUILTIN_SINH; break;
+    case TOKEN_BUILTIN_COSH: builtin_kind = IR_BUILTIN_COSH; break;
+    case TOKEN_BUILTIN_TANH: builtin_kind = IR_BUILTIN_TANH; break;
 
     default: is_builtin = false; break;
     }

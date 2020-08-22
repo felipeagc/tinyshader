@@ -41,13 +41,23 @@ TsCompiler *tsCompilerCreate()
     ts__hashSet(&compiler->keyword_table, "Texture3D", (void *)TOKEN_TEXTURE_3D);
     ts__hashSet(&compiler->keyword_table, "TextureCube", (void *)TOKEN_TEXTURE_CUBE);
 
-    ts__hashSet(&compiler->keyword_table, "dot", (void *)TOKEN_DOT_BUILTIN);
-    ts__hashSet(&compiler->keyword_table, "cross", (void *)TOKEN_CROSS_BUILTIN);
-    ts__hashSet(&compiler->keyword_table, "length", (void *)TOKEN_LENGTH_BUILTIN);
-    ts__hashSet(&compiler->keyword_table, "normalize", (void *)TOKEN_NORMALIZE_BUILTIN);
-    ts__hashSet(&compiler->keyword_table, "mul", (void *)TOKEN_MUL_BUILTIN);
-    ts__hashSet(&compiler->keyword_table, "degrees", (void *)TOKEN_DEGREES_BUILTIN);
-    ts__hashSet(&compiler->keyword_table, "radians", (void *)TOKEN_RADIANS_BUILTIN);
+    ts__hashSet(&compiler->keyword_table, "dot", (void *)TOKEN_BUILTIN_DOT);
+    ts__hashSet(&compiler->keyword_table, "cross", (void *)TOKEN_BUILTIN_CROSS);
+    ts__hashSet(&compiler->keyword_table, "length", (void *)TOKEN_BUILTIN_LENGTH);
+    ts__hashSet(&compiler->keyword_table, "normalize", (void *)TOKEN_BUILTIN_NORMALIZE);
+    ts__hashSet(&compiler->keyword_table, "mul", (void *)TOKEN_BUILTIN_MUL);
+    ts__hashSet(&compiler->keyword_table, "degrees", (void *)TOKEN_BUILTIN_DEGREES);
+    ts__hashSet(&compiler->keyword_table, "radians", (void *)TOKEN_BUILTIN_RADIANS);
+
+    ts__hashSet(&compiler->keyword_table, "sin", (void *)TOKEN_BUILTIN_SIN);
+    ts__hashSet(&compiler->keyword_table, "cos", (void *)TOKEN_BUILTIN_COS);
+    ts__hashSet(&compiler->keyword_table, "tan", (void *)TOKEN_BUILTIN_TAN);
+    ts__hashSet(&compiler->keyword_table, "asin", (void *)TOKEN_BUILTIN_ASIN);
+    ts__hashSet(&compiler->keyword_table, "acos", (void *)TOKEN_BUILTIN_ACOS);
+    ts__hashSet(&compiler->keyword_table, "atan", (void *)TOKEN_BUILTIN_ATAN);
+    ts__hashSet(&compiler->keyword_table, "sinh", (void *)TOKEN_BUILTIN_SINH);
+    ts__hashSet(&compiler->keyword_table, "cosh", (void *)TOKEN_BUILTIN_COSH);
+    ts__hashSet(&compiler->keyword_table, "tanh", (void *)TOKEN_BUILTIN_TANH);
 
     ts__hashSet(&compiler->keyword_table, "uint", (void *)TOKEN_UINT);
     ts__hashSet(&compiler->keyword_table, "int", (void *)TOKEN_INT);

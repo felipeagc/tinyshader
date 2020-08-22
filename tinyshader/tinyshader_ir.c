@@ -966,6 +966,25 @@ static IRInst *irBuildBuiltinCall(
         break;
     }
 
+    case IR_BUILTIN_SIN:
+    case IR_BUILTIN_COS:
+    case IR_BUILTIN_TAN:
+    case IR_BUILTIN_ASIN:
+    case IR_BUILTIN_ACOS:
+    case IR_BUILTIN_ATAN:
+    case IR_BUILTIN_SINH:
+    case IR_BUILTIN_COSH:
+    case IR_BUILTIN_TANH: {
+        assert(param_count == 1);
+
+        IRInst *a = params[0];
+        assert(a->type->kind == IR_TYPE_FLOAT);
+
+        inst->type = a->type;
+        assert(inst->type);
+        break;
+    }
+
     case IR_BUILTIN_CREATE_SAMPLED_IMAGE: {
         assert(param_count == 2);
         IRInst *img_param = params[0];
@@ -1114,6 +1133,20 @@ irModuleEncodeInst(IRModule *m, SpvOp opcode, uint32_t *params, size_t params_co
     {
         arrPush(m->stream, params[i]);
     }
+}
+
+static void irModuleEncodeExtInst(
+    IRModule *m, IRInst *inst, enum GLSLstd450 op, uint32_t *params, size_t params_count)
+{
+    uint32_t *inst_params = NEW_ARRAY(m->compiler, uint32_t, 4 + params_count);
+    inst_params[0] = inst->type->id;
+    inst_params[1] = inst->id;
+    inst_params[2] = m->glsl_ext_inst;
+    inst_params[3] = op;
+
+    memcpy(&inst_params[4], params, params_count * sizeof(uint32_t));
+
+    irModuleEncodeInst(m, SpvOpExtInst, inst_params, 4 + params_count);
 }
 
 static void irModuleReserveTypeIds(IRModule *m)
@@ -1529,42 +1562,20 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             }
 
             case IR_BUILTIN_CROSS: {
-                uint32_t params[6] = {
-                    inst->type->id,
-                    inst->id,
-                    m->glsl_ext_inst,
-                    GLSLstd450Cross,
-                    param_values[0]->id,
-                    param_values[1]->id,
-                };
-
-                irModuleEncodeInst(m, SpvOpExtInst, params, 6);
+                uint32_t params[2] = { param_values[0]->id, param_values[1]->id };
+                irModuleEncodeExtInst(m, inst, GLSLstd450Cross, params, 2);
                 break;
             }
 
             case IR_BUILTIN_LENGTH: {
-                uint32_t params[5] = {
-                    inst->type->id,
-                    inst->id,
-                    m->glsl_ext_inst,
-                    GLSLstd450Length,
-                    param_values[0]->id,
-                };
-
-                irModuleEncodeInst(m, SpvOpExtInst, params, 5);
+                uint32_t params[1] = { param_values[0]->id };
+                irModuleEncodeExtInst(m, inst, GLSLstd450Length, params, 1);
                 break;
             }
 
             case IR_BUILTIN_NORMALIZE: {
-                uint32_t params[5] = {
-                    inst->type->id,
-                    inst->id,
-                    m->glsl_ext_inst,
-                    GLSLstd450Normalize,
-                    param_values[0]->id,
-                };
-
-                irModuleEncodeInst(m, SpvOpExtInst, params, 5);
+                uint32_t params[1] = { param_values[0]->id };
+                irModuleEncodeExtInst(m, inst, GLSLstd450Normalize, params, 1);
                 break;
             }
 
@@ -1616,30 +1627,71 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             }
 
             case IR_BUILTIN_RADIANS: {
-                uint32_t params[5] = {
-                    inst->type->id,
-                    inst->id,
-                    m->glsl_ext_inst,
-                    GLSLstd450Radians,
-                    param_values[0]->id,
-                };
-
-                irModuleEncodeInst(m, SpvOpExtInst, params, 5);
+                uint32_t params[1] = { param_values[0]->id };
+                irModuleEncodeExtInst(m, inst, GLSLstd450Radians, params, 1);
                 break;
             }
 
             case IR_BUILTIN_DEGREES: {
-                uint32_t params[5] = {
-                    inst->type->id,
-                    inst->id,
-                    m->glsl_ext_inst,
-                    GLSLstd450Degrees,
-                    param_values[0]->id,
-                };
-
-                irModuleEncodeInst(m, SpvOpExtInst, params, 5);
+                uint32_t params[1] = { param_values[0]->id };
+                irModuleEncodeExtInst(m, inst, GLSLstd450Degrees, params, 1);
                 break;
             }
+
+            case IR_BUILTIN_SIN: {
+                uint32_t params[1] = { param_values[0]->id };
+                irModuleEncodeExtInst(m, inst, GLSLstd450Sin, params, 1);
+                break;
+            }
+
+            case IR_BUILTIN_COS: {
+                uint32_t params[1] = { param_values[0]->id };
+                irModuleEncodeExtInst(m, inst, GLSLstd450Cos, params, 1);
+                break;
+            }
+
+            case IR_BUILTIN_TAN: {
+                uint32_t params[1] = { param_values[0]->id };
+                irModuleEncodeExtInst(m, inst, GLSLstd450Tan, params, 1);
+                break;
+            }
+
+            case IR_BUILTIN_ASIN: {
+                uint32_t params[1] = { param_values[0]->id };
+                irModuleEncodeExtInst(m, inst, GLSLstd450Asin, params, 1);
+                break;
+            }
+
+            case IR_BUILTIN_ACOS: {
+                uint32_t params[1] = { param_values[0]->id };
+                irModuleEncodeExtInst(m, inst, GLSLstd450Acos, params, 1);
+                break;
+            }
+
+            case IR_BUILTIN_ATAN: {
+                uint32_t params[1] = { param_values[0]->id };
+                irModuleEncodeExtInst(m, inst, GLSLstd450Atan, params, 1);
+                break;
+            }
+
+            case IR_BUILTIN_SINH: {
+                uint32_t params[1] = { param_values[0]->id };
+                irModuleEncodeExtInst(m, inst, GLSLstd450Sinh, params, 1);
+                break;
+            }
+
+            case IR_BUILTIN_COSH: {
+                uint32_t params[1] = { param_values[0]->id };
+                irModuleEncodeExtInst(m, inst, GLSLstd450Cosh, params, 1);
+                break;
+            }
+
+            case IR_BUILTIN_TANH: {
+                uint32_t params[1] = { param_values[0]->id };
+                irModuleEncodeExtInst(m, inst, GLSLstd450Tanh, params, 1);
+                break;
+            }
+
             }
 
             break;
