@@ -985,6 +985,20 @@ static IRInst *irBuildBuiltinCall(
         break;
     }
 
+    case IR_BUILTIN_ATAN2: {
+        assert(param_count == 2);
+
+        IRInst *a = params[0];
+        IRInst *b = params[0];
+        assert(a->type->kind == IR_TYPE_FLOAT);
+        assert(b->type->kind == IR_TYPE_FLOAT);
+        assert(a->type == b->type);
+
+        inst->type = a->type;
+        assert(inst->type);
+        break;
+    }
+
     case IR_BUILTIN_CREATE_SAMPLED_IMAGE: {
         assert(param_count == 2);
         IRInst *img_param = params[0];
@@ -1689,6 +1703,12 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             case IR_BUILTIN_TANH: {
                 uint32_t params[1] = { param_values[0]->id };
                 irModuleEncodeExtInst(m, inst, GLSLstd450Tanh, params, 1);
+                break;
+            }
+
+            case IR_BUILTIN_ATAN2: {
+                uint32_t params[2] = { param_values[0]->id, param_values[0]->id };
+                irModuleEncodeExtInst(m, inst, GLSLstd450Atan2, params, 2);
                 break;
             }
 

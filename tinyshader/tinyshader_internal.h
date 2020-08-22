@@ -426,6 +426,7 @@ typedef enum IRBuiltinInstKind {
     IR_BUILTIN_SINH,
     IR_BUILTIN_COSH,
     IR_BUILTIN_TANH,
+    IR_BUILTIN_ATAN2,
 
     IR_BUILTIN_CREATE_SAMPLED_IMAGE,
 } IRBuiltinInstKind;

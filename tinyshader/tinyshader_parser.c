@@ -671,6 +671,7 @@ static AstExpr *parseAccessFuncCall(Parser *p)
     case TOKEN_BUILTIN_SINH: builtin_kind = IR_BUILTIN_SINH; break;
     case TOKEN_BUILTIN_COSH: builtin_kind = IR_BUILTIN_COSH; break;
     case TOKEN_BUILTIN_TANH: builtin_kind = IR_BUILTIN_TANH; break;
+    case TOKEN_BUILTIN_ATAN2: builtin_kind = IR_BUILTIN_ATAN2; break;
 
     default: is_builtin = false; break;
     }

@@ -1380,6 +1380,45 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             break;
         }
 
+        case IR_BUILTIN_ATAN2: {
+            if (param_count != 2)
+            {
+                ts__addErr(compiler, &expr->loc, "atan2 functions takes 2 parameters");
+                break;
+            }
+
+            AstExpr *a = params[0];
+            AstExpr *b = params[0];
+
+            if (a->kind == EXPR_PRIMARY && a->type->kind == TYPE_INT)
+            {
+                a->type = newFloatType(m, 32);
+            }
+
+            if (b->kind == EXPR_PRIMARY && b->type->kind == TYPE_INT)
+            {
+                b->type = newFloatType(m, 32);
+            }
+
+            if (a->type != b->type)
+            {
+                ts__addErr(
+                    compiler,
+                    &expr->loc,
+                    "atan2 requires 2 parameters of identical types");
+                break;
+            }
+
+            if (a->type->kind != TYPE_FLOAT)
+            {
+                ts__addErr(compiler, &expr->loc, "atan2 functions operates on floats");
+                break;
+            }
+
+            expr->type = a->type;
+            break;
+        }
+
         case IR_BUILTIN_CREATE_SAMPLED_IMAGE: assert(0); break;
         }
 

@@ -58,6 +58,7 @@ TsCompiler *tsCompilerCreate()
     ts__hashSet(&compiler->keyword_table, "sinh", (void *)TOKEN_BUILTIN_SINH);
     ts__hashSet(&compiler->keyword_table, "cosh", (void *)TOKEN_BUILTIN_COSH);
     ts__hashSet(&compiler->keyword_table, "tanh", (void *)TOKEN_BUILTIN_TANH);
+    ts__hashSet(&compiler->keyword_table, "atan2", (void *)TOKEN_BUILTIN_ATAN2);
 
     ts__hashSet(&compiler->keyword_table, "uint", (void *)TOKEN_UINT);
     ts__hashSet(&compiler->keyword_table, "int", (void *)TOKEN_INT);
