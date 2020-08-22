@@ -1225,6 +1225,25 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             break;
         }
 
+        case IR_BUILTIN_NORMALIZE: {
+            if (param_count != 1)
+            {
+                ts__addErr(compiler, &expr->loc, "normalize needs 1 parameter");
+                break;
+            }
+
+            AstExpr *a = params[0];
+
+            if (a->type->kind != TYPE_VECTOR)
+            {
+                ts__addErr(compiler, &expr->loc, "normalize operates on a vector");
+                break;
+            }
+
+            expr->type = a->type;
+            break;
+        }
+
         case IR_BUILTIN_MUL: {
             if (param_count != 2)
             {
