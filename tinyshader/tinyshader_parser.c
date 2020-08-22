@@ -655,6 +655,7 @@ static AstExpr *parseAccessFuncCall(Parser *p)
     switch (parserPeek(p, 0)->kind)
     {
     case TOKEN_DOT_BUILTIN: builtin_kind = IR_BUILTIN_DOT; break;
+    case TOKEN_CROSS_BUILTIN: builtin_kind = IR_BUILTIN_CROSS; break;
     case TOKEN_MUL_BUILTIN: builtin_kind = IR_BUILTIN_MUL; break;
     case TOKEN_DEGREES_BUILTIN: builtin_kind = IR_BUILTIN_DEGREES; break;
     case TOKEN_RADIANS_BUILTIN: builtin_kind = IR_BUILTIN_RADIANS; break;

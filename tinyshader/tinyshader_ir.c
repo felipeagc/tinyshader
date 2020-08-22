@@ -887,6 +887,21 @@ static IRInst *irBuildBuiltinCall(
         break;
     }
 
+    case IR_BUILTIN_CROSS: {
+        assert(param_count == 2);
+        IRInst *a = params[0];
+        IRInst *b = params[1];
+
+        assert(a->type->kind == IR_TYPE_VECTOR);
+        assert(a->type->vector.size == 3);
+        assert(b->type == a->type);
+
+        inst->type = a->type;
+        assert(inst->type);
+
+        break;
+    }
+
     case IR_BUILTIN_MUL: {
         assert(param_count == 2);
         IRInst *a = params[0];
@@ -1491,6 +1506,20 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
                 break;
             }
 
+            case IR_BUILTIN_CROSS: {
+                uint32_t params[6] = {
+                    inst->type->id,
+                    inst->id,
+                    m->glsl_ext_inst,
+                    GLSLstd450Cross,
+                    param_values[0]->id,
+                    param_values[1]->id,
+                };
+
+                irModuleEncodeInst(m, SpvOpExtInst, params, 6);
+                break;
+            }
+
             case IR_BUILTIN_MUL: {
                 IRInst *a = param_values[0];
                 IRInst *b = param_values[1];
@@ -1539,8 +1568,6 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             }
 
             case IR_BUILTIN_RADIANS: {
-                inst->id = irModuleReserveId(m);
-
                 uint32_t params[5] = {
                     inst->type->id,
                     inst->id,
@@ -1554,8 +1581,6 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             }
 
             case IR_BUILTIN_DEGREES: {
-                inst->id = irModuleReserveId(m);
-
                 uint32_t params[5] = {
                     inst->type->id,
                     inst->id,

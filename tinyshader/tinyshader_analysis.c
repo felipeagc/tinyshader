@@ -1174,6 +1174,38 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             break;
         }
 
+        case IR_BUILTIN_CROSS: {
+            if (param_count != 2)
+            {
+                ts__addErr(compiler, &expr->loc, "cross needs 2 parameters");
+                break;
+            }
+
+            AstExpr *a = params[0];
+            AstExpr *b = params[1];
+
+            if ((a->type->kind != TYPE_VECTOR) || (b->type->kind != TYPE_VECTOR))
+            {
+                ts__addErr(compiler, &expr->loc, "cross operates on vectors");
+                break;
+            }
+
+            if (a->type != b->type)
+            {
+                ts__addErr(compiler, &expr->loc, "cross cannot operate on different types");
+                break;
+            }
+
+            if (a->type->vector.size != 3)
+            {
+                ts__addErr(compiler, &expr->loc, "cross operates on 3D vectors");
+                break;
+            }
+
+            expr->type = a->type;
+            break;
+        }
+
         case IR_BUILTIN_MUL: {
             if (param_count != 2)
             {

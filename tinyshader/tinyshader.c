@@ -42,6 +42,7 @@ TsCompiler *tsCompilerCreate()
     ts__hashSet(&compiler->keyword_table, "TextureCube", (void *)TOKEN_TEXTURE_CUBE);
 
     ts__hashSet(&compiler->keyword_table, "dot", (void *)TOKEN_DOT_BUILTIN);
+    ts__hashSet(&compiler->keyword_table, "cross", (void *)TOKEN_CROSS_BUILTIN);
     ts__hashSet(&compiler->keyword_table, "mul", (void *)TOKEN_MUL_BUILTIN);
     ts__hashSet(&compiler->keyword_table, "degrees", (void *)TOKEN_DEGREES_BUILTIN);
     ts__hashSet(&compiler->keyword_table, "radians", (void *)TOKEN_RADIANS_BUILTIN);
