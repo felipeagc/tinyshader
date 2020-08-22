@@ -866,149 +866,16 @@ irBuildFuncCall(IRModule *m, IRInst *function, IRInst **params, uint32_t param_c
 }
 
 static IRInst *irBuildBuiltinCall(
-    IRModule *m, IRBuiltinInstKind kind, IRInst **params, uint32_t param_count)
+    IRModule *m,
+    IRBuiltinInstKind kind,
+    IRType *result_type,
+    IRInst **params,
+    uint32_t param_count)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_BUILTIN_CALL;
 
-    switch (kind)
-    {
-    case IR_BUILTIN_DOT: {
-        assert(param_count == 2);
-        IRInst *a = params[0];
-        IRInst *b = params[1];
-
-        assert(a->type->kind == IR_TYPE_VECTOR);
-        assert(b->type == a->type);
-
-        inst->type = a->type->vector.elem_type;
-        assert(inst->type);
-
-        break;
-    }
-
-    case IR_BUILTIN_CROSS: {
-        assert(param_count == 2);
-        IRInst *a = params[0];
-        IRInst *b = params[1];
-
-        assert(a->type->kind == IR_TYPE_VECTOR);
-        assert(a->type->vector.size == 3);
-        assert(b->type == a->type);
-
-        inst->type = a->type;
-        assert(inst->type);
-
-        break;
-    }
-
-    case IR_BUILTIN_LENGTH: {
-        assert(param_count == 1);
-
-        IRInst *a = params[0];
-        assert(a->type->kind == IR_TYPE_VECTOR);
-
-        inst->type = a->type->vector.elem_type;
-        assert(inst->type);
-        break;
-    }
-
-    case IR_BUILTIN_NORMALIZE: {
-        assert(param_count == 1);
-
-        IRInst *a = params[0];
-        assert(a->type->kind == IR_TYPE_VECTOR);
-
-        inst->type = a->type;
-        assert(inst->type);
-        break;
-    }
-
-    case IR_BUILTIN_MUL: {
-        assert(param_count == 2);
-        IRInst *a = params[0];
-        IRInst *b = params[1];
-
-        if (a->type->kind == IR_TYPE_VECTOR && b->type->kind == IR_TYPE_MATRIX)
-        {
-            // Matrix times vector, yes, it's backwards
-            inst->type = a->type;
-        }
-        else if (a->type->kind == IR_TYPE_MATRIX && b->type->kind == IR_TYPE_VECTOR)
-        {
-            // Vector times matrix, yes, it's backwards
-            inst->type = b->type;
-        }
-        else if (a->type->kind == IR_TYPE_VECTOR && b->type->kind == IR_TYPE_VECTOR)
-        {
-            // Vector dot product
-            inst->type = a->type->vector.elem_type;
-        }
-        else if (a->type->kind == IR_TYPE_MATRIX && b->type->kind == IR_TYPE_MATRIX)
-        {
-            // Matrix times matrix
-            inst->type = a->type;
-        }
-        else
-        {
-            assert(0);
-        }
-
-        break;
-    }
-
-    case IR_BUILTIN_RADIANS:
-    case IR_BUILTIN_DEGREES: {
-        assert(param_count == 1);
-        IRInst *a = params[0];
-        assert(a->type->kind == IR_TYPE_FLOAT);
-        inst->type = a->type;
-        break;
-    }
-
-    case IR_BUILTIN_SIN:
-    case IR_BUILTIN_COS:
-    case IR_BUILTIN_TAN:
-    case IR_BUILTIN_ASIN:
-    case IR_BUILTIN_ACOS:
-    case IR_BUILTIN_ATAN:
-    case IR_BUILTIN_SINH:
-    case IR_BUILTIN_COSH:
-    case IR_BUILTIN_TANH: {
-        assert(param_count == 1);
-
-        IRInst *a = params[0];
-        assert(a->type->kind == IR_TYPE_FLOAT);
-
-        inst->type = a->type;
-        assert(inst->type);
-        break;
-    }
-
-    case IR_BUILTIN_ATAN2: {
-        assert(param_count == 2);
-
-        IRInst *a = params[0];
-        IRInst *b = params[0];
-        assert(a->type->kind == IR_TYPE_FLOAT);
-        assert(b->type->kind == IR_TYPE_FLOAT);
-        assert(a->type == b->type);
-
-        inst->type = a->type;
-        assert(inst->type);
-        break;
-    }
-
-    case IR_BUILTIN_CREATE_SAMPLED_IMAGE: {
-        assert(param_count == 2);
-        IRInst *img_param = params[0];
-        IRType *img_type = img_param->type;
-        assert(img_type->kind == IR_TYPE_IMAGE);
-        inst->type = irNewSampledImageType(m, img_type);
-        break;
-    }
-    }
-
+    inst->type = result_type;
     assert(inst->type);
 
     inst->builtin_call.kind = kind;
@@ -1589,19 +1456,25 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             }
 
             case IR_BUILTIN_CROSS: {
-                uint32_t params[2] = { param_values[0]->id, param_values[1]->id };
+                uint32_t params[2] = {param_values[0]->id, param_values[1]->id};
                 irModuleEncodeExtInst(m, inst, GLSLstd450Cross, params, 2);
                 break;
             }
 
+            case IR_BUILTIN_DISTANCE: {
+                uint32_t params[2] = {param_values[0]->id, param_values[1]->id};
+                irModuleEncodeExtInst(m, inst, GLSLstd450Distance, params, 2);
+                break;
+            }
+
             case IR_BUILTIN_LENGTH: {
-                uint32_t params[1] = { param_values[0]->id };
+                uint32_t params[1] = {param_values[0]->id};
                 irModuleEncodeExtInst(m, inst, GLSLstd450Length, params, 1);
                 break;
             }
 
             case IR_BUILTIN_NORMALIZE: {
-                uint32_t params[1] = { param_values[0]->id };
+                uint32_t params[1] = {param_values[0]->id};
                 irModuleEncodeExtInst(m, inst, GLSLstd450Normalize, params, 1);
                 break;
             }
@@ -1654,77 +1527,76 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             }
 
             case IR_BUILTIN_RADIANS: {
-                uint32_t params[1] = { param_values[0]->id };
+                uint32_t params[1] = {param_values[0]->id};
                 irModuleEncodeExtInst(m, inst, GLSLstd450Radians, params, 1);
                 break;
             }
 
             case IR_BUILTIN_DEGREES: {
-                uint32_t params[1] = { param_values[0]->id };
+                uint32_t params[1] = {param_values[0]->id};
                 irModuleEncodeExtInst(m, inst, GLSLstd450Degrees, params, 1);
                 break;
             }
 
             case IR_BUILTIN_SIN: {
-                uint32_t params[1] = { param_values[0]->id };
+                uint32_t params[1] = {param_values[0]->id};
                 irModuleEncodeExtInst(m, inst, GLSLstd450Sin, params, 1);
                 break;
             }
 
             case IR_BUILTIN_COS: {
-                uint32_t params[1] = { param_values[0]->id };
+                uint32_t params[1] = {param_values[0]->id};
                 irModuleEncodeExtInst(m, inst, GLSLstd450Cos, params, 1);
                 break;
             }
 
             case IR_BUILTIN_TAN: {
-                uint32_t params[1] = { param_values[0]->id };
+                uint32_t params[1] = {param_values[0]->id};
                 irModuleEncodeExtInst(m, inst, GLSLstd450Tan, params, 1);
                 break;
             }
 
             case IR_BUILTIN_ASIN: {
-                uint32_t params[1] = { param_values[0]->id };
+                uint32_t params[1] = {param_values[0]->id};
                 irModuleEncodeExtInst(m, inst, GLSLstd450Asin, params, 1);
                 break;
             }
 
             case IR_BUILTIN_ACOS: {
-                uint32_t params[1] = { param_values[0]->id };
+                uint32_t params[1] = {param_values[0]->id};
                 irModuleEncodeExtInst(m, inst, GLSLstd450Acos, params, 1);
                 break;
             }
 
             case IR_BUILTIN_ATAN: {
-                uint32_t params[1] = { param_values[0]->id };
+                uint32_t params[1] = {param_values[0]->id};
                 irModuleEncodeExtInst(m, inst, GLSLstd450Atan, params, 1);
                 break;
             }
 
             case IR_BUILTIN_SINH: {
-                uint32_t params[1] = { param_values[0]->id };
+                uint32_t params[1] = {param_values[0]->id};
                 irModuleEncodeExtInst(m, inst, GLSLstd450Sinh, params, 1);
                 break;
             }
 
             case IR_BUILTIN_COSH: {
-                uint32_t params[1] = { param_values[0]->id };
+                uint32_t params[1] = {param_values[0]->id};
                 irModuleEncodeExtInst(m, inst, GLSLstd450Cosh, params, 1);
                 break;
             }
 
             case IR_BUILTIN_TANH: {
-                uint32_t params[1] = { param_values[0]->id };
+                uint32_t params[1] = {param_values[0]->id};
                 irModuleEncodeExtInst(m, inst, GLSLstd450Tanh, params, 1);
                 break;
             }
 
             case IR_BUILTIN_ATAN2: {
-                uint32_t params[2] = { param_values[0]->id, param_values[0]->id };
+                uint32_t params[2] = {param_values[0]->id, param_values[0]->id};
                 irModuleEncodeExtInst(m, inst, GLSLstd450Atan2, params, 2);
                 break;
             }
-
             }
 
             break;
@@ -2214,8 +2086,13 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
                 IRInst **sampled_image_params = NEW_ARRAY(compiler, IRInst *, 2);
                 sampled_image_params[0] = self_value;
                 sampled_image_params[1] = param_values[0];
+
                 IRInst *sampled_image = irBuildBuiltinCall(
-                    m, IR_BUILTIN_CREATE_SAMPLED_IMAGE, sampled_image_params, 2);
+                    m,
+                    IR_BUILTIN_CREATE_SAMPLED_IMAGE,
+                    irNewSampledImageType(m, self_value->type),
+                    sampled_image_params,
+                    2);
 
                 IRType *result_type = convertTypeToIR(m->mod, m, expr->type);
                 IRInst *coords = param_values[1];
@@ -2335,8 +2212,10 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
             param_values[i] = irLoadVal(m, param->value);
         }
 
-        expr->value =
-            irBuildBuiltinCall(m, expr->builtin_call.kind, param_values, param_count);
+        IRType *result_type = convertTypeToIR(m->mod, m, expr->type);
+
+        expr->value = irBuildBuiltinCall(
+            m, expr->builtin_call.kind, result_type, param_values, param_count);
 
         break;
     }
@@ -2662,7 +2541,8 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
 
             if (!irBlockHasTerminator(irGetCurrentBlock(m)))
             {
-                irBuildCondBr(m, cond, body_block, merge_block, merge_block, continue_block);
+                irBuildCondBr(
+                    m, cond, body_block, merge_block, merge_block, continue_block);
             }
         }
 
@@ -2686,7 +2566,6 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
 
         break;
     }
-
     }
 }
 

@@ -1322,6 +1322,33 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             break;
         }
 
+        case IR_BUILTIN_DISTANCE: {
+            if (param_count != 2)
+            {
+                ts__addErr(compiler, &expr->loc, "distance needs 2 parameters");
+                break;
+            }
+
+            AstExpr *a = params[0];
+            AstExpr *b = params[1];
+
+            if ((a->type->kind != TYPE_VECTOR) || (b->type->kind != TYPE_VECTOR))
+            {
+                ts__addErr(compiler, &expr->loc, "distance operates on vectors");
+                break;
+            }
+
+            if (a->type != b->type)
+            {
+                ts__addErr(
+                    compiler, &expr->loc, "distance cannot operate on different types");
+                break;
+            }
+
+            expr->type = ts__getElemType(a->type);
+            break;
+        }
+
         case IR_BUILTIN_RADIANS:
         case IR_BUILTIN_DEGREES: {
             if (param_count != 1)

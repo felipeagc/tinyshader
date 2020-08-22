@@ -46,6 +46,7 @@ TsCompiler *tsCompilerCreate()
     ts__hashSet(&compiler->keyword_table, "length", (void *)TOKEN_BUILTIN_LENGTH);
     ts__hashSet(&compiler->keyword_table, "normalize", (void *)TOKEN_BUILTIN_NORMALIZE);
     ts__hashSet(&compiler->keyword_table, "mul", (void *)TOKEN_BUILTIN_MUL);
+    ts__hashSet(&compiler->keyword_table, "distance", (void *)TOKEN_BUILTIN_DISTANCE);
     ts__hashSet(&compiler->keyword_table, "degrees", (void *)TOKEN_BUILTIN_DEGREES);
     ts__hashSet(&compiler->keyword_table, "radians", (void *)TOKEN_BUILTIN_RADIANS);
 

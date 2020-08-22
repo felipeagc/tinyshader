@@ -659,6 +659,7 @@ static AstExpr *parseAccessFuncCall(Parser *p)
     case TOKEN_BUILTIN_LENGTH: builtin_kind = IR_BUILTIN_LENGTH; break;
     case TOKEN_BUILTIN_NORMALIZE: builtin_kind = IR_BUILTIN_NORMALIZE; break;
     case TOKEN_BUILTIN_MUL: builtin_kind = IR_BUILTIN_MUL; break;
+    case TOKEN_BUILTIN_DISTANCE: builtin_kind = IR_BUILTIN_DISTANCE; break;
     case TOKEN_BUILTIN_DEGREES: builtin_kind = IR_BUILTIN_DEGREES; break;
     case TOKEN_BUILTIN_RADIANS: builtin_kind = IR_BUILTIN_RADIANS; break;
 
