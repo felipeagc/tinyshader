@@ -1206,6 +1206,25 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             break;
         }
 
+        case IR_BUILTIN_LENGTH: {
+            if (param_count != 1)
+            {
+                ts__addErr(compiler, &expr->loc, "length needs 1 parameter");
+                break;
+            }
+
+            AstExpr *a = params[0];
+
+            if (a->type->kind != TYPE_VECTOR)
+            {
+                ts__addErr(compiler, &expr->loc, "length operates on a vector");
+                break;
+            }
+
+            expr->type = a->type->vector.elem_type;
+            break;
+        }
+
         case IR_BUILTIN_MUL: {
             if (param_count != 2)
             {

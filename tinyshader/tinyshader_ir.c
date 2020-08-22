@@ -902,6 +902,17 @@ static IRInst *irBuildBuiltinCall(
         break;
     }
 
+    case IR_BUILTIN_LENGTH: {
+        assert(param_count == 1);
+
+        IRInst *a = params[0];
+        assert(a->type->kind == IR_TYPE_VECTOR);
+
+        inst->type = a->type->vector.elem_type;
+        assert(inst->type);
+        break;
+    }
+
     case IR_BUILTIN_MUL: {
         assert(param_count == 2);
         IRInst *a = params[0];
@@ -1517,6 +1528,19 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
                 };
 
                 irModuleEncodeInst(m, SpvOpExtInst, params, 6);
+                break;
+            }
+
+            case IR_BUILTIN_LENGTH: {
+                uint32_t params[5] = {
+                    inst->type->id,
+                    inst->id,
+                    m->glsl_ext_inst,
+                    GLSLstd450Length,
+                    param_values[0]->id,
+                };
+
+                irModuleEncodeInst(m, SpvOpExtInst, params, 5);
                 break;
             }
 
