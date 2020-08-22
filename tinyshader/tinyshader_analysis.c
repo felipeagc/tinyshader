@@ -1359,6 +1359,22 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
     }
 
     case EXPR_BINARY: {
+        if (expr->binary.left->kind == EXPR_PRIMARY)
+        {
+            analyzerAnalyzeExpr(a, expr->binary.right, NULL);
+            analyzerAnalyzeExpr(a, expr->binary.left, expr->binary.right->type);
+        }
+        else if (expr->binary.right->kind == EXPR_PRIMARY)
+        {
+            analyzerAnalyzeExpr(a, expr->binary.left, NULL);
+            analyzerAnalyzeExpr(a, expr->binary.right, expr->binary.left->type);
+        }
+        else
+        {
+            analyzerAnalyzeExpr(a, expr->binary.left, NULL);
+            analyzerAnalyzeExpr(a, expr->binary.right, NULL);
+        }
+
         switch (expr->binary.op)
         {
         case BINOP_ADD:
@@ -1366,8 +1382,6 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
         case BINOP_MUL:
         case BINOP_DIV:
         case BINOP_MOD: {
-            analyzerAnalyzeExpr(a, expr->binary.left, NULL);
-            analyzerAnalyzeExpr(a, expr->binary.right, NULL);
             if (!expr->binary.left->type || !expr->binary.right->type) break;
 
             AstType *left_type = expr->binary.left->type;
@@ -1394,8 +1408,6 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
         case BINOP_LESSEQ:
         case BINOP_GREATER:
         case BINOP_GREATEREQ: {
-            analyzerAnalyzeExpr(a, expr->binary.left, NULL);
-            analyzerAnalyzeExpr(a, expr->binary.right, NULL);
             if (!expr->binary.left->type || !expr->binary.right->type) break;
 
             AstType *left_type = expr->binary.left->type;
