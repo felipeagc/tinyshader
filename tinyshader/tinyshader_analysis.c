@@ -613,6 +613,94 @@ AstType *ts__getElemType(AstType *type)
     return type;
 }
 
+static bool canCoerceExprToScalarType(Analyzer *a, AstExpr *expr)
+{
+    switch (expr->kind)
+    {
+    case EXPR_PRIMARY: {
+        switch (expr->primary.token->kind)
+        {
+        case TOKEN_INT_LIT: {
+            return true;
+        }
+
+        default: break;
+        }
+        break;
+    }
+
+    case EXPR_BINARY: {
+        switch (expr->binary.op)
+        {
+        case BINOP_ADD:
+        case BINOP_SUB:
+        case BINOP_MUL:
+        case BINOP_DIV:
+        case BINOP_MOD: {
+            return canCoerceExprToScalarType(a, expr->binary.left) &&
+                   canCoerceExprToScalarType(a, expr->binary.right);
+        }
+
+        default: break;
+        }
+
+        break;
+    }
+
+    case EXPR_UNARY: {
+        switch (expr->unary.op)
+        {
+        case UNOP_NEG: {
+            return canCoerceExprToScalarType(a, expr->unary.right);
+        }
+
+        default: break;
+        }
+
+        break;
+    }
+
+    default: break;
+    }
+
+    return false;
+}
+
+static void tryCoerceExprToScalarType(Analyzer *a, AstExpr *expr, AstType *scalar_type)
+{
+    switch (expr->kind)
+    {
+    case EXPR_PRIMARY: {
+        if (canCoerceExprToScalarType(a, expr))
+        {
+            expr->type = scalar_type;
+        }
+        break;
+    }
+
+    case EXPR_BINARY: {
+        if (canCoerceExprToScalarType(a, expr))
+        {
+            expr->binary.left->type = scalar_type;
+            expr->binary.right->type = scalar_type;
+            expr->type = scalar_type;
+        }
+        break;
+    }
+
+    case EXPR_UNARY: {
+        if (canCoerceExprToScalarType(a, expr))
+        {
+            expr->unary.right->type = scalar_type;
+            expr->type = scalar_type;
+        }
+        break;
+    }
+
+    default: break;
+    }
+}
+
 static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_type);
 static void analyzerAnalyzeStmt(Analyzer *a, AstStmt *stmt);
 static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl);
@@ -1329,6 +1417,9 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
+            tryCoerceExprToScalarType(a, params[0], newFloatType(m, 32));
+            tryCoerceExprToScalarType(a, params[1], newFloatType(m, 32));
+
             AstExpr *a = params[0];
             AstExpr *b = params[1];
 
@@ -1357,6 +1448,8 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                     compiler, &expr->loc, "degrees/radians call needs 1 parameter");
                 break;
             }
+
+            tryCoerceExprToScalarType(a, params[0], newFloatType(m, 32));
 
             AstExpr *a = params[0];
             if (!a->type) break;
@@ -1389,6 +1482,8 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
+            tryCoerceExprToScalarType(a, params[0], newFloatType(m, 32));
+
             AstExpr *a = params[0];
 
             if (a->kind == EXPR_PRIMARY && a->type->kind == TYPE_INT)
@@ -1413,6 +1508,9 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 ts__addErr(compiler, &expr->loc, "atan2 takes 2 parameters");
                 break;
             }
+
+            tryCoerceExprToScalarType(a, params[0], newFloatType(m, 32));
+            tryCoerceExprToScalarType(a, params[1], newFloatType(m, 32));
 
             AstExpr *a = params[0];
             AstExpr *b = params[1];
@@ -1453,6 +1551,8 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 ts__addErr(compiler, &expr->loc, "sqrt/rsqrt takes 1 parameter");
                 break;
             }
+
+            tryCoerceExprToScalarType(a, params[0], newFloatType(m, 32));
 
             AstExpr *a = params[0];
             if (!a->type) break;
@@ -1509,6 +1609,8 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
+            tryCoerceExprToScalarType(a, params[2], newFloatType(m, 32));
+
             AstExpr *a = params[0];
             AstExpr *b = params[1];
             AstExpr *c = params[2];
@@ -1551,6 +1653,9 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
+            tryCoerceExprToScalarType(a, params[0], newFloatType(m, 32));
+            tryCoerceExprToScalarType(a, params[1], newFloatType(m, 32));
+
             AstExpr *a = params[0];
             AstExpr *b = params[1];
             if (!a->type || !b->type) break;
@@ -1558,9 +1663,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             if (a->type != b->type)
             {
                 ts__addErr(
-                    compiler,
-                    &expr->loc,
-                    "pow operates on parameters of the same type");
+                    compiler, &expr->loc, "pow operates on parameters of the same type");
                 break;
             }
 
