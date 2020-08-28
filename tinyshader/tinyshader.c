@@ -67,6 +67,8 @@ TsCompiler *tsCompilerCreate()
     ts__hashSet(&compiler->keyword_table, "reflect", (void *)TOKEN_BUILTIN_REFLECT);
     ts__hashSet(&compiler->keyword_table, "refract", (void *)TOKEN_BUILTIN_REFRACT);
 
+    ts__hashSet(&compiler->keyword_table, "pow", (void *)TOKEN_BUILTIN_POW);
+
     ts__hashSet(&compiler->keyword_table, "uint", (void *)TOKEN_UINT);
     ts__hashSet(&compiler->keyword_table, "int", (void *)TOKEN_INT);
     ts__hashSet(&compiler->keyword_table, "float", (void *)TOKEN_FLOAT);

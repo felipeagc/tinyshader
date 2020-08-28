@@ -1544,6 +1544,41 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             break;
         }
 
+        case IR_BUILTIN_POW: {
+            if (param_count != 2)
+            {
+                ts__addErr(compiler, &expr->loc, "pow takes 2 parameters");
+                break;
+            }
+
+            AstExpr *a = params[0];
+            AstExpr *b = params[1];
+            if (!a->type || !b->type) break;
+
+            if (a->type != b->type)
+            {
+                ts__addErr(
+                    compiler,
+                    &expr->loc,
+                    "pow operates on parameters of the same type");
+                break;
+            }
+
+            AstType *scalar_type = ts__getScalarType(a->type);
+            if (!scalar_type || scalar_type->kind != TYPE_FLOAT)
+            {
+                ts__addErr(
+                    compiler,
+                    &expr->loc,
+                    "pow operates on vectors or scalars of float type");
+                break;
+            }
+
+            expr->type = a->type;
+
+            break;
+        }
+
         case IR_BUILTIN_CREATE_SAMPLED_IMAGE: assert(0); break;
         }
 
