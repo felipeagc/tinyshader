@@ -1460,7 +1460,82 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             AstType *scalar_type = ts__getScalarType(a->type);
             if (!scalar_type || scalar_type->kind != TYPE_FLOAT)
             {
-                ts__addErr(compiler, &expr->loc, "sqrt/rsqrt operates on vectors or scalars of float type");
+                ts__addErr(
+                    compiler,
+                    &expr->loc,
+                    "sqrt/rsqrt operates on vectors or scalars of float type");
+                break;
+            }
+
+            expr->type = a->type;
+
+            break;
+        }
+
+        case IR_BUILTIN_REFLECT: {
+            if (param_count != 2)
+            {
+                ts__addErr(compiler, &expr->loc, "reflect needs 2 parameters");
+                break;
+            }
+
+            AstExpr *a = params[0];
+            AstExpr *b = params[1];
+
+            if ((a->type->kind != TYPE_VECTOR) || (b->type->kind != TYPE_VECTOR))
+            {
+                ts__addErr(compiler, &expr->loc, "reflect operates on vectors");
+                break;
+            }
+
+            if (a->type != b->type)
+            {
+                ts__addErr(
+                    compiler,
+                    &expr->loc,
+                    "reflect cannot operate on different vector types");
+                break;
+            }
+
+            expr->type = a->type;
+
+            break;
+        }
+
+        case IR_BUILTIN_REFRACT: {
+            if (param_count != 3)
+            {
+                ts__addErr(compiler, &expr->loc, "refract needs 2 parameters");
+                break;
+            }
+
+            AstExpr *a = params[0];
+            AstExpr *b = params[1];
+            AstExpr *c = params[2];
+
+            if (!a->type || !b->type || !c->type) break;
+
+            if ((a->type->kind != TYPE_VECTOR) || (b->type->kind != TYPE_VECTOR))
+            {
+                ts__addErr(compiler, &expr->loc, "refract operates on vectors");
+                break;
+            }
+
+            if (a->type != b->type)
+            {
+                ts__addErr(
+                    compiler,
+                    &expr->loc,
+                    "refract cannot operate on different vector types");
+                break;
+            }
+
+            if (c->type->kind != TYPE_FLOAT)
+            {
+                ts__addErr(
+                    compiler,
+                    &expr->loc,
+                    "refract takes a scalar as the third parameter");
                 break;
             }
 
