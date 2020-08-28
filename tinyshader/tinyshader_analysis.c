@@ -1410,12 +1410,12 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
         case IR_BUILTIN_ATAN2: {
             if (param_count != 2)
             {
-                ts__addErr(compiler, &expr->loc, "atan2 functions takes 2 parameters");
+                ts__addErr(compiler, &expr->loc, "atan2 takes 2 parameters");
                 break;
             }
 
             AstExpr *a = params[0];
-            AstExpr *b = params[0];
+            AstExpr *b = params[1];
 
             if (a->kind == EXPR_PRIMARY && a->type->kind == TYPE_INT)
             {
@@ -1438,11 +1438,34 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
             if (a->type->kind != TYPE_FLOAT)
             {
-                ts__addErr(compiler, &expr->loc, "atan2 functions operates on floats");
+                ts__addErr(compiler, &expr->loc, "atan2 operates on floats");
                 break;
             }
 
             expr->type = a->type;
+            break;
+        }
+
+        case IR_BUILTIN_SQRT:
+        case IR_BUILTIN_RSQRT: {
+            if (param_count != 1)
+            {
+                ts__addErr(compiler, &expr->loc, "sqrt/rsqrt takes 1 parameter");
+                break;
+            }
+
+            AstExpr *a = params[0];
+            if (!a->type) break;
+
+            AstType *scalar_type = ts__getScalarType(a->type);
+            if (!scalar_type || scalar_type->kind != TYPE_FLOAT)
+            {
+                ts__addErr(compiler, &expr->loc, "sqrt/rsqrt operates on vectors or scalars of float type");
+                break;
+            }
+
+            expr->type = a->type;
+
             break;
         }
 
@@ -1714,7 +1737,6 @@ static void analyzerAnalyzeStmt(Analyzer *a, AstStmt *stmt)
         analyzerAnalyzeStmt(a, stmt->while_.stmt);
         break;
     }
-
     }
 }
 
