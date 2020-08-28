@@ -1710,6 +1710,34 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             break;
         }
 
+        case IR_BUILTIN_LOG:
+        case IR_BUILTIN_LOG2: {
+            if (param_count != 1)
+            {
+                ts__addErr(compiler, &expr->loc, "log/log2 takes 1 parameter");
+                break;
+            }
+
+            tryCoerceExprToScalarType(a, params[0], newFloatType(m, 32));
+
+            AstExpr *a = params[0];
+            if (!a->type) break;
+
+            AstType *scalar_type = ts__getScalarType(a->type);
+            if (!scalar_type || scalar_type->kind != TYPE_FLOAT)
+            {
+                ts__addErr(
+                    compiler,
+                    &expr->loc,
+                    "log/log2 operates on vectors or scalars of float type");
+                break;
+            }
+
+            expr->type = a->type;
+
+            break;
+        }
+
         case IR_BUILTIN_CREATE_SAMPLED_IMAGE: assert(0); break;
         }
 

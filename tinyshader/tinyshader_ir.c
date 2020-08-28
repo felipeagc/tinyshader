@@ -1640,6 +1640,18 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
                 irModuleEncodeExtInst(m, inst, GLSLstd450Exp2, params, 1);
                 break;
             }
+
+            case IR_BUILTIN_LOG: {
+                uint32_t params[1] = {param_values[0]->id};
+                irModuleEncodeExtInst(m, inst, GLSLstd450Log, params, 1);
+                break;
+            }
+
+            case IR_BUILTIN_LOG2: {
+                uint32_t params[1] = {param_values[0]->id};
+                irModuleEncodeExtInst(m, inst, GLSLstd450Log2, params, 1);
+                break;
+            }
             }
 
             break;

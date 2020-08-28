@@ -70,6 +70,8 @@ TsCompiler *tsCompilerCreate()
     ts__hashSet(&compiler->keyword_table, "pow", (void *)TOKEN_BUILTIN_POW);
     ts__hashSet(&compiler->keyword_table, "exp", (void *)TOKEN_BUILTIN_EXP);
     ts__hashSet(&compiler->keyword_table, "exp2", (void *)TOKEN_BUILTIN_EXP2);
+    ts__hashSet(&compiler->keyword_table, "log", (void *)TOKEN_BUILTIN_LOG);
+    ts__hashSet(&compiler->keyword_table, "log2", (void *)TOKEN_BUILTIN_LOG2);
 
     ts__hashSet(&compiler->keyword_table, "uint", (void *)TOKEN_UINT);
     ts__hashSet(&compiler->keyword_table, "int", (void *)TOKEN_INT);

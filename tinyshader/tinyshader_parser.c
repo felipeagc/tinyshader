@@ -683,6 +683,8 @@ static AstExpr *parseAccessFuncCall(Parser *p)
     case TOKEN_BUILTIN_POW: builtin_kind = IR_BUILTIN_POW; break;
     case TOKEN_BUILTIN_EXP: builtin_kind = IR_BUILTIN_EXP; break;
     case TOKEN_BUILTIN_EXP2: builtin_kind = IR_BUILTIN_EXP2; break;
+    case TOKEN_BUILTIN_LOG: builtin_kind = IR_BUILTIN_LOG; break;
+    case TOKEN_BUILTIN_LOG2: builtin_kind = IR_BUILTIN_LOG2; break;
 
     default: is_builtin = false; break;
     }
