@@ -691,6 +691,7 @@ static AstExpr *parseAccessFuncCall(Parser *p)
     case TOKEN_BUILTIN_MAX: builtin_kind = IR_BUILTIN_MAX; break;
     case TOKEN_BUILTIN_LERP: builtin_kind = IR_BUILTIN_LERP; break;
     case TOKEN_BUILTIN_CLAMP: builtin_kind = IR_BUILTIN_CLAMP; break;
+    case TOKEN_BUILTIN_STEP: builtin_kind = IR_BUILTIN_STEP; break;
 
     default: is_builtin = false; break;
     }

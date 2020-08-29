@@ -1766,6 +1766,12 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
                 }
                 break;
             }
+
+            case IR_BUILTIN_STEP: {
+                uint32_t params[2] = {param_values[0]->id, param_values[1]->id};
+                irModuleEncodeExtInst(m, inst, GLSLstd450Step, params, 2);
+                break;
+            }
             }
 
             break;

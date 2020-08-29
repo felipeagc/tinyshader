@@ -615,6 +615,8 @@ AstType *ts__getElemType(AstType *type)
 
 static bool canCoerceExprToScalarType(Analyzer *a, AstExpr *expr, AstType *scalar_type)
 {
+    if (!scalar_type) return false;
+
     switch (expr->kind)
     {
     case EXPR_PRIMARY: {
@@ -668,6 +670,8 @@ static bool canCoerceExprToScalarType(Analyzer *a, AstExpr *expr, AstType *scala
 
 static void tryCoerceExprToScalarType(Analyzer *a, AstExpr *expr, AstType *scalar_type)
 {
+    if (!scalar_type) return;
+
     switch (expr->kind)
     {
     case EXPR_PRIMARY: {
@@ -681,8 +685,8 @@ static void tryCoerceExprToScalarType(Analyzer *a, AstExpr *expr, AstType *scala
     case EXPR_BINARY: {
         if (canCoerceExprToScalarType(a, expr, scalar_type))
         {
-            expr->binary.left->type = scalar_type;
-            expr->binary.right->type = scalar_type;
+            tryCoerceExprToScalarType(a, expr->binary.left, scalar_type);
+            tryCoerceExprToScalarType(a, expr->binary.right, scalar_type);
             expr->type = scalar_type;
         }
         break;
@@ -691,7 +695,7 @@ static void tryCoerceExprToScalarType(Analyzer *a, AstExpr *expr, AstType *scala
     case EXPR_UNARY: {
         if (canCoerceExprToScalarType(a, expr, scalar_type))
         {
-            expr->unary.right->type = scalar_type;
+            tryCoerceExprToScalarType(a, expr->unary.right, scalar_type);
             expr->type = scalar_type;
         }
         break;
@@ -1900,6 +1904,42 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             break;
         }
 
+        case IR_BUILTIN_STEP: {
+            if (param_count != 2)
+            {
+                ts__addErr(compiler, &expr->loc, "step takes 2 parameters");
+                break;
+            }
+
+            tryCoerceExprToScalarType(a, params[0], newFloatType(m, 32));
+            tryCoerceExprToScalarType(a, params[1], newFloatType(m, 32));
+
+            AstExpr *a = params[0];
+            AstExpr *b = params[1];
+            if (!a->type || !b->type) break;
+
+            if (a->type != b->type)
+            {
+                ts__addErr(
+                    compiler, &expr->loc, "step operates parameters of equal types");
+                break;
+            }
+
+            AstType *scalar_type = ts__getScalarType(a->type);
+            if (!scalar_type || scalar_type->kind != TYPE_FLOAT)
+            {
+                ts__addErr(
+                    compiler,
+                    &expr->loc,
+                    "step operates on vectors or scalars of float type");
+                break;
+            }
+
+            expr->type = a->type;
+
+            break;
+        }
+
         case IR_BUILTIN_CREATE_SAMPLED_IMAGE: assert(0); break;
         }
 
@@ -1984,21 +2024,8 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
     }
 
     case EXPR_BINARY: {
-        if (expr->binary.left->kind == EXPR_PRIMARY)
-        {
-            analyzerAnalyzeExpr(a, expr->binary.right, NULL);
-            analyzerAnalyzeExpr(a, expr->binary.left, expr->binary.right->type);
-        }
-        else if (expr->binary.right->kind == EXPR_PRIMARY)
-        {
-            analyzerAnalyzeExpr(a, expr->binary.left, NULL);
-            analyzerAnalyzeExpr(a, expr->binary.right, expr->binary.left->type);
-        }
-        else
-        {
-            analyzerAnalyzeExpr(a, expr->binary.left, NULL);
-            analyzerAnalyzeExpr(a, expr->binary.right, NULL);
-        }
+        analyzerAnalyzeExpr(a, expr->binary.left, NULL);
+        analyzerAnalyzeExpr(a, expr->binary.right, NULL);
 
         switch (expr->binary.op)
         {
@@ -2008,6 +2035,12 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
         case BINOP_DIV:
         case BINOP_MOD: {
             if (!expr->binary.left->type || !expr->binary.right->type) break;
+
+            tryCoerceExprToScalarType(a, expr->binary.left, expected_type);
+            tryCoerceExprToScalarType(a, expr->binary.right, expected_type);
+
+            tryCoerceExprToScalarType(a, expr->binary.left, expr->binary.right->type);
+            tryCoerceExprToScalarType(a, expr->binary.right, expr->binary.left->type);
 
             AstType *left_type = expr->binary.left->type;
             AstType *right_type = expr->binary.right->type;
