@@ -239,6 +239,8 @@ typedef enum TokenKind {
     TOKEN_BUILTIN_LOG,
     TOKEN_BUILTIN_LOG2,
 
+    TOKEN_BUILTIN_ABS,
+
     TOKEN_INT_LIT,
     TOKEN_FLOAT_LIT,
     TOKEN_STRING_LIT,
@@ -453,6 +455,8 @@ typedef enum IRBuiltinInstKind {
     IR_BUILTIN_EXP2,
     IR_BUILTIN_LOG,
     IR_BUILTIN_LOG2,
+
+    IR_BUILTIN_ABS,
 
     IR_BUILTIN_CREATE_SAMPLED_IMAGE,
 } IRBuiltinInstKind;

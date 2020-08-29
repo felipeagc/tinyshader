@@ -1652,6 +1652,30 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
                 irModuleEncodeExtInst(m, inst, GLSLstd450Log2, params, 1);
                 break;
             }
+
+            case IR_BUILTIN_ABS: {
+                IRType *scalar_type = inst->type;
+                if (scalar_type->kind == IR_TYPE_VECTOR)
+                {
+                    scalar_type = scalar_type->vector.elem_type;
+                }
+
+                if (scalar_type->kind == IR_TYPE_FLOAT)
+                {
+                    uint32_t params[1] = {param_values[0]->id};
+                    irModuleEncodeExtInst(m, inst, GLSLstd450FAbs, params, 1);
+                }
+                else if (scalar_type->kind == IR_TYPE_INT)
+                {
+                    uint32_t params[1] = {param_values[0]->id};
+                    irModuleEncodeExtInst(m, inst, GLSLstd450SAbs, params, 1);
+                }
+                else
+                {
+                    assert(0);
+                }
+                break;
+            }
             }
 
             break;

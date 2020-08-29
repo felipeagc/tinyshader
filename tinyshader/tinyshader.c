@@ -73,6 +73,8 @@ TsCompiler *tsCompilerCreate()
     ts__hashSet(&compiler->keyword_table, "log", (void *)TOKEN_BUILTIN_LOG);
     ts__hashSet(&compiler->keyword_table, "log2", (void *)TOKEN_BUILTIN_LOG2);
 
+    ts__hashSet(&compiler->keyword_table, "abs", (void *)TOKEN_BUILTIN_ABS);
+
     ts__hashSet(&compiler->keyword_table, "uint", (void *)TOKEN_UINT);
     ts__hashSet(&compiler->keyword_table, "int", (void *)TOKEN_INT);
     ts__hashSet(&compiler->keyword_table, "float", (void *)TOKEN_FLOAT);
