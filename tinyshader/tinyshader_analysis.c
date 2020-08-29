@@ -1745,7 +1745,10 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            tryCoerceExprToScalarType(a, params[0], expected_type);
+            if (expected_type)
+            {
+                tryCoerceExprToScalarType(a, params[0], expected_type);
+            }
 
             AstExpr *a = params[0];
             if (!a->type) break;
@@ -1755,6 +1758,46 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 !(scalar_type->kind == TYPE_INT || scalar_type->kind == TYPE_FLOAT))
             {
                 ts__addErr(compiler, &expr->loc, "abs operates on vectors or scalars");
+                break;
+            }
+
+            expr->type = a->type;
+
+            break;
+        }
+
+        case IR_BUILTIN_MIN:
+        case IR_BUILTIN_MAX: {
+            if (param_count != 2)
+            {
+                ts__addErr(compiler, &expr->loc, "min/max takes 2 parameters");
+                break;
+            }
+
+            if (expected_type && canCoerceExprToScalarType(a, params[0]) &&
+                canCoerceExprToScalarType(a, params[1]))
+            {
+                tryCoerceExprToScalarType(a, params[0], expected_type);
+                tryCoerceExprToScalarType(a, params[1], expected_type);
+            }
+
+            AstExpr *a = params[0];
+            AstExpr *b = params[1];
+            if (!a->type || !b->type) break;
+
+            if (a->type != b->type)
+            {
+                ts__addErr(
+                    compiler, &expr->loc, "min/max operates parameters of equal types");
+                break;
+            }
+
+            AstType *scalar_type = ts__getScalarType(a->type);
+            if (!scalar_type ||
+                !(scalar_type->kind == TYPE_INT || scalar_type->kind == TYPE_FLOAT))
+            {
+                ts__addErr(
+                    compiler, &expr->loc, "min/max operates on vectors or scalars");
                 break;
             }
 

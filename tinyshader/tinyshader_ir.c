@@ -1660,19 +1660,74 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
                     scalar_type = scalar_type->vector.elem_type;
                 }
 
+                uint32_t params[1] = {param_values[0]->id};
+
                 if (scalar_type->kind == IR_TYPE_FLOAT)
                 {
-                    uint32_t params[1] = {param_values[0]->id};
                     irModuleEncodeExtInst(m, inst, GLSLstd450FAbs, params, 1);
                 }
                 else if (scalar_type->kind == IR_TYPE_INT)
                 {
-                    uint32_t params[1] = {param_values[0]->id};
                     irModuleEncodeExtInst(m, inst, GLSLstd450SAbs, params, 1);
                 }
                 else
                 {
                     assert(0);
+                }
+                break;
+            }
+
+            case IR_BUILTIN_MIN: {
+                IRType *scalar_type = inst->type;
+                if (scalar_type->kind == IR_TYPE_VECTOR)
+                {
+                    scalar_type = scalar_type->vector.elem_type;
+                }
+
+                uint32_t params[2] = {param_values[0]->id, param_values[1]->id};
+
+                if (scalar_type->kind == IR_TYPE_FLOAT)
+                {
+                    irModuleEncodeExtInst(m, inst, GLSLstd450FMin, params, 2);
+                }
+                else if (scalar_type->kind == IR_TYPE_INT)
+                {
+                    if (scalar_type->int_.is_signed)
+                    {
+                        irModuleEncodeExtInst(m, inst, GLSLstd450SMin, params, 2);
+                    }
+                    else
+                    {
+                        irModuleEncodeExtInst(m, inst, GLSLstd450UMin, params, 2);
+                    }
+                }
+
+                break;
+            }
+
+            case IR_BUILTIN_MAX: {
+                IRType *scalar_type = inst->type;
+                if (scalar_type->kind == IR_TYPE_VECTOR)
+                {
+                    scalar_type = scalar_type->vector.elem_type;
+                }
+
+                uint32_t params[2] = {param_values[0]->id, param_values[1]->id};
+
+                if (scalar_type->kind == IR_TYPE_FLOAT)
+                {
+                    irModuleEncodeExtInst(m, inst, GLSLstd450FMax, params, 2);
+                }
+                else if (scalar_type->kind == IR_TYPE_INT)
+                {
+                    if (scalar_type->int_.is_signed)
+                    {
+                        irModuleEncodeExtInst(m, inst, GLSLstd450SMax, params, 2);
+                    }
+                    else
+                    {
+                        irModuleEncodeExtInst(m, inst, GLSLstd450UMax, params, 2);
+                    }
                 }
                 break;
             }
