@@ -1849,6 +1849,57 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             break;
         }
 
+        case IR_BUILTIN_CLAMP: {
+            if (param_count != 3)
+            {
+                ts__addErr(compiler, &expr->loc, "clamp takes 3 parameters");
+                break;
+            }
+
+            if (expected_type && canCoerceExprToScalarType(a, params[0], expected_type) &&
+                canCoerceExprToScalarType(a, params[1], expected_type) &&
+                canCoerceExprToScalarType(a, params[2], expected_type))
+            {
+                tryCoerceExprToScalarType(a, params[0], expected_type);
+                tryCoerceExprToScalarType(a, params[1], expected_type);
+                tryCoerceExprToScalarType(a, params[2], expected_type);
+            }
+            else if (
+                canCoerceExprToScalarType(a, params[1], params[0]->type) &&
+                canCoerceExprToScalarType(a, params[2], params[0]->type))
+            {
+                tryCoerceExprToScalarType(a, params[1], params[0]->type);
+                tryCoerceExprToScalarType(a, params[2], params[0]->type);
+            }
+
+            AstExpr *a = params[0];
+            AstExpr *b = params[1];
+            AstExpr *c = params[2];
+            if (!a->type || !b->type || !c->type) break;
+
+            if (a->type != b->type || a->type != c->type)
+            {
+                ts__addErr(
+                    compiler, &expr->loc, "clamp operates parameters of equal types");
+                break;
+            }
+
+            AstType *scalar_type = ts__getScalarType(a->type);
+            if (!scalar_type ||
+                !(scalar_type->kind == TYPE_FLOAT || scalar_type->kind == TYPE_INT))
+            {
+                ts__addErr(
+                    compiler,
+                    &expr->loc,
+                    "clamp operates on vectors or scalars of float type");
+                break;
+            }
+
+            expr->type = a->type;
+
+            break;
+        }
+
         case IR_BUILTIN_CREATE_SAMPLED_IMAGE: assert(0); break;
         }
 

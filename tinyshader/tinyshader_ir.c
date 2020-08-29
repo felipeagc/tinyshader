@@ -1738,6 +1738,34 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
                 irModuleEncodeExtInst(m, inst, GLSLstd450FMix, params, 3);
                 break;
             }
+
+            case IR_BUILTIN_CLAMP: {
+                IRType *scalar_type = inst->type;
+                if (scalar_type->kind == IR_TYPE_VECTOR)
+                {
+                    scalar_type = scalar_type->vector.elem_type;
+                }
+
+                uint32_t params[3] = {
+                    param_values[0]->id, param_values[1]->id, param_values[2]->id};
+
+                if (scalar_type->kind == IR_TYPE_FLOAT)
+                {
+                    irModuleEncodeExtInst(m, inst, GLSLstd450FClamp, params, 3);
+                }
+                else if (scalar_type->kind == IR_TYPE_INT)
+                {
+                    if (scalar_type->int_.is_signed)
+                    {
+                        irModuleEncodeExtInst(m, inst, GLSLstd450SClamp, params, 3);
+                    }
+                    else
+                    {
+                        irModuleEncodeExtInst(m, inst, GLSLstd450UClamp, params, 3);
+                    }
+                }
+                break;
+            }
             }
 
             break;

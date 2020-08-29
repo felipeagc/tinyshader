@@ -77,6 +77,7 @@ TsCompiler *tsCompilerCreate()
     ts__hashSet(&compiler->keyword_table, "min", (void *)TOKEN_BUILTIN_MIN);
     ts__hashSet(&compiler->keyword_table, "max", (void *)TOKEN_BUILTIN_MAX);
     ts__hashSet(&compiler->keyword_table, "lerp", (void *)TOKEN_BUILTIN_LERP);
+    ts__hashSet(&compiler->keyword_table, "clamp", (void *)TOKEN_BUILTIN_CLAMP);
 
     ts__hashSet(&compiler->keyword_table, "uint", (void *)TOKEN_UINT);
     ts__hashSet(&compiler->keyword_table, "int", (void *)TOKEN_INT);
