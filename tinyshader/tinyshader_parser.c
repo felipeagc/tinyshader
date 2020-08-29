@@ -694,6 +694,9 @@ static AstExpr *parseAccessFuncCall(Parser *p)
     case TOKEN_BUILTIN_STEP: builtin_kind = IR_BUILTIN_STEP; break;
     case TOKEN_BUILTIN_SMOOTHSTEP: builtin_kind = IR_BUILTIN_SMOOTHSTEP; break;
 
+    case TOKEN_BUILTIN_TRANSPOSE: builtin_kind = IR_BUILTIN_TRANSPOSE; break;
+    case TOKEN_BUILTIN_DETERMINANT: builtin_kind = IR_BUILTIN_DETERMINANT; break;
+
     default: is_builtin = false; break;
     }
 

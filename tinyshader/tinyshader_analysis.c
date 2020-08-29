@@ -1980,6 +1980,64 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             break;
         }
 
+        case IR_BUILTIN_TRANSPOSE: {
+            if (param_count != 1)
+            {
+                ts__addErr(compiler, &expr->loc, "transpose takes 1 parameter");
+                break;
+            }
+
+            AstExpr *a = params[0];
+            if (!a->type) break;
+
+            if (a->type->kind != TYPE_MATRIX)
+            {
+                ts__addErr(compiler, &expr->loc, "transpose operates on matrices");
+                break;
+            }
+
+            AstType *elem_type = a->type->matrix.col_type->vector.elem_type;
+            uint32_t col_count = a->type->matrix.col_count;
+            uint32_t row_count = a->type->matrix.col_type->vector.size;
+
+            AstType *col_type = newVectorType(m, elem_type, col_count);
+            expr->type = newMatrixType(m, col_type, row_count);
+
+            break;
+        }
+
+        case IR_BUILTIN_DETERMINANT: {
+            if (param_count != 1)
+            {
+                ts__addErr(compiler, &expr->loc, "determinant takes 1 parameter");
+                break;
+            }
+
+            AstExpr *a = params[0];
+            if (!a->type) break;
+
+            if (a->type->kind != TYPE_MATRIX)
+            {
+                ts__addErr(compiler, &expr->loc, "determinant operates on matrices");
+                break;
+            }
+
+            AstType *elem_type = a->type->matrix.col_type->vector.elem_type;
+            uint32_t col_count = a->type->matrix.col_count;
+            uint32_t row_count = a->type->matrix.col_type->vector.size;
+
+            expr->type = elem_type;
+
+            if (col_count != row_count)
+            {
+                ts__addErr(
+                    compiler, &expr->loc, "determinant operates on square matrices");
+                break;
+            }
+
+            break;
+        }
+
         case IR_BUILTIN_CREATE_SAMPLED_IMAGE: assert(0); break;
         }
 

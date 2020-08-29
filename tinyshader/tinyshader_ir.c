@@ -1779,6 +1779,18 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
                 irModuleEncodeExtInst(m, inst, GLSLstd450SmoothStep, params, 3);
                 break;
             }
+
+            case IR_BUILTIN_TRANSPOSE: {
+                uint32_t params[3] = {inst->type->id, inst->id, param_values[0]->id};
+                irModuleEncodeInst(m, SpvOpTranspose, params, 3);
+                break;
+            }
+
+            case IR_BUILTIN_DETERMINANT: {
+                uint32_t params[1] = {param_values[0]->id};
+                irModuleEncodeExtInst(m, inst, GLSLstd450Determinant, params, 1);
+                break;
+            }
             }
 
             break;
