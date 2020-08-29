@@ -1940,6 +1940,46 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             break;
         }
 
+        case IR_BUILTIN_SMOOTHSTEP: {
+            if (param_count != 3)
+            {
+                ts__addErr(compiler, &expr->loc, "smoothstep takes 3 parameters");
+                break;
+            }
+
+            tryCoerceExprToScalarType(a, params[0], newFloatType(m, 32));
+            tryCoerceExprToScalarType(a, params[1], newFloatType(m, 32));
+            tryCoerceExprToScalarType(a, params[2], newFloatType(m, 32));
+
+            AstExpr *a = params[0];
+            AstExpr *b = params[1];
+            AstExpr *c = params[2];
+            if (!a->type || !b->type || !c->type) break;
+
+            if ((a->type != b->type) || (a->type != c->type))
+            {
+                ts__addErr(
+                    compiler,
+                    &expr->loc,
+                    "smoothstep operates parameters of equal types");
+                break;
+            }
+
+            AstType *scalar_type = ts__getScalarType(a->type);
+            if (!scalar_type || scalar_type->kind != TYPE_FLOAT)
+            {
+                ts__addErr(
+                    compiler,
+                    &expr->loc,
+                    "smoothstep operates on vectors or scalars of float type");
+                break;
+            }
+
+            expr->type = a->type;
+
+            break;
+        }
+
         case IR_BUILTIN_CREATE_SAMPLED_IMAGE: assert(0); break;
         }
 

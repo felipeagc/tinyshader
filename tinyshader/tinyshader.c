@@ -79,6 +79,7 @@ TsCompiler *tsCompilerCreate()
     ts__hashSet(&compiler->keyword_table, "lerp", (void *)TOKEN_BUILTIN_LERP);
     ts__hashSet(&compiler->keyword_table, "clamp", (void *)TOKEN_BUILTIN_CLAMP);
     ts__hashSet(&compiler->keyword_table, "step", (void *)TOKEN_BUILTIN_STEP);
+    ts__hashSet(&compiler->keyword_table, "smoothstep", (void *)TOKEN_BUILTIN_SMOOTHSTEP);
 
     ts__hashSet(&compiler->keyword_table, "uint", (void *)TOKEN_UINT);
     ts__hashSet(&compiler->keyword_table, "int", (void *)TOKEN_INT);
