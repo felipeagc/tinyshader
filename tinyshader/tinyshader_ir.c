@@ -1731,6 +1731,13 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
                 }
                 break;
             }
+
+            case IR_BUILTIN_LERP: {
+                uint32_t params[3] = {
+                    param_values[0]->id, param_values[1]->id, param_values[2]->id};
+                irModuleEncodeExtInst(m, inst, GLSLstd450FMix, params, 3);
+                break;
+            }
             }
 
             break;

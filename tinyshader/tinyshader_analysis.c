@@ -613,7 +613,7 @@ AstType *ts__getElemType(AstType *type)
     return type;
 }
 
-static bool canCoerceExprToScalarType(Analyzer *a, AstExpr *expr)
+static bool canCoerceExprToScalarType(Analyzer *a, AstExpr *expr, AstType *scalar_type)
 {
     switch (expr->kind)
     {
@@ -621,7 +621,7 @@ static bool canCoerceExprToScalarType(Analyzer *a, AstExpr *expr)
         switch (expr->primary.token->kind)
         {
         case TOKEN_INT_LIT: {
-            return true;
+            return scalar_type->kind == TYPE_FLOAT || scalar_type->kind == TYPE_INT;
         }
 
         default: break;
@@ -637,8 +637,8 @@ static bool canCoerceExprToScalarType(Analyzer *a, AstExpr *expr)
         case BINOP_MUL:
         case BINOP_DIV:
         case BINOP_MOD: {
-            return canCoerceExprToScalarType(a, expr->binary.left) &&
-                   canCoerceExprToScalarType(a, expr->binary.right);
+            return canCoerceExprToScalarType(a, expr->binary.left, scalar_type) &&
+                   canCoerceExprToScalarType(a, expr->binary.right, scalar_type);
         }
 
         default: break;
@@ -651,7 +651,7 @@ static bool canCoerceExprToScalarType(Analyzer *a, AstExpr *expr)
         switch (expr->unary.op)
         {
         case UNOP_NEG: {
-            return canCoerceExprToScalarType(a, expr->unary.right);
+            return canCoerceExprToScalarType(a, expr->unary.right, scalar_type);
         }
 
         default: break;
@@ -671,7 +671,7 @@ static void tryCoerceExprToScalarType(Analyzer *a, AstExpr *expr, AstType *scala
     switch (expr->kind)
     {
     case EXPR_PRIMARY: {
-        if (canCoerceExprToScalarType(a, expr))
+        if (canCoerceExprToScalarType(a, expr, scalar_type))
         {
             expr->type = scalar_type;
         }
@@ -679,7 +679,7 @@ static void tryCoerceExprToScalarType(Analyzer *a, AstExpr *expr, AstType *scala
     }
 
     case EXPR_BINARY: {
-        if (canCoerceExprToScalarType(a, expr))
+        if (canCoerceExprToScalarType(a, expr, scalar_type))
         {
             expr->binary.left->type = scalar_type;
             expr->binary.right->type = scalar_type;
@@ -689,7 +689,7 @@ static void tryCoerceExprToScalarType(Analyzer *a, AstExpr *expr, AstType *scala
     }
 
     case EXPR_UNARY: {
-        if (canCoerceExprToScalarType(a, expr))
+        if (canCoerceExprToScalarType(a, expr, scalar_type))
         {
             expr->unary.right->type = scalar_type;
             expr->type = scalar_type;
@@ -1774,8 +1774,8 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            if (expected_type && canCoerceExprToScalarType(a, params[0]) &&
-                canCoerceExprToScalarType(a, params[1]))
+            if (expected_type && canCoerceExprToScalarType(a, params[0], expected_type) &&
+                canCoerceExprToScalarType(a, params[1], expected_type))
             {
                 tryCoerceExprToScalarType(a, params[0], expected_type);
                 tryCoerceExprToScalarType(a, params[1], expected_type);
@@ -1798,6 +1798,49 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             {
                 ts__addErr(
                     compiler, &expr->loc, "min/max operates on vectors or scalars");
+                break;
+            }
+
+            expr->type = a->type;
+
+            break;
+        }
+
+        case IR_BUILTIN_LERP: {
+            if (param_count != 3)
+            {
+                ts__addErr(compiler, &expr->loc, "lerp takes 3 parameters");
+                break;
+            }
+
+            if (expected_type && canCoerceExprToScalarType(a, params[0], expected_type) &&
+                canCoerceExprToScalarType(a, params[1], expected_type) &&
+                canCoerceExprToScalarType(a, params[2], expected_type))
+            {
+                tryCoerceExprToScalarType(a, params[0], expected_type);
+                tryCoerceExprToScalarType(a, params[1], expected_type);
+                tryCoerceExprToScalarType(a, params[2], expected_type);
+            }
+
+            AstExpr *a = params[0];
+            AstExpr *b = params[1];
+            AstExpr *c = params[2];
+            if (!a->type || !b->type || !c->type) break;
+
+            if (a->type != b->type || a->type != c->type)
+            {
+                ts__addErr(
+                    compiler, &expr->loc, "lerp operates parameters of equal types");
+                break;
+            }
+
+            AstType *scalar_type = ts__getScalarType(a->type);
+            if (!scalar_type || scalar_type->kind != TYPE_FLOAT)
+            {
+                ts__addErr(
+                    compiler,
+                    &expr->loc,
+                    "lerp operates on vectors or scalars of float type");
                 break;
             }
 
