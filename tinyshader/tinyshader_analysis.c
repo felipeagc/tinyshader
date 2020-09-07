@@ -2698,44 +2698,33 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
     }
 }
 
-void ts__analyzerAnalyze(Analyzer *a, TsCompiler *compiler, Module *module)
+void ts__analyzerAnalyze(
+    Analyzer *a, TsCompiler *compiler, Module *module, AstDecl **decls, size_t decl_count)
 {
     memset(a, 0, sizeof(*a));
     a->compiler = compiler;
     a->module = module;
+    a->module->decls = decls;
+    a->module->decl_count = decl_count;
 
     assert(!module->scope);
 
     module->scope = NEW(compiler, Scope);
     scopeInit(module->scope, NULL, NULL);
 
-    for (uint32_t i = 0; i < arrLength(a->module->files); ++i)
+    analyzerPushScope(a, a->module->scope);
+
+    for (uint32_t i = 0; i < decl_count; ++i)
     {
-        File *file = a->module->files[i];
-
-        analyzerPushScope(a, a->module->scope);
-
-        for (uint32_t j = 0; j < arrLength(file->decls); ++j)
-        {
-            AstDecl *decl = file->decls[j];
-            analyzerTryRegisterDecl(a, decl);
-        }
-
-        analyzerPopScope(a, a->module->scope);
+        AstDecl *decl = decls[i];
+        analyzerTryRegisterDecl(a, decl);
     }
 
-    for (uint32_t i = 0; i < arrLength(a->module->files); ++i)
+    for (uint32_t i = 0; i < decl_count; ++i)
     {
-        File *file = a->module->files[i];
-
-        analyzerPushScope(a, a->module->scope);
-
-        for (uint32_t j = 0; j < arrLength(file->decls); ++j)
-        {
-            AstDecl *decl = file->decls[j];
-            analyzerAnalyzeDecl(a, decl);
-        }
-
-        analyzerPopScope(a, a->module->scope);
+        AstDecl *decl = decls[i];
+        analyzerAnalyzeDecl(a, decl);
     }
+
+    analyzerPopScope(a, a->module->scope);
 }

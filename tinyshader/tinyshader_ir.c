@@ -2895,97 +2895,86 @@ uint32_t *ts__irModuleCodegen(Module *mod, size_t *word_count)
     m->glsl_ext_inst = irModuleReserveId(m);
 
     // Add functions / globals
-    for (uint32_t i = 0; i < arrLength(m->mod->files); ++i)
+    for (uint32_t i = 0; i < mod->decl_count; ++i)
     {
-        File *file = m->mod->files[i];
-
-        for (uint32_t j = 0; j < arrLength(file->decls); ++j)
+        AstDecl *decl = mod->decls[i];
+        switch (decl->kind)
         {
-            AstDecl *decl = file->decls[j];
-            switch (decl->kind)
+        case DECL_FUNC: {
+            assert(decl->type);
+
+            if (!decl->func.called) break;
+
+            IRType *ir_type = convertTypeToIR(m->mod, m, decl->type);
+            decl->value = irAddFunction(m, ir_type);
+
+            for (uint32_t k = 0; k < arrLength(decl->func.func_params); ++k)
             {
-            case DECL_FUNC: {
-                assert(decl->type);
-
-                if (!decl->func.called) break;
-
-                IRType *ir_type = convertTypeToIR(m->mod, m, decl->type);
-                decl->value = irAddFunction(m, ir_type);
-
-                for (uint32_t k = 0; k < arrLength(decl->func.func_params); ++k)
+                AstDecl *param = decl->func.func_params[k];
+                IRType *ir_param_type = convertTypeToIR(m->mod, m, param->type);
+                bool by_reference = false;
+                if (param->var.kind == VAR_IN_PARAM || param->var.kind == VAR_OUT_PARAM ||
+                    param->var.kind == VAR_INOUT_PARAM)
                 {
-                    AstDecl *param = decl->func.func_params[k];
-                    IRType *ir_param_type = convertTypeToIR(m->mod, m, param->type);
-                    bool by_reference = false;
-                    if (param->var.kind == VAR_IN_PARAM ||
-                        param->var.kind == VAR_OUT_PARAM ||
-                        param->var.kind == VAR_INOUT_PARAM)
-                    {
-                        ir_param_type =
-                            irNewPointerType(m, SpvStorageClassFunction, ir_param_type);
-                        by_reference = true;
-                    }
-                    param->value =
-                        irAddFuncParam(m, decl->value, ir_param_type, by_reference);
+                    ir_param_type =
+                        irNewPointerType(m, SpvStorageClassFunction, ir_param_type);
+                    by_reference = true;
                 }
-
-                for (uint32_t k = 0; k < arrLength(decl->func.inputs); ++k)
-                {
-                    AstDecl *input = decl->func.inputs[k];
-                    IRType *ir_param_type = convertTypeToIR(m->mod, m, input->type);
-                    input->value = irAddInput(m, decl->value, ir_param_type);
-                    input->value->decorations = input->decorations;
-                }
-
-                for (uint32_t k = 0; k < arrLength(decl->func.outputs); ++k)
-                {
-                    AstDecl *output = decl->func.outputs[k];
-                    IRType *ir_param_type = convertTypeToIR(m->mod, m, output->type);
-                    output->value = irAddOutput(m, decl->value, ir_param_type);
-                    output->value->decorations = output->decorations;
-                }
-
-                break;
+                param->value =
+                    irAddFuncParam(m, decl->value, ir_param_type, by_reference);
             }
 
-            case DECL_VAR: {
-                IRType *ir_type = convertTypeToIR(m->mod, m, decl->type);
-                SpvStorageClass storage_class;
-                if (decl->var.kind == VAR_UNIFORM)
-                {
-                    switch (ir_type->kind)
-                    {
-                    case IR_TYPE_SAMPLER:
-                    case IR_TYPE_IMAGE:
-                    case IR_TYPE_SAMPLED_IMAGE:
-                        storage_class = SpvStorageClassUniformConstant;
-                        break;
-                    default: storage_class = SpvStorageClassUniform; break;
-                    }
-                }
-                else
-                {
-                    assert(0);
-                }
-                decl->value = irAddGlobal(m, ir_type, storage_class);
-                decl->value->decorations = decl->decorations;
-                break;
+            for (uint32_t k = 0; k < arrLength(decl->func.inputs); ++k)
+            {
+                AstDecl *input = decl->func.inputs[k];
+                IRType *ir_param_type = convertTypeToIR(m->mod, m, input->type);
+                input->value = irAddInput(m, decl->value, ir_param_type);
+                input->value->decorations = input->decorations;
             }
 
-            default: break;
+            for (uint32_t k = 0; k < arrLength(decl->func.outputs); ++k)
+            {
+                AstDecl *output = decl->func.outputs[k];
+                IRType *ir_param_type = convertTypeToIR(m->mod, m, output->type);
+                output->value = irAddOutput(m, decl->value, ir_param_type);
+                output->value->decorations = output->decorations;
             }
+
+            break;
+        }
+
+        case DECL_VAR: {
+            IRType *ir_type = convertTypeToIR(m->mod, m, decl->type);
+            SpvStorageClass storage_class;
+            if (decl->var.kind == VAR_UNIFORM)
+            {
+                switch (ir_type->kind)
+                {
+                case IR_TYPE_SAMPLER:
+                case IR_TYPE_IMAGE:
+                case IR_TYPE_SAMPLED_IMAGE:
+                    storage_class = SpvStorageClassUniformConstant;
+                    break;
+                default: storage_class = SpvStorageClassUniform; break;
+                }
+            }
+            else
+            {
+                assert(0);
+            }
+            decl->value = irAddGlobal(m, ir_type, storage_class);
+            decl->value->decorations = decl->decorations;
+            break;
+        }
+
+        default: break;
         }
     }
 
-    for (uint32_t i = 0; i < arrLength(m->mod->files); ++i)
+    for (uint32_t i = 0; i < mod->decl_count; ++i)
     {
-        File *file = m->mod->files[i];
-
-        for (uint32_t j = 0; j < arrLength(file->decls); ++j)
-        {
-            AstDecl *decl = file->decls[j];
-            irModuleBuildDecl(m, decl);
-        }
+        AstDecl *decl = mod->decls[i];
+        irModuleBuildDecl(m, decl);
     }
 
     irModuleEncodeModule(m);

@@ -34,7 +34,8 @@ TsCompiler *tsCompilerCreate()
     ts__hashSet(&compiler->keyword_table, "in", (void *)TOKEN_IN);
     ts__hashSet(&compiler->keyword_table, "out", (void *)TOKEN_OUT);
     ts__hashSet(&compiler->keyword_table, "inout", (void *)TOKEN_INOUT);
-    ts__hashSet(&compiler->keyword_table, "ConstantBuffer", (void *)TOKEN_CONSTANT_BUFFER);
+    ts__hashSet(
+        &compiler->keyword_table, "ConstantBuffer", (void *)TOKEN_CONSTANT_BUFFER);
     ts__hashSet(&compiler->keyword_table, "SamplerState", (void *)TOKEN_SAMPLER_STATE);
     ts__hashSet(&compiler->keyword_table, "Texture1D", (void *)TOKEN_TEXTURE_1D);
     ts__hashSet(&compiler->keyword_table, "Texture2D", (void *)TOKEN_TEXTURE_2D);
@@ -82,7 +83,8 @@ TsCompiler *tsCompilerCreate()
     ts__hashSet(&compiler->keyword_table, "smoothstep", (void *)TOKEN_BUILTIN_SMOOTHSTEP);
 
     ts__hashSet(&compiler->keyword_table, "transpose", (void *)TOKEN_BUILTIN_TRANSPOSE);
-    ts__hashSet(&compiler->keyword_table, "determinant", (void *)TOKEN_BUILTIN_DETERMINANT);
+    ts__hashSet(
+        &compiler->keyword_table, "determinant", (void *)TOKEN_BUILTIN_DETERMINANT);
 
     ts__hashSet(&compiler->keyword_table, "uint", (void *)TOKEN_UINT);
     ts__hashSet(&compiler->keyword_table, "int", (void *)TOKEN_INT);
@@ -117,7 +119,6 @@ moduleInit(Module *m, TsCompiler *compiler, const char *entry_point, TsShaderSta
 static void moduleDestroy(Module *m)
 {
     ts__hashDestroy(&m->type_cache);
-    arrFree(m->files);
 }
 
 static bool handleErrors(TsCompiler *compiler, TsCompilerOutput *output)
@@ -129,9 +130,9 @@ static bool handleErrors(TsCompiler *compiler, TsCompilerOutput *output)
         for (uint32_t i = 0; i < arrLength(compiler->errors); ++i)
         {
             Error *err = &compiler->errors[i];
-            if (err->loc.file && err->loc.file->path)
+            if (err->loc.path)
             {
-                ts__sbAppend(&compiler->sb, err->loc.file->path);
+                ts__sbAppend(&compiler->sb, err->loc.path);
                 ts__sbAppend(&compiler->sb, ":");
             }
             ts__sbSprintf(
@@ -158,36 +159,29 @@ void tsCompile(TsCompiler *compiler, TsCompilerInput *input, TsCompilerOutput *o
 
     assert(input->entry_point);
 
-    {
-        File *file = NEW(compiler, File);
-        file->path = input->path;
-        file->text = input->input;
-        file->text_size = input->input_size;
-
-        arrPush(compiler->file_queue, file);
-    }
+    File *file = NEW(compiler, File);
+    file->path = input->path;
+    file->text = input->input;
+    file->text_size = input->input_size;
 
     Module *module = NEW(compiler, Module);
     moduleInit(module, compiler, input->entry_point, input->stage);
 
-    while (arrLength(compiler->file_queue) > 0)
-    {
-        File *file = compiler->file_queue[arrLength(compiler->file_queue) - 1];
-        arrPop(compiler->file_queue);
+    Preprocessor p = {0};
+    size_t text_size = 0;
+    char *text = ts__preprocessRootFile(&p, compiler, file, &text_size);
+    if (handleErrors(compiler, output)) return;
 
-        Lexer lexer = {0};
-        ts__lexerLex(&lexer, compiler, file);
-        if (handleErrors(compiler, output)) return;
+    Lexer lexer = {0};
+    ts__lexerLex(&lexer, compiler, text, text_size);
+    if (handleErrors(compiler, output)) return;
 
-        Parser parser = {0};
-        ts__parserParse(&parser, compiler, file);
-        if (handleErrors(compiler, output)) return;
-
-        arrPush(module->files, file);
-    }
+    Parser parser = {0};
+    ts__parserParse(&parser, compiler, lexer.tokens, arrLength(lexer.tokens));
+    if (handleErrors(compiler, output)) return;
 
     Analyzer analyzer = {0};
-    ts__analyzerAnalyze(&analyzer, compiler, module);
+    ts__analyzerAnalyze(&analyzer, compiler, module, parser.decls, arrLength(parser.decls));
     if (handleErrors(compiler, output)) return;
 
     size_t word_count;

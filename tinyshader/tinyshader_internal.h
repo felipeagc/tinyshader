@@ -105,7 +105,7 @@ typedef struct AstDecl AstDecl;
 
 typedef struct Location
 {
-    File *file;
+    char *path;
     uint32_t pos;
     uint32_t length;
     uint32_t line;
@@ -1009,7 +1009,6 @@ typedef struct TsCompiler
     HashMap keyword_table;
     HashMap files; // Maps absolute paths to files
 
-    /*array*/ File **file_queue;
     /*array*/ Error *errors;
 } TsCompiler;
 
@@ -1024,22 +1023,32 @@ struct File
 
     char *path;
     char *dir;
-
-    /*array*/ Token *tokens;
-    /*array*/ AstDecl **decls;
 };
 
 struct Module
 {
     TsCompiler *compiler;
     Scope *scope;
-    /*array*/ File **files;
 
     const char *entry_point; // Requested entry point name
     TsShaderStage stage;
 
     HashMap type_cache;
+
+    AstDecl **decls;
+    size_t decl_count;
 };
+
+//
+// Preprocessor
+//
+
+typedef struct Preprocessor
+{
+    TsCompiler *compiler;
+    StringBuilder sb;
+    HashMap defines;
+} Preprocessor;
 
 //
 // Lexer
@@ -1048,22 +1057,37 @@ struct Module
 typedef struct Lexer
 {
     TsCompiler *compiler;
-    File *file;
 
+    char *text;
+    size_t text_size;
     Token token;
 
+    /*array*/ Token *tokens;
+
+    char *file_path;
     size_t pos;
     uint32_t line;
     uint32_t col;
 } Lexer;
 
+//
+// Parser
+//
+
 typedef struct Parser
 {
     TsCompiler *compiler;
-    File *file;
+    Token *tokens;
+    size_t token_count;
+
+    /*array*/ AstDecl **decls;
 
     size_t pos;
 } Parser;
+
+//
+// Analyzer
+//
 
 typedef struct Analyzer
 {
@@ -1102,9 +1126,16 @@ char *ts__sbBuild(StringBuilder *sb, BumpAlloc *bump);
 
 void ts__addErr(TsCompiler *compiler, Location *loc, const char *msg);
 
-void ts__lexerLex(Lexer *l, TsCompiler *compiler, File *file);
-void ts__parserParse(Parser *p, TsCompiler *compiler, File *file);
-void ts__analyzerAnalyze(Analyzer *a, TsCompiler *compiler, Module *module);
+char *ts__preprocessRootFile(
+    Preprocessor *p, TsCompiler *compiler, File *file, size_t *out_length);
+void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size);
+void ts__parserParse(Parser *p, TsCompiler *compiler, Token *tokens, size_t token_count);
+void ts__analyzerAnalyze(
+    Analyzer *a,
+    TsCompiler *compiler,
+    Module *module,
+    AstDecl **decls,
+    size_t decl_count);
 
 AstType *ts__getScalarType(AstType *type);
 AstType *ts__getComparableType(AstType *type);
