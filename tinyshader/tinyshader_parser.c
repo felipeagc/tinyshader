@@ -15,6 +15,11 @@ static inline bool isAlphanum(char c)
     return isLetter(c) || isNumeric(c);
 }
 
+static inline bool isWhitespace(char c)
+{
+    return (c == ' ') || (c == '\t');
+}
+
 ////////////////////////////////
 //
 // Preprocessor
@@ -23,10 +28,13 @@ static inline bool isAlphanum(char c)
 
 typedef struct PreprocessorFile
 {
+    TsCompiler *compiler;
     File *file;
     size_t pos;
     uint32_t line;
     uint32_t col;
+
+    /*array*/ bool *if_stack;
 } PreprocessorFile;
 
 static inline bool preprocIsAtEnd(PreprocessorFile *f)
@@ -47,11 +55,47 @@ static inline char preprocPeek(PreprocessorFile *f, size_t offset)
     return f->file->text[f->pos + offset];
 }
 
-static void preprocessFile(Preprocessor *p, PreprocessorFile *f)
+static Location preprocErrLoc(PreprocessorFile *f)
 {
-    f->col = 1;
-    f->line = 1;
+    Location err_loc = {0};
+    err_loc.path = f->file->path;
+    err_loc.pos = f->pos;
+    err_loc.line = f->line;
+    err_loc.col = f->col;
+    err_loc.length = 1;
+    return err_loc;
+}
 
+static inline bool preprocConsume1(PreprocessorFile *f, char c)
+{
+    if (preprocPeek(f, 0) != c)
+    {
+        Location err_loc = preprocErrLoc(f);
+        ts__addErr(f->compiler, &err_loc, "unexpected character");
+        preprocNext(f, 1);
+        return false;
+    }
+    return true;
+}
+
+static inline bool preprocSkipWhitespace1(PreprocessorFile *f)
+{
+    if (!isWhitespace(preprocPeek(f, 0)))
+    {
+        Location err_loc = preprocErrLoc(f);
+        ts__addErr(f->compiler, &err_loc, "expecting whitespace");
+        preprocNext(f, 1);
+        return false;
+    }
+    while (isWhitespace(preprocPeek(f, 0)))
+    {
+        preprocNext(f, 1);
+    }
+    return true;
+}
+
+static void preprocPrintLoc(Preprocessor *p, PreprocessorFile *f)
+{
     if (f->file->path)
     {
         ts__sbSprintf(
@@ -65,6 +109,25 @@ static void preprocessFile(Preprocessor *p, PreprocessorFile *f)
     {
         ts__sbSprintf(&p->sb, "# %zu \n", f->line);
     }
+}
+
+static bool preprocCanInsert(PreprocessorFile *f)
+{
+    bool can_insert = true;
+    if (arrLength(f->if_stack) > 0 && !(*arrLast(f->if_stack)))
+    {
+        can_insert = false;
+    }
+    return can_insert;
+}
+
+static void preprocessFile(Preprocessor *p, PreprocessorFile *f)
+{
+    f->col = 1;
+    f->line = 1;
+    f->compiler = p->compiler;
+
+    preprocPrintLoc(p, f);
 
     while (!preprocIsAtEnd(f))
     {
@@ -75,16 +138,143 @@ static void preprocessFile(Preprocessor *p, PreprocessorFile *f)
             char *curr = &f->file->text[f->pos];
             if (strncmp(curr, "#define", strlen("#define")) == 0)
             {
-                assert(0); // TODO: implement
+                if (preprocCanInsert(f))
+                {
+                    preprocNext(f, strlen("#define"));
+                    if (!preprocSkipWhitespace1(f)) break;
+
+                    size_t ident_start = f->pos;
+
+                    while (!preprocIsAtEnd(f) && isAlphanum(preprocPeek(f, 0)))
+                    {
+                        preprocNext(f, 1);
+                    }
+
+                    size_t ident_length = f->pos - ident_start;
+
+                    if (ident_length == 0)
+                    {
+                        Location err_loc = preprocErrLoc(f);
+                        ts__addErr(
+                            p->compiler, &err_loc, "expected idenfier for #define");
+                        break;
+                    }
+
+                    char *ident = NEW_ARRAY(p->compiler, char, ident_length + 1);
+                    memcpy(ident, &f->file->text[ident_start], ident_length);
+                    ident[ident_length] = '\0';
+
+                    ts__hashSet(&p->defines, ident, NULL);
+                }
+            }
+            else if (strncmp(curr, "#undef", strlen("#undef")) == 0)
+            {
+                if (preprocCanInsert(f))
+                {
+                    preprocNext(f, strlen("#undef"));
+                    if (!preprocSkipWhitespace1(f)) break;
+
+                    size_t ident_start = f->pos;
+
+                    while (!preprocIsAtEnd(f) && isAlphanum(preprocPeek(f, 0)))
+                    {
+                        preprocNext(f, 1);
+                    }
+
+                    size_t ident_length = f->pos - ident_start;
+
+                    if (ident_length == 0)
+                    {
+                        Location err_loc = preprocErrLoc(f);
+                        ts__addErr(p->compiler, &err_loc, "expected idenfier for #undef");
+                        break;
+                    }
+
+                    char *ident = NEW_ARRAY(p->compiler, char, ident_length + 1);
+                    memcpy(ident, &f->file->text[ident_start], ident_length);
+                    ident[ident_length] = '\0';
+
+                    ts__hashRemove(&p->defines, ident);
+                }
+            }
+            else if (strncmp(curr, "#ifdef", strlen("#ifdef")) == 0)
+            {
+                if (preprocCanInsert(f))
+                {
+                    preprocNext(f, strlen("#ifdef"));
+                    if (!preprocSkipWhitespace1(f)) break;
+
+                    size_t ident_start = f->pos;
+
+                    while (!preprocIsAtEnd(f) && isAlphanum(preprocPeek(f, 0)))
+                    {
+                        preprocNext(f, 1);
+                    }
+
+                    size_t ident_length = f->pos - ident_start;
+
+                    if (ident_length == 0)
+                    {
+                        Location err_loc = preprocErrLoc(f);
+                        ts__addErr(p->compiler, &err_loc, "expected idenfier for #ifdef");
+                        break;
+                    }
+
+                    char *ident = NEW_ARRAY(p->compiler, char, ident_length + 1);
+                    memcpy(ident, &f->file->text[ident_start], ident_length);
+                    ident[ident_length] = '\0';
+
+                    void *result;
+                    arrPush(f->if_stack, ts__hashGet(&p->defines, ident, &result));
+                }
+            }
+            else if (strncmp(curr, "#ifndef", strlen("#ifndef")) == 0)
+            {
+                if (preprocCanInsert(f))
+                {
+                    preprocNext(f, strlen("#ifndef"));
+                    if (!preprocSkipWhitespace1(f)) break;
+
+                    size_t ident_start = f->pos;
+
+                    while (!preprocIsAtEnd(f) && isAlphanum(preprocPeek(f, 0)))
+                    {
+                        preprocNext(f, 1);
+                    }
+
+                    size_t ident_length = f->pos - ident_start;
+
+                    if (ident_length == 0)
+                    {
+                        Location err_loc = preprocErrLoc(f);
+                        ts__addErr(
+                            p->compiler, &err_loc, "expected idenfier for #ifndef");
+                        break;
+                    }
+
+                    char *ident = NEW_ARRAY(p->compiler, char, ident_length + 1);
+                    memcpy(ident, &f->file->text[ident_start], ident_length);
+                    ident[ident_length] = '\0';
+
+                    void *result;
+                    arrPush(f->if_stack, !ts__hashGet(&p->defines, ident, &result));
+                }
+            }
+            else if (strncmp(curr, "#endif", strlen("#endif")) == 0)
+            {
+                preprocNext(f, strlen("#endif"));
+
+                if (arrLength(f->if_stack) == 0)
+                {
+                    Location err_loc = preprocErrLoc(f);
+                    ts__addErr(p->compiler, &err_loc, "unmatched #endif");
+                    break;
+                }
+                arrPop(f->if_stack);
             }
             else
             {
-                Location err_loc = {0};
-                err_loc.path = f->file->path;
-                err_loc.pos = f->pos;
-                err_loc.line = f->line;
-                err_loc.col = f->col;
-                err_loc.length = 1;
+                Location err_loc = preprocErrLoc(f);
                 ts__addErr(p->compiler, &err_loc, "unexpected preprocessor directive");
             }
 
@@ -92,6 +282,14 @@ static void preprocessFile(Preprocessor *p, PreprocessorFile *f)
             {
                 preprocNext(f, 1);
             }
+
+            if (!preprocIsAtEnd(f) && preprocPeek(f, 0) == '\n')
+            {
+                preprocNext(f, 1);
+                f->line++;
+            }
+
+            preprocPrintLoc(p, f);
             break;
         }
 
@@ -99,16 +297,30 @@ static void preprocessFile(Preprocessor *p, PreprocessorFile *f)
             f->col = 0;
             f->line++;
             preprocNext(f, 1);
-            ts__sbAppendChar(&p->sb, c);
+
+            if (preprocCanInsert(f))
+            {
+                ts__sbAppendChar(&p->sb, c);
+            }
             break;
         }
 
         default: {
             preprocNext(f, 1);
-            ts__sbAppendChar(&p->sb, c);
+
+            if (preprocCanInsert(f))
+            {
+                ts__sbAppendChar(&p->sb, c);
+            }
             break;
         }
         }
+    }
+
+    if (arrLength(f->if_stack) > 0)
+    {
+        Location err_loc = preprocErrLoc(f);
+        ts__addErr(p->compiler, &err_loc, "expected #endif");
     }
 }
 
@@ -120,6 +332,8 @@ char *ts__preprocessRootFile(
     PreprocessorFile pfile = {0};
     pfile.file = file;
 
+    ts__hashInit(&p->defines, 0);
+
     ts__sbInit(&p->sb);
 
     preprocessFile(p, &pfile);
@@ -128,6 +342,8 @@ char *ts__preprocessRootFile(
 
     printf("%s\n", buffer);
 
+    arrFree(pfile.if_stack);
+    ts__hashDestroy(&p->defines);
     ts__sbDestroy(&p->sb);
     return buffer;
 }
@@ -158,8 +374,7 @@ static inline char lexerPeek(Lexer *l, size_t offset)
 
 static inline bool lexerConsume(Lexer *l, char c)
 {
-    char otherc = lexerPeek(l, 0);
-    if (otherc != c)
+    if (lexerPeek(l, 0) != c)
     {
         Location err_loc = {0};
         err_loc.length = 1;

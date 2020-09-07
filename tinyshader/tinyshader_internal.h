@@ -1107,6 +1107,7 @@ typedef struct Analyzer
 void ts__hashInit(HashMap *map, uint64_t size);
 void *ts__hashSet(HashMap *map, const char *key, void *value);
 bool ts__hashGet(HashMap *map, const char *key, void **result);
+void ts__hashRemove(HashMap *map, const char *key);
 void ts__hashDestroy(HashMap *map);
 
 void ts__bumpInit(BumpAlloc *alloc, size_t block_size);

@@ -65,8 +65,8 @@ static uint64_t hashSetInternal(HashMap *map, const char *key, uint64_t index)
     uint64_t hash = hashStr(key);
     uint64_t i = hash & (map->size - 1);
     uint64_t iters = 0;
-    while ((map->hashes[i] != hash || strcmp(map->keys[i], key) != 0) && map->hashes[i] != 0 &&
-           iters < map->size)
+    while ((map->hashes[i] != hash || strcmp(map->keys[i], key) != 0) &&
+           map->hashes[i] != 0 && iters < map->size)
     {
         i = (i + 1) & (map->size - 1);
         iters++;
@@ -98,8 +98,8 @@ bool ts__hashGet(HashMap *map, const char *key, void **result)
     uint64_t hash = hashStr(key);
     uint64_t i = hash & (map->size - 1);
     uint64_t iters = 0;
-    while ((map->hashes[i] != hash || strcmp(map->keys[i], key) != 0) && map->hashes[i] != 0 &&
-           iters < map->size)
+    while ((map->hashes[i] != hash || strcmp(map->keys[i], key) != 0) &&
+           map->hashes[i] != 0 && iters < map->size)
     {
         i = (i + 1) & (map->size - 1);
         iters++;
@@ -116,6 +116,26 @@ bool ts__hashGet(HashMap *map, const char *key, void **result)
     }
 
     return false;
+}
+
+void ts__hashRemove(HashMap *map, const char *key)
+{
+    uint64_t hash = hashStr(key);
+    uint64_t i = hash & (map->size - 1);
+    uint64_t iters = 0;
+    while ((map->hashes[i] != hash || strcmp(map->keys[i], key) != 0) &&
+           map->hashes[i] != 0 && iters < map->size)
+    {
+        i = (i + 1) & (map->size - 1);
+        iters++;
+    }
+
+    if (iters >= map->size)
+    {
+        return;
+    }
+
+    map->hashes[i] = 0;
 }
 
 static void hashGrow(HashMap *map)
