@@ -170,18 +170,21 @@ static void preprocessFile(Preprocessor *p, PreprocessorFile *f)
                     {
                         preprocSkipWhitespace1(f);
 
-                        size_t value_start = f->pos;
+                        ts__sbReset(&p->compiler->sb);
 
                         while (!preprocIsAtEnd(f) && preprocPeek(f, 0) != '\n')
                         {
+                            if (preprocPeek(f, 0) == '\\' && preprocPeek(f, 1) == '\n')
+                            {
+                                f->line++;
+                                preprocNext(f, 1);
+                            }
+                            ts__sbAppendChar(&p->compiler->sb, preprocPeek(f, 0));
                             preprocNext(f, 1);
                         }
 
-                        size_t value_length = f->pos - value_start;
-
-                        defined_value = NEW_ARRAY(p->compiler, char, value_length + 1);
-                        memcpy(defined_value, &f->file->text[value_start], value_length);
-                        defined_value[value_length] = '\0';
+                        defined_value =
+                            ts__sbBuild(&p->compiler->sb, &p->compiler->alloc);
                     }
 
                     ts__hashSet(&p->defines, ident, defined_value);
