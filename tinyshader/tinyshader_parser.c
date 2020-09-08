@@ -164,7 +164,27 @@ static void preprocessFile(Preprocessor *p, PreprocessorFile *f)
                     memcpy(ident, &f->file->text[ident_start], ident_length);
                     ident[ident_length] = '\0';
 
-                    ts__hashSet(&p->defines, ident, NULL);
+                    char *defined_value = NULL;
+
+                    if (!preprocIsAtEnd(f) && isWhitespace(preprocPeek(f, 0)))
+                    {
+                        preprocSkipWhitespace1(f);
+
+                        size_t value_start = f->pos;
+
+                        while (!preprocIsAtEnd(f) && preprocPeek(f, 0) != '\n')
+                        {
+                            preprocNext(f, 1);
+                        }
+
+                        size_t value_length = f->pos - value_start;
+
+                        defined_value = NEW_ARRAY(p->compiler, char, value_length + 1);
+                        memcpy(defined_value, &f->file->text[value_start], value_length);
+                        defined_value[value_length] = '\0';
+                    }
+
+                    ts__hashSet(&p->defines, ident, defined_value);
                 }
             }
             else if (strncmp(curr, "#undef", strlen("#undef")) == 0)
@@ -306,12 +326,43 @@ static void preprocessFile(Preprocessor *p, PreprocessorFile *f)
         }
 
         default: {
-            preprocNext(f, 1);
-
-            if (preprocCanInsert(f))
+            if (isLetter(preprocPeek(f, 0)))
             {
-                ts__sbAppendChar(&p->sb, c);
+                size_t ident_start = f->pos;
+
+                while (!preprocIsAtEnd(f) && isAlphanum(preprocPeek(f, 0)))
+                {
+                    preprocNext(f, 1);
+                }
+
+                size_t ident_length = f->pos - ident_start;
+
+                char *ident = calloc(1, ident_length + 1);
+                memcpy(ident, &f->file->text[ident_start], ident_length);
+                ident[ident_length] = '\0';
+
+                char *value;
+                if (ts__hashGet(&p->defines, ident, (void **)&value))
+                {
+                    if (value) ts__sbAppend(&p->sb, value);
+                }
+                else
+                {
+                    ts__sbAppend(&p->sb, ident);
+                }
+
+                free(ident);
             }
+            else
+            {
+                preprocNext(f, 1);
+
+                if (preprocCanInsert(f))
+                {
+                    ts__sbAppendChar(&p->sb, c);
+                }
+            }
+
             break;
         }
         }
