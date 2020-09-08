@@ -353,6 +353,65 @@ static void preprocessFile(Preprocessor *p, PreprocessorFile *f)
 
                 free(ident);
             }
+            else if (preprocPeek(f, 0) == '/' && preprocPeek(f, 1) == '/')
+            {
+                size_t comment_start = f->pos;
+
+                preprocNext(f, 2);
+
+                while (!preprocIsAtEnd(f) && preprocPeek(f, 0) != '\n')
+                {
+                    preprocNext(f, 1);
+                }
+
+                size_t comment_length = f->pos - comment_start;
+
+                char *comment = calloc(1, comment_length + 1);
+                memcpy(comment, &f->file->text[comment_start], comment_length);
+                comment[comment_length] = '\0';
+
+                ts__sbAppend(&p->sb, comment);
+
+                free(comment);
+            }
+            else if (preprocPeek(f, 0) == '/' && preprocPeek(f, 1) == '*')
+            {
+                size_t comment_start = f->pos;
+
+                // Multiline comment
+                preprocNext(f, 2);
+
+                while ((preprocPeek(f, 0) != '*' || preprocPeek(f, 1) != '/') &&
+                       !preprocIsAtEnd(f))
+                {
+                    if (preprocPeek(f, 0) == '\n')
+                    {
+                        ++f->line;
+                        f->col = 0;
+                    }
+                    preprocNext(f, 1);
+                }
+
+                if (!preprocIsAtEnd(f))
+                {
+                    preprocNext(f, 2);
+                }
+                else
+                {
+                    Location err_loc = preprocErrLoc(f);
+                    ts__addErr(f->compiler, &err_loc, "unclosed comment");
+                }
+
+                size_t comment_length = f->pos - comment_start;
+
+                char *comment = calloc(1, comment_length + 1);
+                memcpy(comment, &f->file->text[comment_start], comment_length);
+                comment[comment_length] = '\0';
+
+                ts__sbAppend(&p->sb, comment);
+
+                free(comment);
+            }
             else
             {
                 preprocNext(f, 1);
