@@ -13,7 +13,11 @@ add_library(
 	tinyshader/tinyshader_analysis.c
 	tinyshader/spirv.h)
 
-target_compile_options(tinyshader PRIVATE -Wall -Wextra -Wno-unused-function)
+if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+else()
+	target_compile_options(tinyshader PRIVATE -Wall -Wextra -Wno-unused-function)
+endif()
+
 target_include_directories(tinyshader PUBLIC tinyshader)
 
 add_executable(tsc tsc/tsc.c)
