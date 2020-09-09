@@ -151,6 +151,15 @@ static bool handleErrors(TsCompiler *compiler, TsCompilerOutput *output)
     return false;
 }
 
+File *ts__createFile(TsCompiler *compiler, char *text, size_t text_size, char *path)
+{
+    File *file = NEW(compiler, File);
+    file->path = ts__getAbsolutePath(compiler, path);
+    file->text = text;
+    file->text_size = text_size;
+    return file;
+}
+
 void tsCompile(TsCompiler *compiler, TsCompilerInput *input, TsCompilerOutput *output)
 {
     assert(compiler);
@@ -159,10 +168,7 @@ void tsCompile(TsCompiler *compiler, TsCompilerInput *input, TsCompilerOutput *o
 
     assert(input->entry_point);
 
-    File *file = NEW(compiler, File);
-    file->path = input->path;
-    file->text = input->input;
-    file->text_size = input->input_size;
+    File *file = ts__createFile(compiler, input->input, input->input_size, input->path);
 
     Module *module = NEW(compiler, Module);
     moduleInit(module, compiler, input->entry_point, input->stage);
@@ -181,7 +187,8 @@ void tsCompile(TsCompiler *compiler, TsCompilerInput *input, TsCompilerOutput *o
     if (handleErrors(compiler, output)) return;
 
     Analyzer analyzer = {0};
-    ts__analyzerAnalyze(&analyzer, compiler, module, parser.decls, arrLength(parser.decls));
+    ts__analyzerAnalyze(
+        &analyzer, compiler, module, parser.decls, arrLength(parser.decls));
     if (handleErrors(compiler, output)) return;
 
     size_t word_count;

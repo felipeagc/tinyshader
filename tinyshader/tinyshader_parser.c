@@ -75,6 +75,7 @@ static inline bool preprocConsume1(PreprocessorFile *f, char c)
         preprocNext(f, 1);
         return false;
     }
+    preprocNext(f, 1);
     return true;
 }
 
@@ -121,8 +122,11 @@ static bool preprocCanInsert(PreprocessorFile *f)
     return can_insert;
 }
 
-static void preprocessFile(Preprocessor *p, PreprocessorFile *f)
+static void preprocessFile(Preprocessor *p, File *file)
 {
+    PreprocessorFile *f = NEW(p->compiler, PreprocessorFile);
+
+    f->file = file;
     f->col = 1;
     f->line = 1;
     f->compiler = p->compiler;
@@ -295,6 +299,77 @@ static void preprocessFile(Preprocessor *p, PreprocessorFile *f)
                 }
                 arrPop(f->if_stack);
             }
+            else if (strncmp(curr, "#include", strlen("#include")) == 0)
+            {
+                if (preprocCanInsert(f))
+                {
+                    preprocNext(f, strlen("#include"));
+                    if (!preprocSkipWhitespace1(f)) break;
+
+                    if (!preprocConsume1(f, '\"')) break;
+
+                    size_t path_start = f->pos;
+
+                    while (!preprocIsAtEnd(f) && (preprocPeek(f, 0) != '\"'))
+                    {
+                        preprocNext(f, 1);
+                    }
+
+                    size_t path_length = f->pos - path_start;
+
+                    char *path = NEW_ARRAY(p->compiler, char, path_length + 1);
+                    memcpy(path, &f->file->text[path_start], path_length);
+                    path[path_length] = '\0';
+
+                    if (!preprocConsume1(f, '\"')) break;
+
+                    if (!f->file->path)
+                    {
+                        Location err_loc = preprocErrLoc(f);
+                        ts__addErr(
+                            f->compiler,
+                            &err_loc,
+                            "#include only works if you supply a path for the file "
+                            "during compilation");
+                        break;
+                    }
+
+                    char *this_path = ts__getAbsolutePath(f->compiler, f->file->path);
+                    char *dir_path = ts__getPathDir(f->compiler, this_path);
+                    char *full_path = ts__pathConcat(f->compiler, dir_path, path);
+                    bool exists = ts__fileExists(f->compiler, full_path);
+
+                    if (!this_path || !dir_path || !full_path || !exists)
+                    {
+                        Location err_loc = preprocErrLoc(f);
+                        ts__addErr(
+                            f->compiler, &err_loc, "#include'd file does not exist");
+                        break;
+                    }
+
+                    FILE *cfile = fopen(full_path, "rb");
+                    if (!cfile)
+                    {
+                        Location err_loc = preprocErrLoc(f);
+                        ts__addErr(f->compiler, &err_loc, "could not open included file");
+                        break;
+                    }
+
+                    fseek(cfile, 0, SEEK_END);
+                    size_t text_size = ftell(cfile);
+                    fseek(cfile, 0, SEEK_SET);
+
+                    char *text = NEW_ARRAY_UNINIT(p->compiler, char, text_size);
+                    fread(text, 1, text_size, cfile);
+
+                    fclose(cfile);
+
+                    File *new_file =
+                        ts__createFile(f->compiler, text, text_size, full_path);
+
+                    preprocessFile(p, new_file);
+                }
+            }
             else
             {
                 Location err_loc = preprocErrLoc(f);
@@ -329,6 +404,12 @@ static void preprocessFile(Preprocessor *p, PreprocessorFile *f)
         }
 
         default: {
+            if (!preprocCanInsert(f))
+            {
+                preprocNext(f, 1);
+                break;
+            }
+
             if (isLetter(preprocPeek(f, 0)))
             {
                 size_t ident_start = f->pos;
@@ -435,6 +516,8 @@ static void preprocessFile(Preprocessor *p, PreprocessorFile *f)
         Location err_loc = preprocErrLoc(f);
         ts__addErr(p->compiler, &err_loc, "expected #endif");
     }
+
+    arrFree(f->if_stack);
 }
 
 char *ts__preprocessRootFile(
@@ -442,20 +525,16 @@ char *ts__preprocessRootFile(
 {
     p->compiler = compiler;
 
-    PreprocessorFile pfile = {0};
-    pfile.file = file;
-
     ts__hashInit(&p->defines, 0);
 
     ts__sbInit(&p->sb);
 
-    preprocessFile(p, &pfile);
+    preprocessFile(p, file);
     char *buffer = ts__sbBuild(&p->sb, &compiler->alloc);
     *out_length = strlen(buffer);
 
     printf("%s\n", buffer);
 
-    arrFree(pfile.if_stack);
     ts__hashDestroy(&p->defines);
     ts__sbDestroy(&p->sb);
     return buffer;

@@ -1,5 +1,200 @@
 #include "tinyshader_internal.h"
 
+#define TS_PATHSEP '/'
+
+#if defined(__unix__) || defined(__APPLE__)
+#include <limits.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <spawn.h>
+
+extern char **environ;
+#endif
+
+#if defined(__APPLE__)
+#include <mach-o/dyld.h>
+#endif
+
+#if defined(_WIN32)
+#include <windows.h>
+#include <shlwapi.h>
+
+#pragma comment(lib, "advapi32.lib")
+#pragma comment(lib, "ole32.lib")
+#pragma comment(lib, "oleaut32.lib")
+#pragma comment(lib, "Shlwapi.lib")
+
+#undef TS_PATHSEP
+#define TS_PATHSEP '\\'
+#endif
+
+////////////////////////////////
+//
+// Paths
+//
+////////////////////////////////
+
+#if defined(_WIN32)
+static char *utf16ToUtf8(TsCompiler *compiler, wchar_t *source)
+{
+    size_t required_size =
+        WideCharToMultiByte(CP_UTF8, 0, source, -1, NULL, 0, NULL, NULL);
+    char *buf = NEW_ARRAY(compiler, char, required_size + 1);
+    WideCharToMultiByte(CP_UTF8, 0, source, -1, buf, required_size, NULL, NULL);
+    buf[required_size] = 0;
+    return buf;
+}
+
+static wchar_t *utf8ToUtf16(TsCompiler *compiler, char *source)
+{
+    DWORD wpath_len = MultiByteToWideChar(CP_UTF8, 0, source, strlen(source), NULL, 0);
+
+    wchar_t *wpath = NEW_ARRAY(compiler, wchar_t, wpath_len + 1);
+
+    MultiByteToWideChar(CP_UTF8, 0, source, strlen(source), wpath, wpath_len);
+
+    wpath[wpath_len] = 0;
+
+    return wpath;
+}
+#endif
+
+static void replaceSlashes(char *path)
+{
+    for (size_t i = 0; i < strlen(path); ++i)
+    {
+        if (path[i] == '\\' || path[i] == '/') path[i] = TS_PATHSEP;
+    }
+}
+
+char *ts__getAbsolutePath(TsCompiler *compiler, const char *relative_path)
+{
+    if (!relative_path) return NULL;
+
+#if defined(__unix__) || defined(__APPLE__)
+    char *path = realpath(relative_path, NULL);
+    if (!path) return NULL;
+
+    size_t path_size = strlen(path) + 1;
+    char *new_path = NEW_ARRAY(compiler, char, path_size);
+    memcpy(new_path, path, path_size);
+    free(path);
+
+    replaceSlashes(new_path);
+    return new_path;
+#elif defined(_WIN32)
+    wchar_t *wide_relative_path = utf8ToUtf16(compiler, relative_path);
+
+    DWORD length = GetFullPathNameW(wide_relative_path, 0, NULL, NULL);
+    wchar_t *buf = NEW_ARRAY(compiler, wchar_t, 4 + length);
+    GetFullPathNameW(wide_relative_path, length, buf, NULL);
+    buf[length] = 0;
+
+    char *c_str = utf16ToUtf8(compiler, buf);
+
+    replaceSlashes(c_str);
+    return c_str;
+#else
+#error OS not supported
+#endif
+}
+
+char *ts__getPathDir(TsCompiler *compiler, const char *path)
+{
+    if (!path) return NULL;
+
+    char *abs = ts__getAbsolutePath(compiler, path);
+    for (int i = strlen(abs) - 1; i >= 0; i--)
+    {
+        if (abs[i] == TS_PATHSEP)
+        {
+            abs[i + 1] = '\0';
+            break;
+        }
+    }
+    return abs;
+}
+
+char *ts__getCurrentDir(TsCompiler *compiler)
+{
+#if defined(__unix__) || defined(__APPLE__)
+    char *cwd = getcwd(NULL, 0);
+    if (!cwd) return NULL;
+
+    size_t cwd_size = strlen(cwd) + 1;
+    char *new_cwd = NEW_ARRAY(compiler, char, cwd_size);
+    memcpy(new_cwd, cwd, cwd_size);
+    free(cwd);
+    return new_cwd;
+#elif defined(_WIN32)
+    DWORD required_size = GetCurrentDirectory(0, NULL);
+
+    TCHAR *buf = NEW_ARRAY(compiler, TCHAR, required_size);
+    GetCurrentDirectory(required_size, buf);
+    if (sizeof(TCHAR) == sizeof(char))
+    {
+        return buf;
+    }
+    else
+    {
+        assert(sizeof(TCHAR) == sizeof(wchar_t));
+        return utf16ToUtf8(compiler, (wchar_t *)buf);
+    }
+
+    return NULL;
+#else
+#error OS not supported
+#endif
+}
+
+char *ts__pathConcat(TsCompiler *compiler, const char *a, const char *b)
+{
+    if (!a || !b) return NULL;
+
+    size_t a_len = strlen(a);
+    size_t b_len = strlen(b);
+
+    bool insert_sep = !(a[a_len - 1] == '/' || a[a_len - 1] == '\\');
+
+    size_t new_size = a_len + b_len + 1;
+    if (insert_sep) new_size++;
+
+    char *new_path = NEW_ARRAY(compiler, char, new_size);
+
+    char *curr = new_path;
+    memcpy(curr, a, a_len);
+    curr += a_len;
+
+    if (insert_sep)
+    {
+        *curr = TS_PATHSEP;
+        curr += 1;
+    }
+
+    memcpy(curr, b, b_len);
+    curr += b_len;
+
+    *curr = '\0';
+
+    replaceSlashes(new_path);
+    return new_path;
+}
+
+bool ts__fileExists(TsCompiler *compiler, const char *path)
+{
+    if (!path) return false;
+#if defined(__unix__) || defined(__APPLE__)
+    (void)compiler;
+    return (access(path, F_OK) != -1);
+#elif defined(_WIN32)
+    wchar_t *wide_path = utf8ToUtf16(compiler, path);
+    return (bool)PathFileExistsW(wide_path);
+#else
+#error OS not supported
+#endif
+}
+
 ////////////////////////////////
 //
 // HashMap

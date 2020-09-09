@@ -18,6 +18,8 @@
 #define NEW(compiler, type) ts__bumpZeroAlloc(&(compiler)->alloc, sizeof(type))
 #define NEW_ARRAY(compiler, type, count)                                                 \
     ts__bumpZeroAlloc(&(compiler)->alloc, sizeof(type) * (count))
+#define NEW_ARRAY_UNINIT(compiler, type, count)                                          \
+    ts__bumpAlloc(&(compiler)->alloc, sizeof(type) * (count))
 
 #define arrFree(a) ((a) ? free(arr__sbraw(a)), 0 : 0)
 #define arrPush(a, v) (arr__sbmaybegrow(a, 1), (a)[arr__sbn(a)++] = (v))
@@ -1104,6 +1106,12 @@ typedef struct Analyzer
 //
 ////////////////////////////////
 
+char *ts__getAbsolutePath(TsCompiler *compiler, const char *relative_path);
+char *ts__getPathDir(TsCompiler *compiler, const char *path);
+char *ts__getCurrentDir(TsCompiler *compiler);
+char *ts__pathConcat(TsCompiler *compiler, const char *a, const char *b);
+bool ts__fileExists(TsCompiler *compiler, const char *path);
+
 void ts__hashInit(HashMap *map, uint64_t size);
 void *ts__hashSet(HashMap *map, const char *key, void *value);
 bool ts__hashGet(HashMap *map, const char *key, void **result);
@@ -1126,6 +1134,8 @@ char *ts__sbBuildMalloc(StringBuilder *sb);
 char *ts__sbBuild(StringBuilder *sb, BumpAlloc *bump);
 
 void ts__addErr(TsCompiler *compiler, Location *loc, const char *msg);
+
+File *ts__createFile(TsCompiler *compiler, char *text, size_t text_size, char *path);
 
 char *ts__preprocessRootFile(
     Preprocessor *p, TsCompiler *compiler, File *file, size_t *out_length);
