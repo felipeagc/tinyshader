@@ -89,6 +89,8 @@ TsCompiler *tsCompilerCreate()
     ts__hashSet(
         &compiler->keyword_table, "determinant", (void *)TOKEN_BUILTIN_DETERMINANT);
 
+    ts__hashSet(&compiler->keyword_table, "discard", (void *)TOKEN_DISCARD);
+
     ts__hashSet(&compiler->keyword_table, "uint", (void *)TOKEN_UINT);
     ts__hashSet(&compiler->keyword_table, "int", (void *)TOKEN_INT);
     ts__hashSet(&compiler->keyword_table, "float", (void *)TOKEN_FLOAT);

@@ -28,9 +28,9 @@ struct Uniform
 
 const int my_const = 123;
 
-[[vk::binding(0, 0)]] ConstantBuffer<Uniform> gInput;
-[[vk::binding(1, 0)]] Texture2D<float4> gInput2;
-[[vk::binding(2, 0)]] SamplerState gInput3;
+ConstantBuffer<Uniform> gInput;
+Texture2D<float4> gInput2;
+SamplerState gInput3;
 
 void otherFunc(inout float3 pos)
 {
@@ -105,5 +105,9 @@ void vertex(in float3 pos : Heyy, out float3 out_pos : AAA)
 void pixel(in float3 pos : POSITION, in float2 uv : TEXCOORD0, out float4 color : SV_Target)
 {
 	float4 my_color = gInput2.Sample(gInput3, uv) * float4(ddx(1.0), 1, 1, 1);
+    if (my_color.r > 0.2)
+    {
+        discard;
+    }
 	color = my_color;
 }

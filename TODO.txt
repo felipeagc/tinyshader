@@ -5,12 +5,18 @@ Builtin functions:
 	ceil
 	floor
 
+    asuint
+    asint
+    asfloat
+    asdouble
+
     AllMemoryBarrier
     AllMemoryBarrierWithGroupSync
     DeviceMemoryBarrier
     DeviceMemoryBarrierWithGroupSync
     GroupMemoryBarrier
     GroupMemoryBarrierWithGroupSync
+
     InterlockedAdd
     InterlockedAnd
     InterlockedCompareExchange
@@ -33,7 +39,15 @@ Vulkan-specifics:
     combined image sampler
 
 Language features:
-	for statement
+    shared variables
+    groupshared variables
+    static variables
+
+    do-while
+	for
+    continue
+    break
+
 	struct literals
 	arrays
 	typedefs

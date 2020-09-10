@@ -2267,6 +2267,11 @@ static void analyzerAnalyzeStmt(Analyzer *a, AstStmt *stmt)
         break;
     }
 
+    case STMT_DISCARD: {
+        assert(a->scope_func);
+        break;
+    }
+
     case STMT_VAR_ASSIGN: {
         analyzerAnalyzeExpr(a, stmt->var_assign.assigned_expr, NULL);
         if (!stmt->var_assign.assigned_expr->assignable)

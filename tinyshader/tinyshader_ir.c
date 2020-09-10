@@ -607,6 +607,7 @@ static bool irBlockHasTerminator(IRInst *block)
     {
     case IR_INST_COND_BRANCH:
     case IR_INST_BRANCH:
+    case IR_INST_DISCARD:
     case IR_INST_RETURN: return true;
     default: return false;
     }
@@ -975,6 +976,15 @@ static void irBuildReturn(IRModule *m, IRInst *value)
     arrPush(block->block.insts, inst);
 }
 
+static void irBuildDiscard(IRModule *m)
+{
+    IRInst *inst = NEW(m->compiler, IRInst);
+    inst->kind = IR_INST_DISCARD;
+
+    IRInst *block = irGetCurrentBlock(m);
+    arrPush(block->block.insts, inst);
+}
+
 static void irBuildBr(IRModule *m, IRInst *target)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
@@ -1313,6 +1323,11 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             {
                 irModuleEncodeInst(m, SpvOpReturn, NULL, 0);
             }
+            break;
+        }
+
+        case IR_INST_DISCARD: {
+            irModuleEncodeInst(m, SpvOpKill, NULL, 0);
             break;
         }
 
@@ -2647,6 +2662,11 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
         {
             irBuildReturn(m, NULL);
         }
+        break;
+    }
+
+    case STMT_DISCARD: {
+        irBuildDiscard(m);
         break;
     }
 

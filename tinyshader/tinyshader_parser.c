@@ -1577,6 +1577,17 @@ static AstStmt *parseStmt(Parser *p)
         return stmt;
     }
 
+    case TOKEN_DISCARD: {
+        parserNext(p, 1);
+
+        AstStmt *stmt = NEW(compiler, AstStmt);
+        stmt->kind = STMT_DISCARD;
+        
+        if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
+
+        return stmt;
+    }
+
     case TOKEN_IF: {
         parserNext(p, 1);
         AstStmt *stmt = NEW(compiler, AstStmt);
