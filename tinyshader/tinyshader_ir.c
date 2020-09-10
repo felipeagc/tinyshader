@@ -1791,6 +1791,18 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
                 irModuleEncodeExtInst(m, inst, GLSLstd450Determinant, params, 1);
                 break;
             }
+
+            case IR_BUILTIN_DDX: {
+                uint32_t params[3] = {inst->type->id, inst->id, param_values[0]->id};
+                irModuleEncodeInst(m, SpvOpDPdx, params, 3);
+                break;
+            }
+
+            case IR_BUILTIN_DDY: {
+                uint32_t params[3] = {inst->type->id, inst->id, param_values[0]->id};
+                irModuleEncodeInst(m, SpvOpDPdy, params, 3);
+                break;
+            }
             }
 
             break;

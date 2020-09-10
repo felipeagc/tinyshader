@@ -104,6 +104,6 @@ void vertex(in float3 pos : Heyy, out float3 out_pos : AAA)
 
 void pixel(in float3 pos : POSITION, in float2 uv : TEXCOORD0, out float4 color : SV_Target)
 {
-	float4 my_color = gInput2.Sample(gInput3, uv);
+	float4 my_color = gInput2.Sample(gInput3, uv) * float4(ddx(1.0), 1, 1, 1);
 	color = my_color;
 }

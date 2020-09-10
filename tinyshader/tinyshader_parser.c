@@ -1309,6 +1309,9 @@ static AstExpr *parseAccessFuncCall(Parser *p)
     case TOKEN_BUILTIN_TRANSPOSE: builtin_kind = IR_BUILTIN_TRANSPOSE; break;
     case TOKEN_BUILTIN_DETERMINANT: builtin_kind = IR_BUILTIN_DETERMINANT; break;
 
+    case TOKEN_BUILTIN_DDX: builtin_kind = IR_BUILTIN_DDX; break;
+    case TOKEN_BUILTIN_DDY: builtin_kind = IR_BUILTIN_DDY; break;
+
     default: is_builtin = false; break;
     }
 

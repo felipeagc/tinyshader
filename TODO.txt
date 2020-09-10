@@ -5,18 +5,35 @@ Builtin functions:
 	ceil
 	floor
 
-	derivative functions
-	Interlocked functions
+    AllMemoryBarrier
+    AllMemoryBarrierWithGroupSync
+    DeviceMemoryBarrier
+    DeviceMemoryBarrierWithGroupSync
+    GroupMemoryBarrier
+    GroupMemoryBarrierWithGroupSync
+    InterlockedAdd
+    InterlockedAnd
+    InterlockedCompareExchange
+    InterlockedCompareStore
+    InterlockedExchange
+    InterlockedMax
+    InterlockedMin
+    InterlockedOr
+    InterlockedXor
 
-Language features:
-	#include
+Preprocessor:
 	#error
 	#if
 	#else
 	#elif
-	column_major/row_major matrices
+    function-like #define
+
+Vulkan-specifics:
+    push constants
+    combined image sampler
+
+Language features:
 	for statement
-	1-dimentional vector types
 	struct literals
 	arrays
 	typedefs
@@ -26,10 +43,15 @@ Language features:
 	compute shaders
 	structured buffers
 
+Low priority:
+	1-dimentional vector types
+	column_major/row_major matrices
+    cbuffer
+    tbuffer
+
 Internals:
 	make sure all allocations are freed at the end
 	some dead code elimination
 	cache duplicate constants
-	add ability to use same binding for image and sampler to get a combined image sampler
 
 TODAY:

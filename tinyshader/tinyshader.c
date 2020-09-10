@@ -82,6 +82,9 @@ TsCompiler *tsCompilerCreate()
     ts__hashSet(&compiler->keyword_table, "step", (void *)TOKEN_BUILTIN_STEP);
     ts__hashSet(&compiler->keyword_table, "smoothstep", (void *)TOKEN_BUILTIN_SMOOTHSTEP);
 
+    ts__hashSet(&compiler->keyword_table, "ddx", (void *)TOKEN_BUILTIN_DDX);
+    ts__hashSet(&compiler->keyword_table, "ddy", (void *)TOKEN_BUILTIN_DDY);
+
     ts__hashSet(&compiler->keyword_table, "transpose", (void *)TOKEN_BUILTIN_TRANSPOSE);
     ts__hashSet(
         &compiler->keyword_table, "determinant", (void *)TOKEN_BUILTIN_DETERMINANT);
