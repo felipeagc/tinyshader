@@ -721,6 +721,8 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
         case '+': {
             if (lexerPeek(l, 1) == '=')
                 lexerAddSimpleToken(l, TOKEN_ADDEQ, 2);
+            else if (lexerPeek(l, 1) == '+')
+                lexerAddSimpleToken(l, TOKEN_ADDADD, 2);
             else
                 lexerAddSimpleToken(l, TOKEN_ADD, 1);
             break;
@@ -728,6 +730,8 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
         case '-': {
             if (lexerPeek(l, 1) == '=')
                 lexerAddSimpleToken(l, TOKEN_SUBEQ, 2);
+            else if (lexerPeek(l, 1) == '-')
+                lexerAddSimpleToken(l, TOKEN_SUBSUB, 2);
             else
                 lexerAddSimpleToken(l, TOKEN_SUB, 1);
             break;
@@ -1414,7 +1418,8 @@ static AstExpr *parseAccessFuncCall(Parser *p)
 
 static AstExpr *parseUnaryExpr(Parser *p)
 {
-    if (parserPeek(p, 0)->kind == TOKEN_SUB || parserPeek(p, 0)->kind == TOKEN_NOT)
+    if (parserPeek(p, 0)->kind == TOKEN_SUB || parserPeek(p, 0)->kind == TOKEN_NOT ||
+        parserPeek(p, 0)->kind == TOKEN_ADDADD || parserPeek(p, 0)->kind == TOKEN_SUBSUB)
     {
         Token *op_tok = parserNext(p, 1);
 
@@ -1424,6 +1429,8 @@ static AstExpr *parseUnaryExpr(Parser *p)
         {
         case TOKEN_SUB: op = UNOP_NEG; break;
         case TOKEN_NOT: op = UNOP_NOT; break;
+        case TOKEN_ADDADD: op = UNOP_PRE_INC; break;
+        case TOKEN_SUBSUB: op = UNOP_PRE_DEC; break;
         default: assert(0); break;
         }
 
@@ -1582,7 +1589,7 @@ static AstStmt *parseStmt(Parser *p)
 
         AstStmt *stmt = NEW(compiler, AstStmt);
         stmt->kind = STMT_DISCARD;
-        
+
         if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
 
         return stmt;

@@ -144,6 +144,9 @@ typedef enum TokenKind {
     TOKEN_DIV,
     TOKEN_MOD,
 
+    TOKEN_ADDADD, // ++
+    TOKEN_SUBSUB, // --
+
     TOKEN_BITOR,
     TOKEN_BITXOR,
     TOKEN_BITAND,
@@ -767,6 +770,8 @@ typedef struct AstAttribute
 typedef enum AstUnaryOp {
     UNOP_NEG,
     UNOP_NOT,
+    UNOP_PRE_INC,
+    UNOP_PRE_DEC,
 } AstUnaryOp;
 
 typedef enum AstBinaryOp {

@@ -566,6 +566,21 @@ AstType *ts__getScalarType(AstType *type)
     return NULL;
 }
 
+AstType *ts__getScalarTypeNoVec(AstType *type)
+{
+    switch (type->kind)
+    {
+    case TYPE_FLOAT:
+    case TYPE_INT: {
+        return type;
+    }
+
+    default: break;
+    }
+
+    return NULL;
+}
+
 // Returns a type that can be used in a comparison operation
 AstType *ts__getComparableType(AstType *type)
 {
@@ -2115,6 +2130,46 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                     compiler,
                     &expr->unary.right->loc,
                     "\'negation\' expression does not work on this type");
+                break;
+            }
+
+            expr->type = right_type;
+
+            break;
+        }
+
+        case UNOP_PRE_INC: {
+            analyzerAnalyzeExpr(a, expr->unary.right, NULL);
+            if (!expr->unary.right->type) break;
+            AstType *right_type = expr->unary.right->type;
+            AstType *scalar_type = ts__getScalarTypeNoVec(right_type);
+
+            if (!scalar_type)
+            {
+                ts__addErr(
+                    compiler,
+                    &expr->unary.right->loc,
+                    "\'increment\' expression does not work on this type");
+                break;
+            }
+
+            expr->type = right_type;
+
+            break;
+        }
+
+        case UNOP_PRE_DEC: {
+            analyzerAnalyzeExpr(a, expr->unary.right, NULL);
+            if (!expr->unary.right->type) break;
+            AstType *right_type = expr->unary.right->type;
+            AstType *scalar_type = ts__getScalarTypeNoVec(right_type);
+
+            if (!scalar_type)
+            {
+                ts__addErr(
+                    compiler,
+                    &expr->unary.right->loc,
+                    "\'decrement\' expression does not work on this type");
                 break;
             }
 
