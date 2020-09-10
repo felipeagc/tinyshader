@@ -1,6 +1,10 @@
 #ifndef TINYSHADER_INTERNAL_H
 #define TINYSHADER_INTERNAL_H
 
+#ifdef _MSC_VER
+#pragma warning(disable:4996)
+#endif
+
 #include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -64,7 +68,7 @@ static void *arr__sbgrowf(void *arr, uint32_t increment, uint32_t itemsize)
 
 typedef struct HashMap
 {
-    const char **keys;
+    char **keys;
     uint64_t *hashes;
     uint64_t *indices;
     uint64_t size;

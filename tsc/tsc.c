@@ -3,6 +3,10 @@
 #define OPTPARSE_IMPLEMENTATION
 #include "optparse.h"
 
+#ifdef _MSC_VER
+#pragma warning(disable:4996)
+#endif
+
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>

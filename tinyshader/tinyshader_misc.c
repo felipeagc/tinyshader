@@ -36,9 +36,9 @@ extern char **environ;
 ////////////////////////////////
 
 #if defined(_WIN32)
-static char *utf16ToUtf8(TsCompiler *compiler, wchar_t *source)
+static char *utf16ToUtf8(TsCompiler *compiler, const wchar_t *source)
 {
-    size_t required_size =
+    int required_size =
         WideCharToMultiByte(CP_UTF8, 0, source, -1, NULL, 0, NULL, NULL);
     char *buf = NEW_ARRAY(compiler, char, required_size + 1);
     WideCharToMultiByte(CP_UTF8, 0, source, -1, buf, required_size, NULL, NULL);
@@ -46,13 +46,14 @@ static char *utf16ToUtf8(TsCompiler *compiler, wchar_t *source)
     return buf;
 }
 
-static wchar_t *utf8ToUtf16(TsCompiler *compiler, char *source)
+static wchar_t *utf8ToUtf16(TsCompiler *compiler, const char *source)
 {
-    DWORD wpath_len = MultiByteToWideChar(CP_UTF8, 0, source, strlen(source), NULL, 0);
+    int source_length = (int)strlen(source);
+    DWORD wpath_len = MultiByteToWideChar(CP_UTF8, 0, source, source_length, NULL, 0);
 
     wchar_t *wpath = NEW_ARRAY(compiler, wchar_t, wpath_len + 1);
 
-    MultiByteToWideChar(CP_UTF8, 0, source, strlen(source), wpath, wpath_len);
+    MultiByteToWideChar(CP_UTF8, 0, source, source_length, wpath, wpath_len);
 
     wpath[wpath_len] = 0;
 
@@ -105,7 +106,7 @@ char *ts__getPathDir(TsCompiler *compiler, const char *path)
     if (!path) return NULL;
 
     char *abs = ts__getAbsolutePath(compiler, path);
-    for (int i = strlen(abs) - 1; i >= 0; i--)
+    for (int i = (int)strlen(abs) - 1; i >= 0; i--)
     {
         if (abs[i] == TS_PATHSEP)
         {
@@ -273,7 +274,7 @@ static uint64_t hashSetInternal(HashMap *map, const char *key, uint64_t index)
         return hashSetInternal(map, key, index);
     }
 
-    map->keys[i] = key;
+    map->keys[i] = (char*)key;
     map->hashes[i] = hash;
     map->indices[i] = index;
 
@@ -336,7 +337,7 @@ void ts__hashRemove(HashMap *map, const char *key)
 static void hashGrow(HashMap *map)
 {
     uint64_t old_size = map->size;
-    const char **old_keys = map->keys;
+    char **old_keys = map->keys;
     uint64_t *old_hashes = map->hashes;
     uint64_t *old_indices = map->indices;
 

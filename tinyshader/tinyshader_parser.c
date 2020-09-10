@@ -46,7 +46,7 @@ static inline char preprocNext(PreprocessorFile *f, size_t count)
 {
     char c = f->file->text[f->pos];
     f->pos += count;
-    f->col += count;
+    f->col += (uint32_t)count;
     return c;
 }
 
@@ -59,7 +59,7 @@ static Location preprocErrLoc(PreprocessorFile *f)
 {
     Location err_loc = {0};
     err_loc.path = f->file->path;
-    err_loc.pos = f->pos;
+    err_loc.pos = (uint32_t)f->pos;
     err_loc.line = f->line;
     err_loc.col = f->col;
     err_loc.length = 1;
@@ -582,7 +582,7 @@ static inline char lexerNext(Lexer *l, size_t count)
 {
     char c = l->text[l->pos];
     l->pos += count;
-    l->col += count;
+    l->col += (uint32_t)count;
     return c;
 }
 
@@ -616,7 +616,7 @@ static inline bool lexerConsume(Lexer *l, char c)
         err_loc.length = 1;
         err_loc.line = l->line;
         err_loc.col = l->col;
-        err_loc.pos = l->pos;
+        err_loc.pos = (uint32_t)l->pos;
         ts__addErr(l->compiler, &err_loc, "unexpected character");
         lexerNext(l, 1);
         return false;
@@ -629,7 +629,7 @@ static inline void lexerAddSimpleToken(Lexer *l, TokenKind kind, size_t length)
 {
     lexerNext(l, length);
     l->token.kind = kind;
-    l->token.loc.length = length;
+    l->token.loc.length = (uint32_t)length;
 }
 
 void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
@@ -646,7 +646,7 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
     {
         memset(&l->token, 0, sizeof(Token));
         l->token.loc.path = l->file_path;
-        l->token.loc.pos = l->pos;
+        l->token.loc.pos = (uint32_t)l->pos;
         l->token.loc.length = 0;
         l->token.loc.line = l->line;
         l->token.loc.col = l->col;
@@ -815,7 +815,7 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
                     Location err_loc = l->token.loc;
                     err_loc.length = 1;
                     err_loc.path = l->file_path;
-                    err_loc.pos = l->pos;
+                    err_loc.pos = (uint32_t)l->pos;
                     err_loc.line = l->line;
                     err_loc.col = l->col;
                     ts__addErr(l->compiler, &err_loc, "unclosed comment");
@@ -987,7 +987,7 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
                 Location err_loc = l->token.loc;
                 err_loc.length = 1;
                 err_loc.path = l->file_path;
-                err_loc.pos = l->pos;
+                err_loc.pos = (uint32_t)l->pos;
                 err_loc.line = l->line;
                 err_loc.col = l->col;
                 ts__addErr(l->compiler, &err_loc, "unclosed string");
@@ -998,7 +998,7 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
 
             l->token.kind = TOKEN_STRING_LIT;
             l->token.str = ts__sbBuild(&compiler->sb, &compiler->alloc);
-            l->token.loc.length = l->pos - l->token.loc.pos;
+            l->token.loc.length = (uint32_t)(l->pos - l->token.loc.pos);
             break;
         }
 
@@ -1023,7 +1023,7 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
                 memcpy(ident, ident_start, ident_length);
                 ident[ident_length] = '\0';
 
-                l->token.loc.length = ident_length;
+                l->token.loc.length = (uint32_t)ident_length;
                 l->token.str = ident;
 
                 void *result = NULL;
@@ -1144,7 +1144,7 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
                 Location err_loc = l->token.loc;
                 err_loc.length = 1;
                 err_loc.path = l->file_path;
-                err_loc.pos = l->pos;
+                err_loc.pos = (uint32_t)l->pos;
                 err_loc.line = l->line;
                 err_loc.col = l->col;
                 ts__addErr(l->compiler, &err_loc, "unknown token");

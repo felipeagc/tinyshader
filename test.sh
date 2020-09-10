@@ -1,9 +1,8 @@
-#!/bin/sh
+#!/bin/bash
 
 pushd ../examples
 
-rm -f vert.spv
-rm -f frag.spv
+rm -f *.spv
 
 cmake --build ../build
 
