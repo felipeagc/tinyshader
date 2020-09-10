@@ -13,7 +13,7 @@ add_library(
 	tinyshader/tinyshader_analysis.c
 	tinyshader/spirv.h)
 
-if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+if (MSVC)
 else()
 	target_compile_options(tinyshader PRIVATE -Wall -Wextra -Wno-unused-function)
 endif()
