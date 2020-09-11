@@ -808,6 +808,7 @@ typedef enum AstStmtKind {
     STMT_BLOCK,
     STMT_IF,
     STMT_WHILE,
+    STMT_FOR,
 } AstStmtKind;
 
 typedef enum AstDeclKind {
@@ -868,6 +869,15 @@ struct AstStmt
             AstExpr *cond;
             AstStmt *stmt;
         } while_;
+
+        struct
+        {
+            AstStmt *init;
+            AstExpr *cond;
+            AstExpr *inc;
+
+            AstStmt *stmt;
+        } for_;
     };
 };
 

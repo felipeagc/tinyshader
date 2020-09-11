@@ -44,7 +44,6 @@ Language features:
     static variables
 
     do-while
-	for
     continue
     break
 

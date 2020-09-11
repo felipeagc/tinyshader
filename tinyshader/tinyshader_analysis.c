@@ -2057,8 +2057,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
         case IR_BUILTIN_DDY: {
             if (param_count != 1)
             {
-                ts__addErr(
-                    compiler, &expr->loc, "ddx/ddy call needs 1 parameter");
+                ts__addErr(compiler, &expr->loc, "ddx/ddy call needs 1 parameter");
                 break;
             }
 
@@ -2069,8 +2068,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
             if (a->type->kind != TYPE_FLOAT)
             {
-                ts__addErr(
-                    compiler, &expr->loc, "ddx/ddycall needs a float parameter");
+                ts__addErr(compiler, &expr->loc, "ddx/ddycall needs a float parameter");
                 break;
             }
 
@@ -2385,6 +2383,31 @@ static void analyzerAnalyzeStmt(Analyzer *a, AstStmt *stmt)
         }
 
         analyzerAnalyzeStmt(a, stmt->while_.stmt);
+        break;
+    }
+
+    case STMT_FOR: {
+        if (stmt->for_.init)
+        {
+            analyzerAnalyzeStmt(a, stmt->for_.init);
+        }
+
+        if (stmt->for_.cond)
+        {
+            analyzerAnalyzeExpr(a, stmt->for_.cond, NULL);
+            if (stmt->for_.cond->type && !ts__getComparableType(stmt->for_.cond->type))
+            {
+                ts__addErr(
+                    compiler, &stmt->for_.cond->loc, "expression is not comparable");
+            }
+        }
+
+        if (stmt->for_.inc)
+        {
+            analyzerAnalyzeExpr(a, stmt->for_.inc, NULL);
+        }
+
+        analyzerAnalyzeStmt(a, stmt->for_.stmt);
         break;
     }
     }

@@ -2480,7 +2480,7 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
             IRType *ir_type = convertTypeToIR(m->mod, m, expr->type);
 
             SpvOp op_kind;
-            IRInst* one_val = NULL;
+            IRInst *one_val = NULL;
 
             switch (expr->type->kind)
             {
@@ -2512,7 +2512,7 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
             IRType *ir_type = convertTypeToIR(m->mod, m, expr->type);
 
             SpvOp op_kind;
-            IRInst* one_val = NULL;
+            IRInst *one_val = NULL;
 
             switch (expr->type->kind)
             {
@@ -2544,7 +2544,7 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
             IRType *ir_type = convertTypeToIR(m->mod, m, expr->type);
 
             SpvOp op_kind;
-            IRInst* one_val = NULL;
+            IRInst *one_val = NULL;
 
             switch (expr->type->kind)
             {
@@ -2561,7 +2561,10 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
 
             if (isLvalue(right_val_ptr))
             {
-                irBuildStore(m, right_val_ptr, irBuildBinary(m, op_kind, ir_type, right_val, one_val));
+                irBuildStore(
+                    m,
+                    right_val_ptr,
+                    irBuildBinary(m, op_kind, ir_type, right_val, one_val));
             }
 
             expr->value = right_val;
@@ -2576,7 +2579,7 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
             IRType *ir_type = convertTypeToIR(m->mod, m, expr->type);
 
             SpvOp op_kind;
-            IRInst* one_val = NULL;
+            IRInst *one_val = NULL;
 
             switch (expr->type->kind)
             {
@@ -2593,7 +2596,10 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
 
             if (isLvalue(right_val_ptr))
             {
-                irBuildStore(m, right_val_ptr, irBuildBinary(m, op_kind, ir_type, right_val, one_val));
+                irBuildStore(
+                    m,
+                    right_val_ptr,
+                    irBuildBinary(m, op_kind, ir_type, right_val, one_val));
             }
 
             expr->value = right_val;
@@ -2873,7 +2879,6 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
     }
 
     case STMT_WHILE: {
-
         IRInst *current_block = irGetCurrentBlock(m);
         IRInst *func = current_block->block.func;
 
@@ -2913,6 +2918,74 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
 
         {
             irPositionAtEnd(m, continue_block);
+            irBuildBr(m, check_block);
+        }
+
+        irPositionAtEnd(m, merge_block);
+
+        break;
+    }
+
+    case STMT_FOR: {
+        IRInst *current_block = irGetCurrentBlock(m);
+        IRInst *func = current_block->block.func;
+
+        if (stmt->for_.init)
+        {
+            irModuleBuildStmt(m, stmt->for_.init);
+        }
+
+        IRInst *check_block = irAddBlock(m, func);
+        IRInst *body_block = irAddBlock(m, func);
+        IRInst *continue_block = irAddBlock(m, func);
+        IRInst *merge_block = irAddBlock(m, func);
+
+        irBuildBr(m, check_block);
+
+        {
+            irPositionAtEnd(m, check_block);
+
+            IRInst *cond = NULL;
+
+            if (stmt->for_.cond)
+            {
+                irModuleBuildExpr(m, stmt->for_.cond);
+                cond = stmt->for_.cond->value;
+                assert(cond);
+                cond = irLoadVal(m, cond);
+                cond = irBoolVal(m, cond);
+            }
+            else
+            {
+                cond = irBuildConstBool(m, true);
+            }
+
+            if (!irBlockHasTerminator(irGetCurrentBlock(m)))
+            {
+                irBuildCondBr(
+                    m, cond, body_block, merge_block, merge_block, continue_block);
+            }
+        }
+
+        {
+            irPositionAtEnd(m, body_block);
+
+            irModuleBuildStmt(m, stmt->for_.stmt);
+
+            if (!irBlockHasTerminator(irGetCurrentBlock(m)))
+            {
+                irBuildBr(m, continue_block);
+            }
+        }
+
+        {
+            irPositionAtEnd(m, continue_block);
+
+            if (stmt->for_.inc)
+            {
+                irModuleBuildExpr(m, stmt->for_.inc);
+            }
+
             irBuildBr(m, check_block);
         }
 

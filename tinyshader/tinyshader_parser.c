@@ -533,7 +533,7 @@ char *ts__preprocessRootFile(
     char *buffer = ts__sbBuild(&p->sb, &compiler->alloc);
     *out_length = strlen(buffer);
 
-    printf("%s\n", buffer);
+    /* printf("%s\n", buffer); */
 
     ts__hashDestroy(&p->defines);
     ts__sbDestroy(&p->sb);
@@ -1420,7 +1420,8 @@ static AstExpr *parsePostfixedUnaryExpr(Parser *p)
 {
     AstExpr *expr = parseAccessFuncCall(p);
 
-    while (parserPeek(p, 0)->kind == TOKEN_ADDADD || parserPeek(p, 0)->kind == TOKEN_SUBSUB)
+    while (parserPeek(p, 0)->kind == TOKEN_ADDADD ||
+           parserPeek(p, 0)->kind == TOKEN_SUBSUB)
     {
         Token *op_tok = parserNext(p, 1);
 
@@ -1663,6 +1664,48 @@ static AstStmt *parseStmt(Parser *p)
 
         stmt->while_.stmt = parseStmt(p);
         if (!stmt->while_.stmt) return NULL;
+
+        return stmt;
+    }
+
+    case TOKEN_FOR: {
+        parserNext(p, 1);
+        AstStmt *stmt = NEW(compiler, AstStmt);
+        stmt->kind = STMT_FOR;
+
+        if (!parserConsume(p, TOKEN_LPAREN)) return NULL;
+
+        stmt->for_.init = NULL;
+        if (parserPeek(p, 0)->kind != TOKEN_SEMICOLON)
+        {
+            stmt->for_.init = parseStmt(p);
+            if (!stmt->for_.init) return NULL;
+        }
+        else
+        {
+            parserNext(p, 1);
+        }
+
+        stmt->for_.cond = NULL;
+        if (parserPeek(p, 0)->kind != TOKEN_SEMICOLON)
+        {
+            stmt->for_.cond = parseExpr(p);
+            if (!stmt->for_.cond) return NULL;
+        }
+
+        if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
+
+        stmt->for_.inc = NULL;
+        if (parserPeek(p, 0)->kind != TOKEN_RPAREN)
+        {
+            stmt->for_.inc = parseExpr(p);
+            if (!stmt->for_.inc) return NULL;
+        }
+
+        if (!parserConsume(p, TOKEN_RPAREN)) return NULL;
+
+        stmt->for_.stmt = parseStmt(p);
+        if (!stmt->for_.stmt) return NULL;
 
         return stmt;
     }
