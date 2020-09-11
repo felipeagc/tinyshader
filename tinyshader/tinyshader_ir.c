@@ -2535,6 +2535,70 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
             }
             break;
         }
+
+        case UNOP_POST_INC: {
+            irModuleBuildExpr(m, expr->unary.right);
+            IRInst *right_val_ptr = expr->unary.right->value;
+            IRInst *right_val = irLoadVal(m, right_val_ptr);
+
+            IRType *ir_type = convertTypeToIR(m->mod, m, expr->type);
+
+            SpvOp op_kind;
+            IRInst* one_val = NULL;
+
+            switch (expr->type->kind)
+            {
+            case TYPE_FLOAT:
+                op_kind = SpvOpFAdd;
+                one_val = irBuildConstFloat(m, ir_type, 1.0);
+                break;
+            case TYPE_INT:
+                op_kind = SpvOpIAdd;
+                one_val = irBuildConstInt(m, ir_type, 1);
+                break;
+            default: assert(0); break;
+            }
+
+            if (isLvalue(right_val_ptr))
+            {
+                irBuildStore(m, right_val_ptr, irBuildBinary(m, op_kind, ir_type, right_val, one_val));
+            }
+
+            expr->value = right_val;
+            break;
+        }
+
+        case UNOP_POST_DEC: {
+            irModuleBuildExpr(m, expr->unary.right);
+            IRInst *right_val_ptr = expr->unary.right->value;
+            IRInst *right_val = irLoadVal(m, right_val_ptr);
+
+            IRType *ir_type = convertTypeToIR(m->mod, m, expr->type);
+
+            SpvOp op_kind;
+            IRInst* one_val = NULL;
+
+            switch (expr->type->kind)
+            {
+            case TYPE_FLOAT:
+                op_kind = SpvOpFSub;
+                one_val = irBuildConstFloat(m, ir_type, 1.0);
+                break;
+            case TYPE_INT:
+                op_kind = SpvOpISub;
+                one_val = irBuildConstInt(m, ir_type, 1);
+                break;
+            default: assert(0); break;
+            }
+
+            if (isLvalue(right_val_ptr))
+            {
+                irBuildStore(m, right_val_ptr, irBuildBinary(m, op_kind, ir_type, right_val, one_val));
+            }
+
+            expr->value = right_val;
+            break;
+        }
         }
         break;
     }

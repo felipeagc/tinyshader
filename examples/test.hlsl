@@ -105,7 +105,7 @@ void vertex(in float3 pos : Heyy, out float3 out_pos : AAA)
 void pixel(in float3 pos : POSITION, in float2 uv : TEXCOORD0, out float4 color : SV_Target)
 {
     int i = 0;
-    ++i;
+    i++;
     // for (int i = 0; i < 10; ++i)
     // {
     //     discard;

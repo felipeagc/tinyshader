@@ -2138,6 +2138,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             break;
         }
 
+        case UNOP_POST_INC:
         case UNOP_PRE_INC: {
             analyzerAnalyzeExpr(a, expr->unary.right, NULL);
             if (!expr->unary.right->type) break;
@@ -2158,6 +2159,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             break;
         }
 
+        case UNOP_POST_DEC:
         case UNOP_PRE_DEC: {
             analyzerAnalyzeExpr(a, expr->unary.right, NULL);
             if (!expr->unary.right->type) break;

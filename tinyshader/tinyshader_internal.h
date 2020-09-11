@@ -772,6 +772,8 @@ typedef enum AstUnaryOp {
     UNOP_NOT,
     UNOP_PRE_INC,
     UNOP_PRE_DEC,
+    UNOP_POST_INC,
+    UNOP_POST_DEC,
 } AstUnaryOp;
 
 typedef enum AstBinaryOp {

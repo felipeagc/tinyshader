@@ -1416,7 +1416,35 @@ static AstExpr *parseAccessFuncCall(Parser *p)
     return expr;
 }
 
-static AstExpr *parseUnaryExpr(Parser *p)
+static AstExpr *parsePostfixedUnaryExpr(Parser *p)
+{
+    AstExpr *expr = parseAccessFuncCall(p);
+
+    while (parserPeek(p, 0)->kind == TOKEN_ADDADD || parserPeek(p, 0)->kind == TOKEN_SUBSUB)
+    {
+        Token *op_tok = parserNext(p, 1);
+
+        AstUnaryOp op = {0};
+
+        switch (op_tok->kind)
+        {
+        case TOKEN_ADDADD: op = UNOP_POST_INC; break;
+        case TOKEN_SUBSUB: op = UNOP_POST_DEC; break;
+        default: assert(0); break;
+        }
+
+        AstExpr *new_expr = NEW(p->compiler, AstExpr);
+        new_expr->kind = EXPR_UNARY;
+        new_expr->unary.right = expr;
+        new_expr->unary.op = op;
+
+        expr = new_expr;
+    }
+
+    return expr;
+}
+
+static AstExpr *parsePrefixedUnaryExpr(Parser *p)
 {
     if (parserPeek(p, 0)->kind == TOKEN_SUB || parserPeek(p, 0)->kind == TOKEN_NOT ||
         parserPeek(p, 0)->kind == TOKEN_ADDADD || parserPeek(p, 0)->kind == TOKEN_SUBSUB)
@@ -1434,7 +1462,7 @@ static AstExpr *parseUnaryExpr(Parser *p)
         default: assert(0); break;
         }
 
-        AstExpr *right = parseUnaryExpr(p);
+        AstExpr *right = parsePrefixedUnaryExpr(p);
 
         AstExpr *expr = NEW(p->compiler, AstExpr);
         expr->kind = EXPR_UNARY;
@@ -1444,12 +1472,12 @@ static AstExpr *parseUnaryExpr(Parser *p)
         return expr;
     }
 
-    return parseAccessFuncCall(p);
+    return parsePostfixedUnaryExpr(p);
 }
 
 static AstExpr *parseMuliplication(Parser *p)
 {
-    AstExpr *expr = parseUnaryExpr(p);
+    AstExpr *expr = parsePrefixedUnaryExpr(p);
     if (!expr) return NULL;
 
     while (!parserIsAtEnd(p) &&
@@ -1467,7 +1495,7 @@ static AstExpr *parseMuliplication(Parser *p)
         }
 
         AstExpr *left = expr;
-        AstExpr *right = parseUnaryExpr(p);
+        AstExpr *right = parsePrefixedUnaryExpr(p);
         if (!right) return NULL;
 
         expr = NEW(p->compiler, AstExpr);
@@ -1808,7 +1836,7 @@ static AstDecl *parseTopLevel(Parser *p)
         decl->kind = DECL_CONST;
         decl->attributes = attributes;
 
-        AstExpr *type_expr = parseUnaryExpr(p);
+        AstExpr *type_expr = parsePrefixedUnaryExpr(p);
         if (!type_expr) return NULL;
 
         Token *name_tok = parserConsume(p, TOKEN_IDENT);
@@ -1842,7 +1870,7 @@ static AstDecl *parseTopLevel(Parser *p)
 
         while (parserPeek(p, 0)->kind != TOKEN_RCURLY)
         {
-            AstExpr *type_expr = parseUnaryExpr(p);
+            AstExpr *type_expr = parsePrefixedUnaryExpr(p);
             if (!type_expr) return NULL;
 
             Token *name_tok = parserConsume(p, TOKEN_IDENT);
@@ -1891,7 +1919,7 @@ static AstDecl *parseTopLevel(Parser *p)
 
             if (!parserConsume(p, TOKEN_LESS)) return NULL;
 
-            type_expr = parseUnaryExpr(p);
+            type_expr = parsePrefixedUnaryExpr(p);
             if (!type_expr) return NULL;
 
             if (!parserConsume(p, TOKEN_GREATER)) return NULL;
@@ -1934,7 +1962,7 @@ static AstDecl *parseTopLevel(Parser *p)
 
             if (!parserConsume(p, TOKEN_LESS)) return NULL;
 
-            type_expr->texture.sampled_type_expr = parseUnaryExpr(p);
+            type_expr->texture.sampled_type_expr = parsePrefixedUnaryExpr(p);
             if (!type_expr->texture.sampled_type_expr) return NULL;
 
             if (!parserConsume(p, TOKEN_GREATER)) return NULL;
@@ -1973,7 +2001,7 @@ static AstDecl *parseTopLevel(Parser *p)
     }
 
     default: {
-        AstExpr *type_expr = parseUnaryExpr(p);
+        AstExpr *type_expr = parsePrefixedUnaryExpr(p);
         if (!type_expr) return NULL;
 
         Token *name_tok = parserConsume(p, TOKEN_IDENT);
@@ -2011,7 +2039,7 @@ static AstDecl *parseTopLevel(Parser *p)
                     var_kind = VAR_INOUT_PARAM;
                 }
 
-                AstExpr *type_expr = parseUnaryExpr(p);
+                AstExpr *type_expr = parsePrefixedUnaryExpr(p);
                 if (!type_expr) return NULL;
 
                 Token *param_name_tok = parserConsume(p, TOKEN_IDENT);
