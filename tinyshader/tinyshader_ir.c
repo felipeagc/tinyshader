@@ -2804,6 +2804,20 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
         break;
     }
 
+    case STMT_CONTINUE: {
+        assert(arrLength(m->continue_stack) > 0);
+        IRInst *block = m->continue_stack[arrLength(m->continue_stack) - 1];
+        irBuildBr(m, block);
+        break;
+    }
+
+    case STMT_BREAK: {
+        assert(arrLength(m->break_stack) > 0);
+        IRInst *block = m->break_stack[arrLength(m->break_stack) - 1];
+        irBuildBr(m, block);
+        break;
+    }
+
     case STMT_VAR_ASSIGN: {
         irModuleBuildExpr(m, stmt->var_assign.value_expr);
         IRInst *to_store = stmt->var_assign.value_expr->value;
@@ -2823,6 +2837,11 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
         {
             AstStmt *sub_stmt = stmt->block.stmts[i];
             irModuleBuildStmt(m, sub_stmt);
+
+            if (irBlockHasTerminator(irGetCurrentBlock(m)))
+            {
+                break;
+            }
         }
         break;
     }
@@ -2908,7 +2927,11 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
         {
             irPositionAtEnd(m, body_block);
 
+            arrPush(m->continue_stack, continue_block);
+            arrPush(m->break_stack, merge_block);
             irModuleBuildStmt(m, stmt->while_.stmt);
+            arrPop(m->continue_stack);
+            arrPop(m->break_stack);
 
             if (!irBlockHasTerminator(irGetCurrentBlock(m)))
             {
@@ -2970,7 +2993,11 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
         {
             irPositionAtEnd(m, body_block);
 
+            arrPush(m->continue_stack, continue_block);
+            arrPush(m->break_stack, merge_block);
             irModuleBuildStmt(m, stmt->for_.stmt);
+            arrPop(m->continue_stack);
+            arrPop(m->break_stack);
 
             if (!irBlockHasTerminator(irGetCurrentBlock(m)))
             {
@@ -3064,6 +3091,10 @@ static void irModuleBuildDecl(IRModule *m, AstDecl *decl)
         {
             AstStmt *stmt = decl->func.stmts[i];
             irModuleBuildStmt(m, stmt);
+            if (irBlockHasTerminator(irGetCurrentBlock(m)))
+            {
+                break;
+            }
         }
 
         if (!irBlockHasTerminator(irGetCurrentBlock(m)))

@@ -192,7 +192,6 @@ typedef enum TokenKind {
     TOKEN_IN,
     TOKEN_OUT,
     TOKEN_INOUT,
-    TOKEN_IMPORT,
     TOKEN_STRUCT,
     TOKEN_FOR,
     TOKEN_WHILE,
@@ -659,6 +658,9 @@ struct IRModule
 
     HashMap type_cache;
 
+    /*array*/ IRInst **continue_stack;
+    /*array*/ IRInst **break_stack;
+
     /*array*/ IRInst **entry_points;
     /*array*/ IRInst **constants;
     /*array*/ IRInst **functions;
@@ -809,6 +811,8 @@ typedef enum AstStmtKind {
     STMT_VAR_ASSIGN,
     STMT_RETURN,
     STMT_DISCARD,
+    STMT_CONTINUE,
+    STMT_BREAK,
     STMT_BLOCK,
     STMT_IF,
     STMT_WHILE,
@@ -1128,7 +1132,10 @@ typedef struct Analyzer
     Module *module;
 
     AstDecl *scope_func;
-    Scope **scope_stack;
+    /*array*/ Scope **scope_stack;
+
+    /*array*/ AstStmt **continue_stack;
+    /*array*/ AstStmt **break_stack;
 } Analyzer;
 
 ////////////////////////////////

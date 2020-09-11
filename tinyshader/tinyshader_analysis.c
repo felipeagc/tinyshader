@@ -2327,6 +2327,30 @@ static void analyzerAnalyzeStmt(Analyzer *a, AstStmt *stmt)
         break;
     }
 
+    case STMT_CONTINUE: {
+        assert(a->scope_func);
+        if (arrLength(a->continue_stack) == 0)
+        {
+            ts__addErr(
+                compiler,
+                &stmt->loc,
+                "continue must be inside a control flow structure");
+        }
+        break;
+    }
+
+    case STMT_BREAK: {
+        assert(a->scope_func);
+        if (arrLength(a->break_stack) == 0)
+        {
+            ts__addErr(
+                compiler,
+                &stmt->loc,
+                "break must be inside a control flow structure");
+        }
+        break;
+    }
+
     case STMT_VAR_ASSIGN: {
         analyzerAnalyzeExpr(a, stmt->var_assign.assigned_expr, NULL);
         if (!stmt->var_assign.assigned_expr->assignable)
@@ -2382,7 +2406,11 @@ static void analyzerAnalyzeStmt(Analyzer *a, AstStmt *stmt)
             ts__addErr(compiler, &stmt->while_.cond->loc, "expression is not comparable");
         }
 
+        arrPush(a->continue_stack, stmt);
+        arrPush(a->break_stack, stmt);
         analyzerAnalyzeStmt(a, stmt->while_.stmt);
+        arrPop(a->continue_stack);
+        arrPop(a->break_stack);
         break;
     }
 
@@ -2407,7 +2435,11 @@ static void analyzerAnalyzeStmt(Analyzer *a, AstStmt *stmt)
             analyzerAnalyzeExpr(a, stmt->for_.inc, NULL);
         }
 
+        arrPush(a->continue_stack, stmt);
+        arrPush(a->break_stack, stmt);
         analyzerAnalyzeStmt(a, stmt->for_.stmt);
+        arrPop(a->continue_stack);
+        arrPop(a->break_stack);
         break;
     }
     }

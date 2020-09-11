@@ -44,8 +44,6 @@ Language features:
     static variables
 
     do-while
-    continue
-    break
 
 	struct literals
 	arrays
