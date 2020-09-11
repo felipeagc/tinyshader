@@ -2414,6 +2414,21 @@ static void analyzerAnalyzeStmt(Analyzer *a, AstStmt *stmt)
         break;
     }
 
+    case STMT_DO_WHILE: {
+        analyzerAnalyzeExpr(a, stmt->do_while.cond, NULL);
+        if (stmt->do_while.cond->type && !ts__getComparableType(stmt->do_while.cond->type))
+        {
+            ts__addErr(compiler, &stmt->do_while.cond->loc, "expression is not comparable");
+        }
+
+        arrPush(a->continue_stack, stmt);
+        arrPush(a->break_stack, stmt);
+        analyzerAnalyzeStmt(a, stmt->do_while.stmt);
+        arrPop(a->continue_stack);
+        arrPop(a->break_stack);
+        break;
+    }
+
     case STMT_FOR: {
         if (stmt->for_.init)
         {

@@ -1738,6 +1738,28 @@ static AstStmt *parseStmt(Parser *p)
         return stmt;
     }
 
+    case TOKEN_DO: {
+        parserNext(p, 1);
+        AstStmt *stmt = NEW(compiler, AstStmt);
+        stmt->kind = STMT_DO_WHILE;
+
+        stmt->do_while.stmt = parseStmt(p);
+        if (!stmt->do_while.stmt) return NULL;
+
+        if (!parserConsume(p, TOKEN_WHILE)) return NULL;
+
+        if (!parserConsume(p, TOKEN_LPAREN)) return NULL;
+
+        stmt->do_while.cond = parseExpr(p);
+        if (!stmt->do_while.cond) return NULL;
+
+        if (!parserConsume(p, TOKEN_RPAREN)) return NULL;
+
+        if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
+
+        return stmt;
+    }
+
     case TOKEN_FOR: {
         parserNext(p, 1);
         AstStmt *stmt = NEW(compiler, AstStmt);

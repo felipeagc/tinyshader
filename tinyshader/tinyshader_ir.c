@@ -531,7 +531,8 @@ irAddFuncParam(IRModule *m, IRInst *func, IRType *type, bool is_by_reference)
     return inst;
 }
 
-static IRInst *irAddBlock(IRModule *m, IRInst *func)
+// Does not add the block to the function
+static IRInst *irCreateBlock(IRModule *m, IRInst *func)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_BLOCK;
@@ -540,10 +541,14 @@ static IRInst *irAddBlock(IRModule *m, IRInst *func)
 
     inst->block.func = func;
 
-    assert(func->kind == IR_INST_FUNCTION);
-    arrPush(func->func.blocks, inst);
-
     return inst;
+}
+
+// Finally adds the block to the function
+static void irAddBlock(IRInst *block)
+{
+    assert(block->block.func->kind == IR_INST_FUNCTION);
+    arrPush(block->block.func->func.blocks, block);
 }
 
 static IRInst *irAddGlobal(IRModule *m, IRType *type, SpvStorageClass storage_class)
@@ -985,11 +990,14 @@ static void irBuildDiscard(IRModule *m)
     arrPush(block->block.insts, inst);
 }
 
-static void irBuildBr(IRModule *m, IRInst *target)
+static void
+irBuildBr(IRModule *m, IRInst *target, IRInst *merge_block, IRInst *continue_block)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_BRANCH;
     inst->branch.target = target;
+    inst->branch.merge_block = merge_block;
+    inst->branch.continue_block = continue_block;
 
     IRInst *block = irGetCurrentBlock(m);
     arrPush(block->block.insts, inst);
@@ -1332,13 +1340,25 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
         }
 
         case IR_INST_BRANCH: {
+            if (inst->branch.continue_block && inst->branch.merge_block)
+            {
+                assert(inst->branch.merge_block);
+
+                uint32_t params[3] = {
+                    inst->branch.merge_block->id,
+                    inst->branch.continue_block->id,
+                    SpvLoopControlMaskNone,
+                };
+                irModuleEncodeInst(m, SpvOpLoopMerge, params, 3);
+            }
+
             uint32_t params[1] = {inst->branch.target->id};
             irModuleEncodeInst(m, SpvOpBranch, params, 1);
             break;
         }
 
         case IR_INST_COND_BRANCH: {
-            if (!inst->cond_branch.continue_block)
+            if (!inst->cond_branch.continue_block && inst->cond_branch.merge_block)
             {
                 uint32_t params[2] = {
                     inst->cond_branch.merge_block->id,
@@ -1346,7 +1366,7 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
                 };
                 irModuleEncodeInst(m, SpvOpSelectionMerge, params, 2);
             }
-            else
+            else if (inst->cond_branch.continue_block && inst->cond_branch.merge_block)
             {
                 uint32_t params[3] = {
                     inst->cond_branch.merge_block->id,
@@ -2807,14 +2827,14 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
     case STMT_CONTINUE: {
         assert(arrLength(m->continue_stack) > 0);
         IRInst *block = m->continue_stack[arrLength(m->continue_stack) - 1];
-        irBuildBr(m, block);
+        irBuildBr(m, block, NULL, NULL);
         break;
     }
 
     case STMT_BREAK: {
         assert(arrLength(m->break_stack) > 0);
         IRInst *block = m->break_stack[arrLength(m->break_stack) - 1];
-        irBuildBr(m, block);
+        irBuildBr(m, block, NULL, NULL);
         break;
     }
 
@@ -2856,13 +2876,13 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
         IRInst *current_block = irGetCurrentBlock(m);
         IRInst *func = current_block->block.func;
 
-        IRInst *then_block = irAddBlock(m, func);
+        IRInst *then_block = irCreateBlock(m, func);
         IRInst *else_block = NULL;
         if (stmt->if_.else_stmt)
         {
-            else_block = irAddBlock(m, func);
+            else_block = irCreateBlock(m, func);
         }
-        IRInst *merge_block = irAddBlock(m, func);
+        IRInst *merge_block = irCreateBlock(m, func);
         if (!else_block) else_block = merge_block;
 
         irBuildCondBr(m, cond, then_block, else_block, merge_block, NULL);
@@ -2870,12 +2890,13 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
         // Then
         {
             irPositionAtEnd(m, then_block);
+            irAddBlock(then_block);
 
             irModuleBuildStmt(m, stmt->if_.if_stmt);
 
             if (!irBlockHasTerminator(irGetCurrentBlock(m)))
             {
-                irBuildBr(m, merge_block);
+                irBuildBr(m, merge_block, NULL, NULL);
             }
         }
 
@@ -2883,16 +2904,18 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
         if (stmt->if_.else_stmt)
         {
             irPositionAtEnd(m, else_block);
+            irAddBlock(else_block);
 
             irModuleBuildStmt(m, stmt->if_.else_stmt);
 
             if (!irBlockHasTerminator(irGetCurrentBlock(m)))
             {
-                irBuildBr(m, merge_block);
+                irBuildBr(m, merge_block, NULL, NULL);
             }
         }
 
         irPositionAtEnd(m, merge_block);
+        irAddBlock(merge_block);
 
         break;
     }
@@ -2901,15 +2924,16 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
         IRInst *current_block = irGetCurrentBlock(m);
         IRInst *func = current_block->block.func;
 
-        IRInst *check_block = irAddBlock(m, func);
-        IRInst *body_block = irAddBlock(m, func);
-        IRInst *continue_block = irAddBlock(m, func);
-        IRInst *merge_block = irAddBlock(m, func);
+        IRInst *check_block = irCreateBlock(m, func);
+        IRInst *body_block = irCreateBlock(m, func);
+        IRInst *continue_block = irCreateBlock(m, func);
+        IRInst *merge_block = irCreateBlock(m, func);
 
-        irBuildBr(m, check_block);
+        irBuildBr(m, check_block, NULL, NULL);
 
         {
             irPositionAtEnd(m, check_block);
+            irAddBlock(check_block);
 
             irModuleBuildExpr(m, stmt->while_.cond);
             IRInst *cond = stmt->while_.cond->value;
@@ -2926,6 +2950,7 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
 
         {
             irPositionAtEnd(m, body_block);
+            irAddBlock(body_block);
 
             arrPush(m->continue_stack, continue_block);
             arrPush(m->break_stack, merge_block);
@@ -2935,16 +2960,75 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
 
             if (!irBlockHasTerminator(irGetCurrentBlock(m)))
             {
-                irBuildBr(m, continue_block);
+                irBuildBr(m, continue_block, NULL, NULL);
             }
         }
 
         {
             irPositionAtEnd(m, continue_block);
-            irBuildBr(m, check_block);
+            irAddBlock(continue_block);
+
+            irBuildBr(m, check_block, NULL, NULL);
         }
 
         irPositionAtEnd(m, merge_block);
+        irAddBlock(merge_block);
+
+        break;
+    }
+
+    case STMT_DO_WHILE: {
+        IRInst *current_block = irGetCurrentBlock(m);
+        IRInst *func = current_block->block.func;
+
+        IRInst *header_block = irCreateBlock(m, func);
+        IRInst *body_block = irCreateBlock(m, func);
+        IRInst *continue_block = irCreateBlock(m, func);
+        IRInst *merge_block = irCreateBlock(m, func);
+
+        irBuildBr(m, header_block, NULL, NULL);
+
+        {
+            irPositionAtEnd(m, header_block);
+            irAddBlock(header_block);
+
+            irBuildBr(m, body_block, merge_block, continue_block);
+        }
+
+        {
+            irPositionAtEnd(m, body_block);
+            irAddBlock(body_block);
+
+            arrPush(m->continue_stack, continue_block);
+            arrPush(m->break_stack, merge_block);
+            irModuleBuildStmt(m, stmt->do_while.stmt);
+            arrPop(m->continue_stack);
+            arrPop(m->break_stack);
+
+            if (!irBlockHasTerminator(irGetCurrentBlock(m)))
+            {
+                irBuildBr(m, continue_block, NULL, NULL);
+            }
+        }
+
+        {
+            irPositionAtEnd(m, continue_block);
+            irAddBlock(continue_block);
+
+            irModuleBuildExpr(m, stmt->do_while.cond);
+            IRInst *cond = stmt->do_while.cond->value;
+            assert(cond);
+            cond = irLoadVal(m, cond);
+            cond = irBoolVal(m, cond);
+
+            if (!irBlockHasTerminator(irGetCurrentBlock(m)))
+            {
+                irBuildCondBr(m, cond, header_block, merge_block, NULL, NULL);
+            }
+        }
+
+        irPositionAtEnd(m, merge_block);
+        irAddBlock(merge_block);
 
         break;
     }
@@ -2958,15 +3042,16 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
             irModuleBuildStmt(m, stmt->for_.init);
         }
 
-        IRInst *check_block = irAddBlock(m, func);
-        IRInst *body_block = irAddBlock(m, func);
-        IRInst *continue_block = irAddBlock(m, func);
-        IRInst *merge_block = irAddBlock(m, func);
+        IRInst *check_block = irCreateBlock(m, func);
+        IRInst *body_block = irCreateBlock(m, func);
+        IRInst *continue_block = irCreateBlock(m, func);
+        IRInst *merge_block = irCreateBlock(m, func);
 
-        irBuildBr(m, check_block);
+        irBuildBr(m, check_block, NULL, NULL);
 
         {
             irPositionAtEnd(m, check_block);
+            irAddBlock(check_block);
 
             IRInst *cond = NULL;
 
@@ -2992,6 +3077,7 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
 
         {
             irPositionAtEnd(m, body_block);
+            irAddBlock(body_block);
 
             arrPush(m->continue_stack, continue_block);
             arrPush(m->break_stack, merge_block);
@@ -3001,22 +3087,24 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
 
             if (!irBlockHasTerminator(irGetCurrentBlock(m)))
             {
-                irBuildBr(m, continue_block);
+                irBuildBr(m, continue_block, NULL, NULL);
             }
         }
 
         {
             irPositionAtEnd(m, continue_block);
+            irAddBlock(continue_block);
 
             if (stmt->for_.inc)
             {
                 irModuleBuildExpr(m, stmt->for_.inc);
             }
 
-            irBuildBr(m, check_block);
+            irBuildBr(m, check_block, NULL, NULL);
         }
 
         irPositionAtEnd(m, merge_block);
+        irAddBlock(merge_block);
 
         break;
     }
@@ -3058,8 +3146,9 @@ static void irModuleBuildDecl(IRModule *m, AstDecl *decl)
                 arrLength(globals));
         }
 
-        IRInst *entry_block = irAddBlock(m, decl->value);
+        IRInst *entry_block = irCreateBlock(m, decl->value);
         irPositionAtEnd(m, entry_block);
+        irAddBlock(entry_block);
 
         IRInst **old_inputs =
             NEW_ARRAY(m->compiler, IRInst *, arrLength(decl->func.inputs));

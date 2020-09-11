@@ -27,6 +27,7 @@ TsCompiler *tsCompilerCreate()
     ts__hashSet(&compiler->keyword_table, "continue", (void *)TOKEN_CONTINUE);
     ts__hashSet(&compiler->keyword_table, "for", (void *)TOKEN_FOR);
     ts__hashSet(&compiler->keyword_table, "while", (void *)TOKEN_WHILE);
+    ts__hashSet(&compiler->keyword_table, "do", (void *)TOKEN_DO);
     ts__hashSet(&compiler->keyword_table, "if", (void *)TOKEN_IF);
     ts__hashSet(&compiler->keyword_table, "else", (void *)TOKEN_ELSE);
     ts__hashSet(&compiler->keyword_table, "struct", (void *)TOKEN_STRUCT);

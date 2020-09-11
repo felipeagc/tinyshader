@@ -195,6 +195,7 @@ typedef enum TokenKind {
     TOKEN_STRUCT,
     TOKEN_FOR,
     TOKEN_WHILE,
+    TOKEN_DO,
     TOKEN_SWITCH,
     TOKEN_CASE,
     TOKEN_DEFAULT,
@@ -638,6 +639,8 @@ struct IRInst
         struct
         {
             IRInst *target;
+            IRInst *merge_block;
+            IRInst *continue_block;
         } branch;
 
         struct
@@ -816,6 +819,7 @@ typedef enum AstStmtKind {
     STMT_BLOCK,
     STMT_IF,
     STMT_WHILE,
+    STMT_DO_WHILE,
     STMT_FOR,
 } AstStmtKind;
 
@@ -877,6 +881,12 @@ struct AstStmt
             AstExpr *cond;
             AstStmt *stmt;
         } while_;
+
+        struct
+        {
+            AstExpr *cond;
+            AstStmt *stmt;
+        } do_while;
 
         struct
         {

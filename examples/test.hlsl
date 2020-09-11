@@ -104,10 +104,11 @@ void vertex(in float3 pos : Heyy, out float3 out_pos : AAA)
 
 void pixel(in float3 pos : POSITION, in float2 uv : TEXCOORD0, out float4 color : SV_Target)
 {
-    for (int i = 0; i < 10; ++i)
-    {
-        i = i + 321;
-        break;
+    for (; pos.x > 0.0;) {
+        if (pos.x == 123.0)
+        {
+            break;
+        }
     }
 
 	// float4 my_color = gInput2.Sample(gInput3, uv) * float4(ddx(1.0), 1, 1, 1);

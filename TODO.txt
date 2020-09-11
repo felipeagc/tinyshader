@@ -43,8 +43,6 @@ Language features:
     groupshared variables
     static variables
 
-    do-while
-
 	struct literals
 	arrays
 	typedefs
