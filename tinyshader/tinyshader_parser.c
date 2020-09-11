@@ -46,7 +46,7 @@ static inline char preprocNext(PreprocessorFile *f, size_t count)
 {
     char c = f->file->text[f->pos];
     f->pos += count;
-    f->col += count;
+    f->col += (uint32_t)count;
     return c;
 }
 
@@ -59,7 +59,7 @@ static Location preprocErrLoc(PreprocessorFile *f)
 {
     Location err_loc = {0};
     err_loc.path = f->file->path;
-    err_loc.pos = f->pos;
+    err_loc.pos = (uint32_t)f->pos;
     err_loc.line = f->line;
     err_loc.col = f->col;
     err_loc.length = 1;
@@ -122,6 +122,23 @@ static bool preprocCanInsert(PreprocessorFile *f)
     return can_insert;
 }
 
+static int preprocIsAtLineEnd(PreprocessorFile *f)
+{
+    if (preprocIsAtEnd(f)) return 0;
+
+    if (preprocPeek(f, 0) == '\n')
+    {
+        return 1;
+    }
+
+    if (preprocPeek(f, 0) == '\r' && preprocPeek(f, 1) == '\n')
+    {
+        return 2;
+    }
+
+    return 0;
+}
+
 static void preprocessFile(Preprocessor *p, File *file)
 {
     PreprocessorFile *f = NEW(p->compiler, PreprocessorFile);
@@ -176,12 +193,12 @@ static void preprocessFile(Preprocessor *p, File *file)
 
                         ts__sbReset(&p->compiler->sb);
 
-                        while (!preprocIsAtEnd(f) && preprocPeek(f, 0) != '\n')
+                        while (!preprocIsAtEnd(f) && !preprocIsAtLineEnd(f))
                         {
-                            if (preprocPeek(f, 0) == '\\' && preprocPeek(f, 1) == '\n')
+                            if (preprocPeek(f, 0) == '\\' && preprocIsAtLineEnd(f))
                             {
                                 f->line++;
-                                preprocNext(f, 1);
+                                preprocNext(f, preprocIsAtLineEnd(f));
                             }
                             ts__sbAppendChar(&p->compiler->sb, preprocPeek(f, 0));
                             preprocNext(f, 1);
@@ -376,30 +393,18 @@ static void preprocessFile(Preprocessor *p, File *file)
                 ts__addErr(p->compiler, &err_loc, "unexpected preprocessor directive");
             }
 
-            while (!preprocIsAtEnd(f) && preprocPeek(f, 0) != '\n')
+            while (!preprocIsAtEnd(f) && !preprocIsAtLineEnd(f))
             {
                 preprocNext(f, 1);
             }
 
-            if (!preprocIsAtEnd(f) && preprocPeek(f, 0) == '\n')
+            if (!preprocIsAtEnd(f) && preprocIsAtLineEnd(f))
             {
-                preprocNext(f, 1);
+                preprocNext(f, preprocIsAtLineEnd(f));
                 f->line++;
             }
 
             preprocPrintLoc(p, f);
-            break;
-        }
-
-        case '\n': {
-            f->col = 0;
-            f->line++;
-            preprocNext(f, 1);
-
-            if (preprocCanInsert(f))
-            {
-                ts__sbAppendChar(&p->sb, c);
-            }
             break;
         }
 
@@ -410,7 +415,27 @@ static void preprocessFile(Preprocessor *p, File *file)
                 break;
             }
 
-            if (isLetter(preprocPeek(f, 0)))
+            if (preprocIsAtLineEnd(f))
+            {
+                f->col = 0;
+                f->line++;
+
+                if (preprocCanInsert(f))
+                {
+                    if (preprocIsAtLineEnd(f) == 1)
+                    {
+                        ts__sbAppendChar(&p->sb, '\n');
+                    }
+                    else
+                    {
+                        ts__sbAppendChar(&p->sb, '\r');
+                        ts__sbAppendChar(&p->sb, '\n');
+                    }
+                }
+
+                preprocNext(f, preprocIsAtLineEnd(f));
+            }
+            else if (isLetter(preprocPeek(f, 0)))
             {
                 size_t ident_start = f->pos;
 
@@ -443,7 +468,7 @@ static void preprocessFile(Preprocessor *p, File *file)
 
                 preprocNext(f, 2);
 
-                while (!preprocIsAtEnd(f) && preprocPeek(f, 0) != '\n')
+                while (!preprocIsAtEnd(f) && !preprocIsAtLineEnd(f))
                 {
                     preprocNext(f, 1);
                 }
@@ -468,12 +493,16 @@ static void preprocessFile(Preprocessor *p, File *file)
                 while ((preprocPeek(f, 0) != '*' || preprocPeek(f, 1) != '/') &&
                        !preprocIsAtEnd(f))
                 {
-                    if (preprocPeek(f, 0) == '\n')
+                    if (preprocIsAtLineEnd(f))
                     {
                         ++f->line;
                         f->col = 0;
+                        preprocNext(f, preprocIsAtLineEnd(f));
                     }
-                    preprocNext(f, 1);
+                    else
+                    {
+                        preprocNext(f, 1);
+                    }
                 }
 
                 if (!preprocIsAtEnd(f))
@@ -533,8 +562,6 @@ char *ts__preprocessRootFile(
     char *buffer = ts__sbBuild(&p->sb, &compiler->alloc);
     *out_length = strlen(buffer);
 
-    /* printf("%s\n", buffer); */
-
     ts__hashDestroy(&p->defines);
     ts__sbDestroy(&p->sb);
     return buffer;
@@ -555,13 +582,30 @@ static inline char lexerNext(Lexer *l, size_t count)
 {
     char c = l->text[l->pos];
     l->pos += count;
-    l->col += count;
+    l->col += (uint32_t)count;
     return c;
 }
 
 static inline char lexerPeek(Lexer *l, size_t offset)
 {
     return l->text[l->pos + offset];
+}
+
+static int lexerIsAtLineEnd(Lexer *l)
+{
+    if (lexerIsAtEnd(l)) return 0;
+
+    if (lexerPeek(l, 0) == '\n')
+    {
+        return 1;
+    }
+
+    if (lexerPeek(l, 0) == '\r' && lexerPeek(l, 1) == '\n')
+    {
+        return 2;
+    }
+
+    return 0;
 }
 
 static inline bool lexerConsume(Lexer *l, char c)
@@ -572,7 +616,7 @@ static inline bool lexerConsume(Lexer *l, char c)
         err_loc.length = 1;
         err_loc.line = l->line;
         err_loc.col = l->col;
-        err_loc.pos = l->pos;
+        err_loc.pos = (uint32_t)l->pos;
         ts__addErr(l->compiler, &err_loc, "unexpected character");
         lexerNext(l, 1);
         return false;
@@ -585,7 +629,7 @@ static inline void lexerAddSimpleToken(Lexer *l, TokenKind kind, size_t length)
 {
     lexerNext(l, length);
     l->token.kind = kind;
-    l->token.loc.length = length;
+    l->token.loc.length = (uint32_t)length;
 }
 
 void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
@@ -602,7 +646,7 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
     {
         memset(&l->token, 0, sizeof(Token));
         l->token.loc.path = l->file_path;
-        l->token.loc.pos = l->pos;
+        l->token.loc.pos = (uint32_t)l->pos;
         l->token.loc.length = 0;
         l->token.loc.line = l->line;
         l->token.loc.col = l->col;
@@ -653,7 +697,7 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
                 l->file_path = ts__sbBuild(&compiler->sb, &compiler->alloc);
             }
 
-            while (!lexerIsAtEnd(l) && lexerPeek(l, 0) != '\n')
+            while (!lexerIsAtEnd(l) && !lexerIsAtLineEnd(l))
             {
                 lexerNext(l, 1);
             }
@@ -666,13 +710,6 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
 
         case '\t':
         case ' ': {
-            lexerNext(l, 1);
-            break;
-        }
-
-        case '\n': {
-            l->col = 0;
-            l->line++;
             lexerNext(l, 1);
             break;
         }
@@ -748,7 +785,7 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
             {
                 lexerNext(l, 2);
 
-                while (lexerPeek(l, 0) != '\n' && !lexerIsAtEnd(l))
+                while (!lexerIsAtLineEnd(l) && !lexerIsAtEnd(l))
                 {
                     lexerNext(l, 1);
                 }
@@ -761,12 +798,16 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
                 while ((lexerPeek(l, 0) != '*' || lexerPeek(l, 1) != '/') &&
                        !lexerIsAtEnd(l))
                 {
-                    if (lexerPeek(l, 0) == '\n')
+                    if (lexerIsAtLineEnd(l))
                     {
                         ++l->line;
                         l->col = 0;
+                        lexerNext(l, lexerIsAtLineEnd(l));
                     }
-                    lexerNext(l, 1);
+                    else
+                    {
+                        lexerNext(l, 1);
+                    }
                 }
 
                 if (!lexerIsAtEnd(l))
@@ -778,7 +819,7 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
                     Location err_loc = l->token.loc;
                     err_loc.length = 1;
                     err_loc.path = l->file_path;
-                    err_loc.pos = l->pos;
+                    err_loc.pos = (uint32_t)l->pos;
                     err_loc.line = l->line;
                     err_loc.col = l->col;
                     ts__addErr(l->compiler, &err_loc, "unclosed comment");
@@ -950,7 +991,7 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
                 Location err_loc = l->token.loc;
                 err_loc.length = 1;
                 err_loc.path = l->file_path;
-                err_loc.pos = l->pos;
+                err_loc.pos = (uint32_t)l->pos;
                 err_loc.line = l->line;
                 err_loc.col = l->col;
                 ts__addErr(l->compiler, &err_loc, "unclosed string");
@@ -961,12 +1002,18 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
 
             l->token.kind = TOKEN_STRING_LIT;
             l->token.str = ts__sbBuild(&compiler->sb, &compiler->alloc);
-            l->token.loc.length = l->pos - l->token.loc.pos;
+            l->token.loc.length = (uint32_t)(l->pos - l->token.loc.pos);
             break;
         }
 
         default: {
-            if (isLetter(lexerPeek(l, 0)))
+            if (lexerIsAtLineEnd(l))
+            {
+                l->col = 0;
+                l->line++;
+                lexerNext(l, lexerIsAtLineEnd(l));
+            }
+            else if (isLetter(lexerPeek(l, 0)))
             {
                 while (!lexerIsAtEnd(l) && isAlphanum(lexerPeek(l, 0)))
                 {
@@ -980,7 +1027,7 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
                 memcpy(ident, ident_start, ident_length);
                 ident[ident_length] = '\0';
 
-                l->token.loc.length = ident_length;
+                l->token.loc.length = (uint32_t)ident_length;
                 l->token.str = ident;
 
                 void *result = NULL;
@@ -1097,10 +1144,11 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
             }
             else
             {
+                printf("char: '%d'\n", (int)lexerPeek(l, 0));
                 Location err_loc = l->token.loc;
                 err_loc.length = 1;
                 err_loc.path = l->file_path;
-                err_loc.pos = l->pos;
+                err_loc.pos = (uint32_t)l->pos;
                 err_loc.line = l->line;
                 err_loc.col = l->col;
                 ts__addErr(l->compiler, &err_loc, "unknown token");

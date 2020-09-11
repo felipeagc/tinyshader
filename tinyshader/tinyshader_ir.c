@@ -1247,7 +1247,7 @@ static void irModuleEncodeEntryPoints(IRModule *m)
         assert(inst->entry_point.func->id);
 
         {
-            uint32_t name_len = strlen(inst->entry_point.name);
+            size_t name_len = strlen(inst->entry_point.name);
             uint32_t name_words = ROUND_TO_4(name_len + 1) / 4;
 
             uint32_t param_count = 2 + name_words + inst->entry_point.global_count;

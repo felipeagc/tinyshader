@@ -303,7 +303,7 @@ static uint32_t typeSizeOf(Module *m, AstType *type)
     }
 
     case TYPE_STRUCT: {
-        for (size_t i = 0; i < type->struct_.field_count; ++i)
+        for (uint32_t i = 0; i < type->struct_.field_count; ++i)
         {
             AstType *field = type->struct_.fields[i];
             uint32_t field_align = typeAlignOf(m, field);
@@ -983,7 +983,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 assert(right->kind == EXPR_IDENT);
 
                 char *selector = right->ident.name;
-                uint32_t new_vec_dim = strlen(selector);
+                size_t new_vec_dim = strlen(selector);
                 if (new_vec_dim > 4)
                 {
                     ts__addErr(
@@ -1026,7 +1026,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 }
 
                 right->ident.shuffle_indices = positions;
-                right->ident.shuffle_index_count = new_vec_dim;
+                right->ident.shuffle_index_count = (uint32_t)new_vec_dim;
 
                 if (new_vec_dim == 1)
                 {
@@ -1035,7 +1035,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 else
                 {
                     right->type =
-                        newVectorType(m, left->type->vector.elem_type, new_vec_dim);
+                        newVectorType(m, left->type->vector.elem_type, (uint32_t)new_vec_dim);
                 }
             }
             else
@@ -2688,7 +2688,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                     {
                         IRDecoration dec = {0};
                         dec.kind = SpvDecorationBinding;
-                        dec.value = *attr->values[0]->resolved_int;
+                        dec.value = (uint32_t)*attr->values[0]->resolved_int;
                         arrPush(decl->decorations, dec);
                     }
                 }
@@ -2706,7 +2706,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                     {
                         IRDecoration dec = {0};
                         dec.kind = SpvDecorationDescriptorSet;
-                        dec.value = *attr->values[1]->resolved_int;
+                        dec.value = (uint32_t)*attr->values[1]->resolved_int;
                         arrPush(decl->decorations, dec);
                     }
                 }
