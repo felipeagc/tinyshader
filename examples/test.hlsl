@@ -17,6 +17,11 @@
 #define SOME_CONST 1.0123123
 #define HELLO 123 + 123
 
+#ifndef ASDASD
+#else
+heyy
+#endif
+
 struct Uniform
 {
 	float4 yoo;

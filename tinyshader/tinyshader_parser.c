@@ -115,9 +115,9 @@ static void preprocPrintLoc(Preprocessor *p, PreprocessorFile *f)
 static bool preprocCanInsert(PreprocessorFile *f)
 {
     bool can_insert = true;
-    if (arrLength(f->if_stack) > 0 && !(*arrLast(f->if_stack)))
+    if (arrLength(f->if_stack) > 0)
     {
-        can_insert = false;
+        can_insert = *arrLast(f->if_stack);
     }
     return can_insert;
 }
@@ -303,6 +303,20 @@ static void preprocessFile(Preprocessor *p, File *file)
                     void *result;
                     arrPush(f->if_stack, !ts__hashGet(&p->defines, ident, &result));
                 }
+            }
+            else if (strncmp(curr, "#else", strlen("#else")) == 0)
+            {
+                preprocNext(f, strlen("#else"));
+
+                if (arrLength(f->if_stack) == 0)
+                {
+                    Location err_loc = preprocErrLoc(f);
+                    ts__addErr(p->compiler, &err_loc, "unmatched #else");
+                    break;
+                }
+
+                bool *insert = &f->if_stack[arrLength(f->if_stack)-1];
+                *insert = !(*insert); // Invert the condition
             }
             else if (strncmp(curr, "#endif", strlen("#endif")) == 0)
             {
@@ -1144,7 +1158,6 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
             }
             else
             {
-                printf("char: '%d'\n", (int)lexerPeek(l, 0));
                 Location err_loc = l->token.loc;
                 err_loc.length = 1;
                 err_loc.path = l->file_path;

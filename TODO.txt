@@ -30,7 +30,6 @@ Builtin functions:
 Preprocessor:
 	#error
 	#if
-	#else
 	#elif
     function-like #define
 
