@@ -34,7 +34,7 @@ struct Uniform
 const int my_const = 123;
 
 ConstantBuffer<Uniform> gInput;
-Texture2D<float4> gInput2;
+Texture2D gInput2;
 SamplerState gInput3;
 
 void otherFunc(inout float3 pos)
@@ -116,6 +116,6 @@ void pixel(in float3 pos : POSITION, in float2 uv : TEXCOORD0, out float4 color 
         }
     }
 
-	// float4 my_color = gInput2.Sample(gInput3, uv) * float4(ddx(1.0), 1, 1, 1);
-	// color = my_color;
+	float4 my_color = gInput2.Sample(gInput3, uv) * float4(ddx(1.0), 1, 1, 1);
+	color = my_color;
 }

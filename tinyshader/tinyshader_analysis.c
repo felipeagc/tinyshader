@@ -1034,8 +1034,8 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 }
                 else
                 {
-                    right->type =
-                        newVectorType(m, left->type->vector.elem_type, (uint32_t)new_vec_dim);
+                    right->type = newVectorType(
+                        m, left->type->vector.elem_type, (uint32_t)new_vec_dim);
                 }
             }
             else
@@ -2091,13 +2091,20 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
     case EXPR_TEXTURE_TYPE: {
         AstType *type_type = newBasicType(m, TYPE_TYPE);
-        analyzerAnalyzeExpr(a, expr->texture.sampled_type_expr, type_type);
-        if (!expr->texture.sampled_type_expr->type)
+
+        AstType *sampled_type = NULL;
+        if (expr->texture.sampled_type_expr)
         {
-            break;
+            analyzerAnalyzeExpr(a, expr->texture.sampled_type_expr, type_type);
+            if (!expr->texture.sampled_type_expr->type) break;
+
+            sampled_type = expr->texture.sampled_type_expr->as_type;
+        }
+        else
+        {
+            sampled_type = newVectorType(m, newFloatType(m, 32), 4);
         }
 
-        AstType *sampled_type = expr->texture.sampled_type_expr->as_type;
         assert(sampled_type);
 
         if (!(sampled_type->kind == TYPE_VECTOR || sampled_type->kind == TYPE_INT ||
@@ -2332,9 +2339,7 @@ static void analyzerAnalyzeStmt(Analyzer *a, AstStmt *stmt)
         if (arrLength(a->continue_stack) == 0)
         {
             ts__addErr(
-                compiler,
-                &stmt->loc,
-                "continue must be inside a control flow structure");
+                compiler, &stmt->loc, "continue must be inside a control flow structure");
         }
         break;
     }
@@ -2344,9 +2349,7 @@ static void analyzerAnalyzeStmt(Analyzer *a, AstStmt *stmt)
         if (arrLength(a->break_stack) == 0)
         {
             ts__addErr(
-                compiler,
-                &stmt->loc,
-                "break must be inside a control flow structure");
+                compiler, &stmt->loc, "break must be inside a control flow structure");
         }
         break;
     }
@@ -2416,9 +2419,11 @@ static void analyzerAnalyzeStmt(Analyzer *a, AstStmt *stmt)
 
     case STMT_DO_WHILE: {
         analyzerAnalyzeExpr(a, stmt->do_while.cond, NULL);
-        if (stmt->do_while.cond->type && !ts__getComparableType(stmt->do_while.cond->type))
+        if (stmt->do_while.cond->type &&
+            !ts__getComparableType(stmt->do_while.cond->type))
         {
-            ts__addErr(compiler, &stmt->do_while.cond->loc, "expression is not comparable");
+            ts__addErr(
+                compiler, &stmt->do_while.cond->loc, "expression is not comparable");
         }
 
         arrPush(a->continue_stack, stmt);
@@ -2715,12 +2720,17 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
             arrPush(decl->type->struct_.decorations, dec);
         }
 
-        // Add decorations
+        bool got_binding_index = false;
+
+        uint32_t binding_index = 0;
+        uint32_t set_index = 0;
+
+        // Retrieve set & binding from attributes
         for (uint32_t i = 0; i < arrLength(decl->attributes); ++i)
         {
             AstAttribute *attr = &decl->attributes[i];
 
-            if (strcmp(attr->name, "vk::binding") == 0)
+            if (decl->var.kind == VAR_UNIFORM && strcmp(attr->name, "vk::binding") == 0)
             {
                 if (arrLength(attr->values) >= 1)
                 {
@@ -2733,10 +2743,8 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                     }
                     else
                     {
-                        IRDecoration dec = {0};
-                        dec.kind = SpvDecorationBinding;
-                        dec.value = (uint32_t)*attr->values[0]->resolved_int;
-                        arrPush(decl->decorations, dec);
+                        binding_index = (uint32_t)*attr->values[0]->resolved_int;
+                        got_binding_index = true;
                     }
                 }
 
@@ -2751,13 +2759,31 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                     }
                     else
                     {
-                        IRDecoration dec = {0};
-                        dec.kind = SpvDecorationDescriptorSet;
-                        dec.value = (uint32_t)*attr->values[1]->resolved_int;
-                        arrPush(decl->decorations, dec);
+                        set_index = (uint32_t)*attr->values[1]->resolved_int;
                     }
                 }
             }
+        }
+
+        if (decl->var.kind == VAR_UNIFORM)
+        {
+            if (!got_binding_index)
+            {
+                binding_index = a->last_uniform_binding++;
+            }
+            else if (set_index == 0)
+            {
+                a->last_uniform_binding = binding_index + 1;
+            }
+
+            IRDecoration dec = {0};
+            dec.kind = SpvDecorationBinding;
+            dec.value = binding_index;
+            arrPush(decl->decorations, dec);
+
+            dec.kind = SpvDecorationDescriptorSet;
+            dec.value = set_index;
+            arrPush(decl->decorations, dec);
         }
 
         break;

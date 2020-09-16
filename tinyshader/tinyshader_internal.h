@@ -1146,6 +1146,8 @@ typedef struct Analyzer
 
     /*array*/ AstStmt **continue_stack;
     /*array*/ AstStmt **break_stack;
+
+    uint32_t last_uniform_binding;
 } Analyzer;
 
 ////////////////////////////////

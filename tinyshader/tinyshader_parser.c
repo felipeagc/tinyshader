@@ -315,7 +315,7 @@ static void preprocessFile(Preprocessor *p, File *file)
                     break;
                 }
 
-                bool *insert = &f->if_stack[arrLength(f->if_stack)-1];
+                bool *insert = &f->if_stack[arrLength(f->if_stack) - 1];
                 *insert = !(*insert); // Invert the condition
             }
             else if (strncmp(curr, "#endif", strlen("#endif")) == 0)
@@ -2108,12 +2108,19 @@ static AstDecl *parseTopLevel(Parser *p)
             default: assert(0); break;
             }
 
-            if (!parserConsume(p, TOKEN_LESS)) return NULL;
+            if (parserPeek(p, 0)->kind == TOKEN_LESS)
+            {
+                if (!parserConsume(p, TOKEN_LESS)) return NULL;
 
-            type_expr->texture.sampled_type_expr = parsePrefixedUnaryExpr(p);
-            if (!type_expr->texture.sampled_type_expr) return NULL;
+                type_expr->texture.sampled_type_expr = parsePrefixedUnaryExpr(p);
+                if (!type_expr->texture.sampled_type_expr) return NULL;
 
-            if (!parserConsume(p, TOKEN_GREATER)) return NULL;
+                if (!parserConsume(p, TOKEN_GREATER)) return NULL;
+            }
+            else
+            {
+                type_expr->texture.sampled_type_expr = NULL;
+            }
 
             break;
         }

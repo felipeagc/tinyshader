@@ -36,6 +36,7 @@ Preprocessor:
 Vulkan-specifics:
     push constants
     combined image sampler
+    specialization constants
 
 Language features:
     shared variables
@@ -50,6 +51,8 @@ Language features:
 
 	compute shaders
 	structured buffers
+
+    vector casting: float2(uint2(1, 2))
 
 Low priority:
 	1-dimentional vector types
