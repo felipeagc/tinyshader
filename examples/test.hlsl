@@ -109,8 +109,8 @@ void vertex(in float3 pos : Heyy, out float3 out_pos : AAA)
 
 void pixel(in float3 pos : POSITION, in float2 uv : TEXCOORD0, out float4 color : SV_Target)
 {
-    for (; pos.x > 0.0;) {
-        if (pos.x == 123.0)
+    for (; pos.x > 0;) {
+        if (pos.x <= 123)
         {
             break;
         }

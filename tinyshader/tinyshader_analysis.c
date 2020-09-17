@@ -653,7 +653,14 @@ static bool canCoerceExprToScalarType(Analyzer *a, AstExpr *expr, AstType *scala
         case BINOP_SUB:
         case BINOP_MUL:
         case BINOP_DIV:
-        case BINOP_MOD: {
+        case BINOP_MOD:
+
+        case BINOP_GREATER:
+        case BINOP_GREATEREQ:
+        case BINOP_LESS:
+        case BINOP_LESSEQ:
+        case BINOP_EQ:
+        case BINOP_NOTEQ: {
             return canCoerceExprToScalarType(a, expr->binary.left, scalar_type) &&
                    canCoerceExprToScalarType(a, expr->binary.right, scalar_type);
         }
@@ -2253,6 +2260,9 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
         case BINOP_GREATER:
         case BINOP_GREATEREQ: {
             if (!expr->binary.left->type || !expr->binary.right->type) break;
+
+            tryCoerceExprToScalarType(a, expr->binary.left, expr->binary.right->type);
+            tryCoerceExprToScalarType(a, expr->binary.right, expr->binary.left->type);
 
             AstType *left_type = expr->binary.left->type;
             AstType *right_type = expr->binary.right->type;
