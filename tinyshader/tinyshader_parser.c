@@ -1655,6 +1655,12 @@ static AstStmt *parseStmt(Parser *p)
 
     switch (parserPeek(p, 0)->kind)
     {
+    case TOKEN_SEMICOLON:
+    {
+        parserNext(p, 1);
+        return NULL;
+    }
+
     case TOKEN_RETURN: {
         parserNext(p, 1);
 
@@ -1978,6 +1984,12 @@ static AstDecl *parseTopLevel(Parser *p)
 
     switch (parserPeek(p, 0)->kind)
     {
+    case TOKEN_SEMICOLON:
+    {
+        parserNext(p, 1);
+        return NULL;
+    }
+
     case TOKEN_CONST: {
         parserNext(p, 1);
         AstDecl *decl = NEW(compiler, AstDecl);
