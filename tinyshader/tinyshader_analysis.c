@@ -2201,6 +2201,40 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             break;
         }
 
+        case IR_BUILTIN_INTERLOCKED_ADD: {
+            if (param_count != 2)
+            {
+                ts__addErr(compiler, &expr->loc, "InterlockedAdd requires 2 parameters");
+                break;
+            }
+
+            if (!params[0]->type || !params[1]->type) break;
+
+            tryCoerceExprToScalarType(a, params[1], params[0]->type);
+
+            if (params[0]->type != params[1]->type)
+            {
+                ts__addErr(
+                    compiler,
+                    &expr->loc,
+                    "mismatched types for InterlockedAdd parameters");
+                break;
+            }
+
+            if (params[0]->type->kind != TYPE_INT)
+            {
+                ts__addErr(
+                    compiler,
+                    &expr->loc,
+                    "InterlockedAdd requires scalar integer parameters");
+                break;
+            }
+
+            expr->type = newBasicType(m, TYPE_VOID);
+
+            break;
+        }
+
         case IR_BUILTIN_CREATE_SAMPLED_IMAGE: assert(0); break;
         }
 

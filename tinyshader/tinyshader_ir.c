@@ -2114,6 +2114,21 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
                 irModuleEncodeInst(m, SpvOpDPdy, params, 3);
                 break;
             }
+
+            case IR_BUILTIN_INTERLOCKED_ADD: {
+                assert(param_values[0]->type->kind == IR_TYPE_POINTER);
+
+                uint32_t params[6] = {
+                    param_values[0]->type->ptr.sub->id,
+                    inst->id,
+                    param_values[0]->id,
+                    param_values[1]->id,
+                    param_values[2]->id,
+                    param_values[3]->id,
+                };
+                irModuleEncodeInst(m, SpvOpAtomicIAdd, params, 6);
+                break;
+            }
             }
 
             break;
@@ -2761,15 +2776,45 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
         uint32_t param_count = arrLength(expr->builtin_call.params);
         IRInst **param_values = NEW_ARRAY(compiler, IRInst *, param_count);
 
-        for (uint32_t i = 0; i < param_count; ++i)
+        IRType *result_type = convertTypeToIR(m->mod, m, expr->type);
+
+        switch (expr->builtin_call.kind)
         {
-            AstExpr *param = expr->builtin_call.params[i];
-            irModuleBuildExpr(m, param);
-            assert(param->value);
-            param_values[i] = irLoadVal(m, param->value);
+        case IR_BUILTIN_INTERLOCKED_ADD: {
+            param_count = 4;
+            param_values = NEW_ARRAY(compiler, IRInst *, param_count);
+
+            IRType *uint_type = irNewIntType(m, 32, false);
+
+            AstExpr *ptr = expr->builtin_call.params[0];
+            irModuleBuildExpr(m, ptr);
+            assert(ptr->value);
+
+            AstExpr *value = expr->builtin_call.params[1];
+            irModuleBuildExpr(m, value);
+            assert(value->value);
+
+            param_values[0] = ptr->value;
+            param_values[1] = irBuildConstInt(m, uint_type, SpvScopeDevice);
+            param_values[2] = irBuildConstInt(m, uint_type, SpvMemorySemanticsMaskNone);
+            param_values[3] = value->value;
+            break;
         }
 
-        IRType *result_type = convertTypeToIR(m->mod, m, expr->type);
+        default: {
+            param_count = arrLength(expr->builtin_call.params);
+            param_values = NEW_ARRAY(compiler, IRInst *, param_count);
+
+            for (uint32_t i = 0; i < param_count; ++i)
+            {
+                AstExpr *param = expr->builtin_call.params[i];
+                irModuleBuildExpr(m, param);
+                assert(param->value);
+                param_values[i] = irLoadVal(m, param->value);
+            }
+            break;
+        }
+        }
 
         expr->value = irBuildBuiltinCall(
             m, expr->builtin_call.kind, result_type, param_values, param_count);
