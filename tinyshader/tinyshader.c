@@ -36,6 +36,10 @@ TsCompiler *tsCompilerCreate()
     ts__hashSet(&compiler->keyword_table, "inout", (void *)TOKEN_INOUT);
     ts__hashSet(
         &compiler->keyword_table, "ConstantBuffer", (void *)TOKEN_CONSTANT_BUFFER);
+    ts__hashSet(
+        &compiler->keyword_table, "StructuredBuffer", (void *)TOKEN_STRUCTURED_BUFFER);
+    ts__hashSet(
+        &compiler->keyword_table, "RWStructuredBuffer", (void *)TOKEN_RW_STRUCTURED_BUFFER);
     ts__hashSet(&compiler->keyword_table, "SamplerState", (void *)TOKEN_SAMPLER_STATE);
     ts__hashSet(&compiler->keyword_table, "Texture1D", (void *)TOKEN_TEXTURE_1D);
     ts__hashSet(&compiler->keyword_table, "Texture2D", (void *)TOKEN_TEXTURE_2D);

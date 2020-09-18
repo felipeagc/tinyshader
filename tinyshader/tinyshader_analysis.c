@@ -119,6 +119,21 @@ static char *typeToString(TsCompiler *compiler, AstType *type)
         break;
     }
 
+    case TYPE_CONSTANT_BUFFER:
+        prefix = "CB";
+        sub = typeToString(compiler, type->buffer.sub);
+        break;
+
+    case TYPE_STRUCTURED_BUFFER:
+        prefix = "SB";
+        sub = typeToString(compiler, type->buffer.sub);
+        break;
+
+    case TYPE_RW_STRUCTURED_BUFFER:
+        prefix = "RWSB";
+        sub = typeToString(compiler, type->buffer.sub);
+        break;
+
     case TYPE_FUNC: {
         prefix = "func";
 
@@ -231,6 +246,10 @@ static uint32_t typeAlignOf(Module *m, AstType *type)
     case TYPE_INT: align = type->int_.bits / 8; break;
     case TYPE_FLOAT: align = type->float_.bits / 8; break;
 
+    case TYPE_CONSTANT_BUFFER: align = typeAlignOf(m, type->buffer.sub); break;
+    case TYPE_STRUCTURED_BUFFER: align = typeAlignOf(m, type->buffer.sub); break;
+    case TYPE_RW_STRUCTURED_BUFFER: align = typeAlignOf(m, type->buffer.sub); break;
+
     case TYPE_VECTOR: {
         switch (type->vector.size)
         {
@@ -285,6 +304,10 @@ static uint32_t typeSizeOf(Module *m, AstType *type)
     {
     case TYPE_INT: size = type->int_.bits / 8; break;
     case TYPE_FLOAT: size = type->float_.bits / 8; break;
+
+    case TYPE_CONSTANT_BUFFER: size = typeSizeOf(m, type->buffer.sub); break;
+    case TYPE_STRUCTURED_BUFFER: size = typeSizeOf(m, type->buffer.sub); break;
+    case TYPE_RW_STRUCTURED_BUFFER: size = typeSizeOf(m, type->buffer.sub); break;
 
     case TYPE_VECTOR: {
         switch (type->vector.size)
@@ -464,6 +487,30 @@ static AstType *newSampledImageType(Module *m, AstType *image_type)
     return getCachedType(m, ty);
 }
 
+static AstType *newConstantBufferType(Module *m, AstType *sub)
+{
+    AstType *ty = NEW(m->compiler, AstType);
+    ty->kind = TYPE_CONSTANT_BUFFER;
+    ty->buffer.sub = sub;
+    return getCachedType(m, ty);
+}
+
+static AstType *newStructuredBufferType(Module *m, AstType *sub)
+{
+    AstType *ty = NEW(m->compiler, AstType);
+    ty->kind = TYPE_STRUCTURED_BUFFER;
+    ty->buffer.sub = sub;
+    return getCachedType(m, ty);
+}
+
+static AstType *newRWStructuredBufferType(Module *m, AstType *sub)
+{
+    AstType *ty = NEW(m->compiler, AstType);
+    ty->kind = TYPE_RW_STRUCTURED_BUFFER;
+    ty->buffer.sub = sub;
+    return getCachedType(m, ty);
+}
+
 static bool isTypeCastable(AstType *src_type, AstType *dst_type)
 {
     if (src_type == dst_type)
@@ -626,6 +673,22 @@ AstType *ts__getElemType(AstType *type)
     }
 
     return type;
+}
+
+AstType *ts__getStructType(AstType *type)
+{
+    switch (type->kind)
+    {
+    case TYPE_STRUCT: return type;
+    case TYPE_CONSTANT_BUFFER:
+    {
+        return ts__getStructType(type->buffer.sub);
+    }
+
+    default: break;
+    }
+
+    return NULL;
 }
 
 static bool canCoerceExprToScalarType(Analyzer *a, AstExpr *expr, AstType *scalar_type)
@@ -977,7 +1040,9 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            if (left->type->kind == TYPE_STRUCT)
+            AstType *struct_type = ts__getStructType(left->type);
+
+            if (struct_type)
             {
                 assert(left->scope);
 
@@ -2127,6 +2192,54 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
         break;
     }
 
+    case EXPR_CONSTANT_BUFFER_TYPE: {
+        assert(expr->buffer.sub_expr);
+
+        AstType *type_type = newBasicType(m, TYPE_TYPE);
+
+        analyzerAnalyzeExpr(a, expr->buffer.sub_expr, type_type);
+        if (!expr->buffer.sub_expr->type) break;
+
+        AstType *subtype = expr->buffer.sub_expr->as_type;
+        assert(subtype);
+
+        expr->type = type_type;
+        expr->as_type = newConstantBufferType(m, subtype);
+        break;
+    }
+
+    case EXPR_STRUCTURED_BUFFER_TYPE: {
+        assert(expr->buffer.sub_expr);
+
+        AstType *type_type = newBasicType(m, TYPE_TYPE);
+
+        analyzerAnalyzeExpr(a, expr->buffer.sub_expr, type_type);
+        if (!expr->buffer.sub_expr->type) break;
+
+        AstType *subtype = expr->buffer.sub_expr->as_type;
+        assert(subtype);
+
+        expr->type = type_type;
+        expr->as_type = newStructuredBufferType(m, subtype);
+        break;
+    }
+
+    case EXPR_RW_STRUCTURED_BUFFER_TYPE: {
+        assert(expr->buffer.sub_expr);
+
+        AstType *type_type = newBasicType(m, TYPE_TYPE);
+
+        analyzerAnalyzeExpr(a, expr->buffer.sub_expr, type_type);
+        if (!expr->buffer.sub_expr->type) break;
+
+        AstType *subtype = expr->buffer.sub_expr->as_type;
+        assert(subtype);
+
+        expr->type = type_type;
+        expr->as_type = newRWStructuredBufferType(m, subtype);
+        break;
+    }
+
     case EXPR_UNARY: {
         switch (expr->unary.op)
         {
@@ -2771,22 +2884,17 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
             arrPush(a->scope_func->func.var_decls, decl);
         }
 
-        if (decl->type->kind == TYPE_STRUCT)
+        AstType *struct_type = ts__getStructType(decl->type);
+
+        if (struct_type)
         {
             decl->scope = NEW(compiler, Scope);
             scopeInit(decl->scope, NULL, decl);
-            for (uint32_t i = 0; i < decl->type->struct_.field_count; ++i)
+            for (uint32_t i = 0; i < struct_type->struct_.field_count; ++i)
             {
-                AstDecl *field_decl = decl->type->struct_.field_decls[i];
+                AstDecl *field_decl = struct_type->struct_.field_decls[i];
                 scopeAdd(decl->scope, field_decl->name, field_decl);
             }
-        }
-
-        if (decl->var.kind == VAR_UNIFORM && decl->type->kind == TYPE_STRUCT)
-        {
-            IRDecoration dec = {0};
-            dec.kind = SpvDecorationBlock;
-            arrPush(decl->type->struct_.decorations, dec);
         }
 
         bool got_binding_index = false;
@@ -2889,13 +2997,14 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
 
         decl->type = decl->struct_field.type_expr->as_type;
 
-        if (decl->type->kind == TYPE_STRUCT)
+        AstType *struct_type = ts__getStructType(decl->type);
+        if (struct_type)
         {
             decl->scope = NEW(compiler, Scope);
             scopeInit(decl->scope, NULL, decl);
-            for (uint32_t i = 0; i < decl->type->struct_.field_count; ++i)
+            for (uint32_t i = 0; i < struct_type->struct_.field_count; ++i)
             {
-                AstDecl *field_decl = decl->type->struct_.field_decls[i];
+                AstDecl *field_decl = struct_type->struct_.field_decls[i];
                 scopeAdd(decl->scope, field_decl->name, field_decl);
             }
         }

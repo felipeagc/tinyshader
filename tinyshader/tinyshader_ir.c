@@ -68,6 +68,14 @@ static char *irTypeToString(TsCompiler *compiler, IRType *type)
         break;
     }
 
+    case IR_TYPE_RUNTIME_ARRAY: {
+        prefix = "r_array";
+
+        assert(type->array.sub);
+        sub = irTypeToString(compiler, type->array.sub);
+        break;
+    }
+
     case IR_TYPE_FUNC: {
         prefix = "func";
 
@@ -247,6 +255,15 @@ static bool irIsTypeCastable(IRType *src_type, IRType *dst_type, SpvOp *op)
     assert(0);
 }
 
+static void irTypeSetDecorations(
+    IRModule *m, IRType *type, IRDecoration *decorations, uint32_t decoration_count)
+{
+    type->decoration_count = decoration_count;
+
+    type->decorations = NEW_ARRAY(m->compiler, IRDecoration, decoration_count);
+    memcpy(type->decorations, decorations, sizeof(IRDecoration) * decoration_count);
+}
+
 static IRType *irGetCachedType(IRModule *m, IRType *type)
 {
     char *type_string = irTypeToString(m->compiler, type);
@@ -316,6 +333,14 @@ static IRType *irNewIntType(IRModule *m, uint32_t bits, bool is_signed)
     return irGetCachedType(m, ty);
 }
 
+static IRType *irNewRuntimeArrayType(IRModule *m, IRType *sub)
+{
+    IRType *ty = NEW(m->compiler, IRType);
+    ty->kind = IR_TYPE_RUNTIME_ARRAY;
+    ty->array.sub = sub;
+    return irGetCachedType(m, ty);
+}
+
 static IRType *
 irNewFuncType(IRModule *m, IRType *return_type, IRType **params, uint32_t param_count)
 {
@@ -336,8 +361,6 @@ static IRType *irNewStructType(
     char *name,
     IRType **fields,
     uint32_t field_count,
-    IRDecoration *decorations,
-    uint32_t decoration_count,
     IRMemberDecoration *field_decorations,
     uint32_t field_decoration_count)
 {
@@ -360,14 +383,6 @@ static IRType *irNewStructType(
             ty->struct_.field_decorations,
             field_decorations,
             sizeof(IRMemberDecoration) * field_decoration_count);
-
-        ty->struct_.decoration_count = decoration_count;
-
-        ty->struct_.decorations = NEW_ARRAY(m->compiler, IRDecoration, decoration_count);
-        memcpy(
-            ty->struct_.decorations,
-            decorations,
-            sizeof(IRDecoration) * decoration_count);
     }
 
     return irGetCachedType(m, ty);
@@ -417,6 +432,54 @@ static IRType *convertTypeToIR(Module *module, IRModule *ir_module, AstType *typ
         return irNewIntType(ir_module, type->int_.bits, type->int_.is_signed);
     }
 
+    case TYPE_CONSTANT_BUFFER: {
+        IRType *struct_type = convertTypeToIR(module, ir_module, type->buffer.sub);
+        
+        IRDecoration struct_dec = {0};
+        struct_dec.kind = SpvDecorationBlock;
+
+        irTypeSetDecorations(ir_module, struct_type, &struct_dec, 1);
+
+        return struct_type;
+    }
+
+    case TYPE_RW_STRUCTURED_BUFFER:
+    case TYPE_STRUCTURED_BUFFER: {
+        IRType *subtype = convertTypeToIR(module, ir_module, type->buffer.sub);
+        IRType *array_type = irNewRuntimeArrayType(ir_module, subtype);
+
+        assert(type->buffer.sub->size > 0);
+
+        IRDecoration array_dec = {0};
+        array_dec.kind = SpvDecorationArrayStride;
+        array_dec.value = type->buffer.sub->size;
+
+        irTypeSetDecorations(ir_module, array_type, &array_dec, 1);
+
+        ts__sbReset(&module->compiler->sb);
+        ts__sbSprintf(
+            &module->compiler->sb, "__tmp_struct%u", module->compiler->counter++);
+        char *struct_name = ts__sbBuild(&module->compiler->sb, &module->compiler->alloc);
+
+        IRMemberDecoration member_decs[2] = {0};
+        member_decs[0].kind = SpvDecorationOffset;
+        member_decs[0].member_index = 0;
+        member_decs[0].value = 0;
+
+        member_decs[1].kind = SpvDecorationNonWritable;
+        member_decs[1].member_index = 0;
+
+        IRType *struct_wrapper = irNewStructType(
+            ir_module, struct_name, &array_type, 1, member_decs, 2);
+
+        IRDecoration struct_dec = {0};
+        struct_dec.kind = SpvDecorationBufferBlock;
+
+        irTypeSetDecorations(ir_module, struct_wrapper, &struct_dec, 1);
+
+        return struct_wrapper;
+    }
+
     case TYPE_STRUCT: {
         IRType **field_types =
             NEW_ARRAY(module->compiler, IRType *, type->struct_.field_count);
@@ -424,15 +487,15 @@ static IRType *convertTypeToIR(Module *module, IRModule *ir_module, AstType *typ
         {
             field_types[i] = convertTypeToIR(module, ir_module, type->struct_.fields[i]);
         }
-        return irNewStructType(
+        IRType *struct_type = irNewStructType(
             ir_module,
             type->struct_.name,
             field_types,
             type->struct_.field_count,
-            type->struct_.decorations,
-            arrLength(type->struct_.decorations),
             type->struct_.field_decorations,
             arrLength(type->struct_.field_decorations));
+
+        return struct_type;
     }
 
     case TYPE_VECTOR: {
@@ -1093,24 +1156,10 @@ static void irModuleEncodeDecorations(IRModule *m)
     for (uint32_t i = 0; i < arrLength(m->type_cache.values); ++i)
     {
         IRType *type = (IRType *)m->type_cache.values[i];
+        assert(type->id > 0);
+
         if (type->kind == IR_TYPE_STRUCT)
         {
-            assert(type->id > 0);
-
-            for (uint32_t j = 0; j < type->struct_.decoration_count; ++j)
-            {
-                IRDecoration *dec = &type->struct_.decorations[j];
-                uint32_t param_count = 3;
-                uint32_t params[3] = {type->id, dec->kind, dec->value};
-
-                switch (dec->kind)
-                {
-                case SpvDecorationBlock: param_count = 2; break;
-                default: break;
-                }
-                irModuleEncodeInst(m, SpvOpDecorate, params, param_count);
-            }
-
             for (uint32_t j = 0; j < type->struct_.field_decoration_count; ++j)
             {
                 IRMemberDecoration *member_dec = &type->struct_.field_decorations[j];
@@ -1124,6 +1173,7 @@ static void irModuleEncodeDecorations(IRModule *m)
                 uint32_t param_count = 4;
                 switch (member_dec->kind)
                 {
+                case SpvDecorationNonWritable:
                 case SpvDecorationRowMajor:
                 case SpvDecorationColMajor: param_count = 3; break;
                 default: break;
@@ -1131,6 +1181,21 @@ static void irModuleEncodeDecorations(IRModule *m)
 
                 irModuleEncodeInst(m, SpvOpMemberDecorate, params, param_count);
             }
+        }
+
+        for (uint32_t j = 0; j < type->decoration_count; ++j)
+        {
+            IRDecoration *dec = &type->decorations[j];
+            uint32_t param_count = 3;
+            uint32_t params[3] = {type->id, dec->kind, dec->value};
+
+            switch (dec->kind)
+            {
+            case SpvDecorationBlock: param_count = 2; break;
+            case SpvDecorationBufferBlock: param_count = 2; break;
+            default: break;
+            }
+            irModuleEncodeInst(m, SpvOpDecorate, params, param_count);
         }
     }
 }
@@ -1169,6 +1234,12 @@ static void irModuleEncodeTypes(IRModule *m)
         case IR_TYPE_POINTER: {
             uint32_t params[3] = {type->id, type->ptr.storage_class, type->ptr.sub->id};
             irModuleEncodeInst(m, SpvOpTypePointer, params, 3);
+            break;
+        }
+
+        case IR_TYPE_RUNTIME_ARRAY: {
+            uint32_t params[2] = {type->id, type->array.sub->id};
+            irModuleEncodeInst(m, SpvOpTypeRuntimeArray, params, 2);
             break;
         }
 
@@ -2248,8 +2319,12 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
         uint32_t index_count = 0;
         IRInst **indices = NEW_ARRAY(compiler, IRInst *, arrLength(expr->access.chain));
 
-        if (base->type->kind == TYPE_STRUCT)
+        AstType *struct_type = ts__getStructType(base->type);
+
+        if (struct_type)
         {
+            assert(struct_type->kind == TYPE_STRUCT);
+
             for (uint32_t i = 0; i < arrLength(expr->access.chain); ++i)
             {
                 AstExpr *field_ident = expr->access.chain[i];
@@ -2805,6 +2880,9 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
         break;
     }
 
+    case EXPR_CONSTANT_BUFFER_TYPE:
+    case EXPR_STRUCTURED_BUFFER_TYPE:
+    case EXPR_RW_STRUCTURED_BUFFER_TYPE:
     case EXPR_SAMPLER_TYPE:
     case EXPR_TEXTURE_TYPE: {
         break;
@@ -3143,10 +3221,12 @@ static void irModuleBuildDecl(IRModule *m, AstDecl *decl)
         {
             IRInst **globals = NULL;
 
-            for (uint32_t i = 0; i < arrLength(m->globals); ++i)
-            {
-                arrPush(globals, m->globals[i]);
-            }
+            // Only required for spir-v 1.5:
+            //
+            // for (uint32_t i = 0; i < arrLength(m->globals); ++i)
+            // {
+            //     arrPush(globals, m->globals[i]);
+            // }
 
             for (uint32_t i = 0; i < arrLength(decl->value->func.inputs); ++i)
             {

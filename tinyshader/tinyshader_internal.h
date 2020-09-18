@@ -204,6 +204,8 @@ typedef enum TokenKind {
     TOKEN_RETURN,
     TOKEN_CONST,
     TOKEN_CONSTANT_BUFFER,
+    TOKEN_STRUCTURED_BUFFER,
+    TOKEN_RW_STRUCTURED_BUFFER,
     TOKEN_SAMPLER_STATE,
     TOKEN_TEXTURE_1D,
     TOKEN_TEXTURE_2D,
@@ -337,6 +339,8 @@ typedef enum IRTypeKind {
     IR_TYPE_VECTOR,
     IR_TYPE_MATRIX,
 
+    IR_TYPE_RUNTIME_ARRAY,
+
     IR_TYPE_POINTER,
     IR_TYPE_FUNC,
     IR_TYPE_STRUCT,
@@ -351,6 +355,9 @@ typedef struct IRType
     IRTypeKind kind;
     char *string;
     uint32_t id;
+
+    IRDecoration *decorations;
+    uint32_t decoration_count;
 
     union
     {
@@ -391,8 +398,6 @@ typedef struct IRType
 
             struct IRType **fields;
             uint32_t field_count;
-            IRDecoration *decorations;
-            uint32_t decoration_count;
             IRMemberDecoration *field_decorations;
             uint32_t field_decoration_count;
         } struct_;
@@ -410,6 +415,11 @@ typedef struct IRType
         {
             struct IRType *image_type;
         } sampled_image;
+        struct
+        {
+            size_t size;
+            struct IRType *sub;
+        } array;
     };
 } IRType;
 
@@ -704,6 +714,10 @@ typedef enum AstTypeKind {
     TYPE_SAMPLER,
     TYPE_IMAGE,
     TYPE_SAMPLED_IMAGE,
+
+    TYPE_CONSTANT_BUFFER,
+    TYPE_STRUCTURED_BUFFER,
+    TYPE_RW_STRUCTURED_BUFFER,
 } AstTypeKind;
 
 typedef struct AstType
@@ -752,7 +766,6 @@ typedef struct AstType
 
             AstDecl **field_decls;
             struct AstType **fields;
-            /*array*/ IRDecoration *decorations;
             /*array*/ IRMemberDecoration *field_decorations;
             uint32_t field_count;
         } struct_;
@@ -770,6 +783,10 @@ typedef struct AstType
         {
             struct AstType *image_type;
         } sampled_image;
+        struct
+        {
+            struct AstType *sub;
+        } buffer;
     };
 } AstType;
 
@@ -841,6 +858,9 @@ typedef enum AstExprKind {
     EXPR_ACCESS,
     EXPR_SAMPLER_TYPE,
     EXPR_TEXTURE_TYPE,
+    EXPR_CONSTANT_BUFFER_TYPE,
+    EXPR_STRUCTURED_BUFFER_TYPE,
+    EXPR_RW_STRUCTURED_BUFFER_TYPE,
     EXPR_FUNC_CALL,
     EXPR_BUILTIN_CALL,
     EXPR_UNARY,
@@ -1025,6 +1045,11 @@ struct AstExpr
 
         struct
         {
+            AstExpr *sub_expr;
+        } buffer;
+
+        struct
+        {
             AstUnaryOp op;
             AstExpr *right;
         } unary;
@@ -1062,6 +1087,8 @@ typedef struct TsCompiler
     HashMap files; // Maps absolute paths to files
 
     /*array*/ Error *errors;
+
+    uint32_t counter; // General purpose unique number generator
 } TsCompiler;
 
 //
@@ -1207,6 +1234,7 @@ AstType *ts__getScalarType(AstType *type);
 AstType *ts__getComparableType(AstType *type);
 AstType *ts__getLogicalType(AstType *type);
 AstType *ts__getElemType(AstType *type);
+AstType *ts__getStructType(AstType *type);
 
 uint32_t *ts__irModuleCodegen(Module *mod, size_t *word_count);
 

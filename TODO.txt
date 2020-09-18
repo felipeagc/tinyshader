@@ -39,6 +39,8 @@ Vulkan-specifics:
     specialization constants
 
 Language features:
+    scalar * vector arithmetic
+
     shared variables
     groupshared variables
     static variables

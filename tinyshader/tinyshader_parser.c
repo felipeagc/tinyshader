@@ -2068,6 +2068,8 @@ static AstDecl *parseTopLevel(Parser *p)
     }
 
     case TOKEN_CONSTANT_BUFFER:
+    case TOKEN_STRUCTURED_BUFFER:
+    case TOKEN_RW_STRUCTURED_BUFFER:
     case TOKEN_TEXTURE_1D:
     case TOKEN_TEXTURE_2D:
     case TOKEN_TEXTURE_3D:
@@ -2083,10 +2085,52 @@ static AstDecl *parseTopLevel(Parser *p)
 
             var_kind = VAR_UNIFORM;
 
+            type_expr = NEW(compiler, AstExpr);
+            type_expr->loc = parserPeek(p, 0)->loc;
+            type_expr->kind = EXPR_CONSTANT_BUFFER_TYPE;
+
             if (!parserConsume(p, TOKEN_LESS)) return NULL;
 
-            type_expr = parsePrefixedUnaryExpr(p);
-            if (!type_expr) return NULL;
+            type_expr->buffer.sub_expr = parsePrefixedUnaryExpr(p);
+            if (!type_expr->buffer.sub_expr) return NULL;
+
+            if (!parserConsume(p, TOKEN_GREATER)) return NULL;
+
+            break;
+        }
+
+        case TOKEN_STRUCTURED_BUFFER: {
+            parserNext(p, 1);
+
+            var_kind = VAR_UNIFORM;
+
+            type_expr = NEW(compiler, AstExpr);
+            type_expr->loc = parserPeek(p, 0)->loc;
+            type_expr->kind = EXPR_STRUCTURED_BUFFER_TYPE;
+
+            if (!parserConsume(p, TOKEN_LESS)) return NULL;
+
+            type_expr->buffer.sub_expr = parsePrefixedUnaryExpr(p);
+            if (!type_expr->buffer.sub_expr) return NULL;
+
+            if (!parserConsume(p, TOKEN_GREATER)) return NULL;
+
+            break;
+        }
+
+        case TOKEN_RW_STRUCTURED_BUFFER: {
+            parserNext(p, 1);
+
+            var_kind = VAR_UNIFORM;
+
+            type_expr = NEW(compiler, AstExpr);
+            type_expr->loc = parserPeek(p, 0)->loc;
+            type_expr->kind = EXPR_RW_STRUCTURED_BUFFER_TYPE;
+
+            if (!parserConsume(p, TOKEN_LESS)) return NULL;
+
+            type_expr->buffer.sub_expr = parsePrefixedUnaryExpr(p);
+            if (!type_expr->buffer.sub_expr) return NULL;
 
             if (!parserConsume(p, TOKEN_GREATER)) return NULL;
 
