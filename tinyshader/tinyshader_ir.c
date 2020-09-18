@@ -486,7 +486,7 @@ static uint32_t irModuleReserveId(IRModule *m)
     return m->id_bound++;
 }
 
-static void irAddEntryPoint(
+static IRInst *irAddEntryPoint(
     IRModule *m,
     char *name,
     IRInst *func,
@@ -503,6 +503,15 @@ static void irAddEntryPoint(
     inst->entry_point.global_count = global_count;
 
     arrPush(m->entry_points, inst);
+    return inst;
+}
+
+static void
+irEntryPointSetComputeDims(IRInst *entry_point, uint32_t x, uint32_t y, uint32_t z)
+{
+    entry_point->entry_point.compute_dims.x = x;
+    entry_point->entry_point.compute_dims.y = y;
+    entry_point->entry_point.compute_dims.z = z;
 }
 
 static IRInst *irAddFunction(IRModule *m, IRType *func_type)
@@ -1280,6 +1289,18 @@ static void irModuleEncodeEntryPoints(IRModule *m)
             uint32_t params[2] = {
                 inst->entry_point.func->id, SpvExecutionModeOriginUpperLeft};
             irModuleEncodeInst(m, SpvOpExecutionMode, params, 2);
+        }
+
+        if (inst->entry_point.execution_model == SpvExecutionModelGLCompute)
+        {
+            uint32_t params[5] = {
+                inst->entry_point.func->id,
+                SpvExecutionModeLocalSize,
+                inst->entry_point.compute_dims.x,
+                inst->entry_point.compute_dims.y,
+                inst->entry_point.compute_dims.z,
+            };
+            irModuleEncodeInst(m, SpvOpExecutionMode, params, 5);
         }
     }
 }
@@ -2077,7 +2098,7 @@ static void irModuleEncodeModule(IRModule *m)
 
     irModuleEncodeEntryPoints(m);
 
-    uint32_t params[2] = {SpvSourceLanguageHLSL, 500};
+    uint32_t params[2] = {SpvSourceLanguageHLSL, 660};
     irModuleEncodeInst(m, SpvOpSource, params, 2);
 
     irModuleReserveTypeIds(m);
@@ -3137,13 +3158,22 @@ static void irModuleBuildDecl(IRModule *m, AstDecl *decl)
                 arrPush(globals, decl->value->func.outputs[i]);
             }
 
-            irAddEntryPoint(
+            IRInst *entry_point = irAddEntryPoint(
                 m,
                 decl->name,
                 decl->value,
                 *decl->func.execution_model,
                 globals,
                 arrLength(globals));
+
+            if (*decl->func.execution_model == SpvExecutionModelGLCompute)
+            {
+                irEntryPointSetComputeDims(
+                    entry_point,
+                    decl->func.compute_dims[0],
+                    decl->func.compute_dims[1],
+                    decl->func.compute_dims[2]);
+            }
         }
 
         IRInst *entry_block = irCreateBlock(m, decl->value);

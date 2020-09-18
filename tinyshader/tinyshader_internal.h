@@ -135,8 +135,6 @@ typedef enum TokenKind {
     TOKEN_RBRACK,
     TOKEN_LCURLY,
     TOKEN_RCURLY,
-    TOKEN_ATTR_LBRACK,
-    TOKEN_ATTR_RBRACK,
 
     TOKEN_SEMICOLON,
     TOKEN_COLON,
@@ -513,6 +511,11 @@ struct IRInst
             SpvExecutionModel execution_model;
             IRInst **globals;
             uint32_t global_count;
+
+            struct
+            {
+                uint32_t x, y, z;
+            } compute_dims;
         } entry_point;
 
         struct
@@ -929,6 +932,8 @@ struct AstDecl
             /*array*/ AstDecl **outputs;
 
             bool called; // if this function was called or if it's an entry point
+
+            uint32_t compute_dims[3];
         } func;
 
         struct

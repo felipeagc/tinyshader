@@ -12,6 +12,7 @@ extern "C" {
 typedef enum TsShaderStage {
     TS_SHADER_STAGE_VERTEX,
     TS_SHADER_STAGE_FRAGMENT,
+    TS_SHADER_STAGE_COMPUTE,
 } TsShaderStage;
 
 typedef struct TsCompilerInput {

@@ -737,17 +737,11 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
             break;
         }
         case '[': {
-            if (lexerPeek(l, 1) == '[')
-                lexerAddSimpleToken(l, TOKEN_ATTR_LBRACK, 2);
-            else
-                lexerAddSimpleToken(l, TOKEN_LBRACK, 1);
+            lexerAddSimpleToken(l, TOKEN_LBRACK, 1);
             break;
         }
         case ']': {
-            if (lexerPeek(l, 1) == ']')
-                lexerAddSimpleToken(l, TOKEN_ATTR_RBRACK, 2);
-            else
-                lexerAddSimpleToken(l, TOKEN_RBRACK, 1);
+            lexerAddSimpleToken(l, TOKEN_RBRACK, 1);
             break;
         }
         case '{': {
@@ -1655,8 +1649,7 @@ static AstStmt *parseStmt(Parser *p)
 
     switch (parserPeek(p, 0)->kind)
     {
-    case TOKEN_SEMICOLON:
-    {
+    case TOKEN_SEMICOLON: {
         parserNext(p, 1);
         return NULL;
     }
@@ -1921,10 +1914,21 @@ static AstDecl *parseTopLevel(Parser *p)
 
     /*array*/ AstAttribute *attributes = NULL;
 
-    if (parserPeek(p, 0)->kind == TOKEN_ATTR_LBRACK)
+    int attr_start = 0;
+    if (parserPeek(p, 0)->kind == TOKEN_LBRACK)
     {
         parserNext(p, 1);
+        attr_start++;
+    }
 
+    if (parserPeek(p, 0)->kind == TOKEN_LBRACK)
+    {
+        parserNext(p, 1);
+        attr_start++;
+    }
+
+    if (attr_start > 0)
+    {
         Token *namespace = NULL;
         Token *attr_name = NULL;
 
@@ -1979,13 +1983,15 @@ static AstDecl *parseTopLevel(Parser *p)
 
         arrPush(attributes, attr);
 
-        if (!parserConsume(p, TOKEN_ATTR_RBRACK)) return NULL;
+        for (int i = 0; i < attr_start; ++i)
+        {
+            if (!parserConsume(p, TOKEN_RBRACK)) return NULL;
+        }
     }
 
     switch (parserPeek(p, 0)->kind)
     {
-    case TOKEN_SEMICOLON:
-    {
+    case TOKEN_SEMICOLON: {
         parserNext(p, 1);
         return NULL;
     }

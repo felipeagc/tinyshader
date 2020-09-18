@@ -105,6 +105,10 @@ int main(int argc, char *argv[])
             {
                 stage = TS_SHADER_STAGE_FRAGMENT;
             }
+            else if (strcmp(options.optarg, "compute") == 0)
+            {
+                stage = TS_SHADER_STAGE_COMPUTE;
+            }
             else
             {
                 fprintf(stderr, "Unrecognized shader stage: %s\n", options.optarg);

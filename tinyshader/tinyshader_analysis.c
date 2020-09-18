@@ -2147,6 +2147,12 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
             expr->type = right_type;
 
+            if (expr->unary.right->resolved_int)
+            {
+                expr->resolved_int = NEW(compiler, int64_t);
+                *expr->resolved_int = -(*expr->unary.right->resolved_int);
+            }
+
             break;
         }
 
@@ -2505,6 +2511,59 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                 break;
             case TS_SHADER_STAGE_FRAGMENT:
                 *decl->func.execution_model = SpvExecutionModelFragment;
+                break;
+            case TS_SHADER_STAGE_COMPUTE:
+                *decl->func.execution_model = SpvExecutionModelGLCompute;
+
+                bool got_numthreads = false;
+
+                for (uint32_t i = 0; i < arrLength(decl->attributes); ++i)
+                {
+                    AstAttribute *attr = &decl->attributes[i];
+
+                    if (strcmp(attr->name, "numthreads") == 0)
+                    {
+                        got_numthreads = true;
+                        if (arrLength(attr->values) != 3)
+                        {
+                            ts__addErr(
+                                compiler,
+                                &decl->loc,
+                                "numthreads attribute must have exactly 3 integer "
+                                "parameters");
+                        }
+                        else
+                        {
+                            for (size_t j = 0; j < 3; ++j)
+                            {
+                                if (!attr->values[j]->resolved_int)
+                                {
+                                    ts__addErr(
+                                        compiler,
+                                        &attr->values[j]->loc,
+                                        "could not resolve integer from expression");
+                                }
+                                else
+                                {
+                                    uint32_t dim =
+                                        (uint32_t)*attr->values[j]->resolved_int;
+
+                                    decl->func.compute_dims[j] = dim;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (!got_numthreads)
+                {
+                    ts__addErr(
+                        compiler,
+                        &decl->loc,
+                        "thread group size [numthreads(x,y,z)] is missing from the "
+                        "entry-point function");
+                }
+
                 break;
             }
         }
