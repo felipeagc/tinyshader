@@ -692,6 +692,126 @@ static bool irBlockHasTerminator(IRInst *block)
     return false;
 }
 
+static char *irConstToString(TsCompiler *compiler, IRInst *inst)
+{
+    ts__sbReset(&compiler->sb);
+
+    switch (inst->kind)
+    {
+    case IR_INST_CONSTANT: {
+        if (inst->type->kind == IR_TYPE_FLOAT)
+        {
+            switch (inst->type->float_.bits)
+            {
+            case 32:
+                ts__sbSprintf(&compiler->sb, "float%f", *((float *)inst->constant.value));
+                break;
+            case 64:
+                ts__sbSprintf(
+                    &compiler->sb, "double%lf", *((double *)inst->constant.value));
+                break;
+            default: assert(0); break;
+            }
+        }
+        else if (inst->type->kind == IR_TYPE_INT)
+        {
+            if (inst->type->int_.is_signed)
+            {
+                switch (inst->type->int_.bits)
+                {
+                case 8:
+                    ts__sbSprintf(
+                        &compiler->sb, "char%c", *((char *)inst->constant.value));
+                    break;
+                case 16:
+                    ts__sbSprintf(
+                        &compiler->sb, "short%h", *((short *)inst->constant.value));
+                    break;
+                case 32:
+                    ts__sbSprintf(&compiler->sb, "int%d", *((int *)inst->constant.value));
+                    break;
+                case 64:
+                    ts__sbSprintf(
+                        &compiler->sb, "long%ld", *((long *)inst->constant.value));
+                    break;
+                default: assert(0); break;
+                }
+            }
+            else
+            {
+                switch (inst->type->int_.bits)
+                {
+                case 8:
+                    ts__sbSprintf(
+                        &compiler->sb,
+                        "uchar%uc",
+                        *((unsigned char *)inst->constant.value));
+                    break;
+                case 16:
+                    ts__sbSprintf(
+                        &compiler->sb,
+                        "ushort%hu",
+                        *((unsigned short *)inst->constant.value));
+                    break;
+                case 32:
+                    ts__sbSprintf(
+                        &compiler->sb, "uint%u", *((unsigned int *)inst->constant.value));
+                    break;
+                case 64:
+                    ts__sbSprintf(
+                        &compiler->sb,
+                        "ulong%lu",
+                        *((unsigned long *)inst->constant.value));
+                    break;
+                default: assert(0); break;
+                }
+            }
+        }
+        else
+        {
+            assert(0);
+        }
+        break;
+    }
+
+    case IR_INST_CONSTANT_BOOL: {
+        if (inst->constant_bool.value)
+        {
+            ts__sbAppendChar(&compiler->sb, 't');
+        }
+        else
+        {
+            ts__sbAppendChar(&compiler->sb, 'f');
+        }
+        break;
+    }
+
+    default: assert(0); break;
+    }
+
+    char *const_name = ts__sbBuild(&compiler->sb, &compiler->alloc);
+    return const_name;
+}
+
+static IRInst *irGetCachedConst(IRModule *m, IRInst *inst)
+{
+    char *const_string = irConstToString(m->compiler, inst);
+    assert(const_string);
+    assert(strlen(const_string) > 0);
+
+    IRInst *found_inst = NULL;
+    if (ts__hashGet(&m->const_cache, const_string, (void **)&found_inst))
+    {
+        assert(found_inst);
+        return found_inst;
+    }
+
+    ts__hashSet(&m->const_cache, const_string, inst);
+    arrPush(m->constants, inst);
+
+    return inst;
+}
+
 static IRInst *irBuildConstFloat(IRModule *m, IRType *type, double value)
 {
     assert(type->kind == IR_TYPE_FLOAT);
@@ -720,7 +840,7 @@ static IRInst *irBuildConstFloat(IRModule *m, IRType *type, double value)
         assert(0);
     }
 
-    arrPush(m->constants, inst);
+    inst = irGetCachedConst(m, inst);
 
     return inst;
 }
@@ -769,7 +889,7 @@ static IRInst *irBuildConstInt(IRModule *m, IRType *type, uint64_t value)
     default: assert(0);
     }
 
-    arrPush(m->constants, inst);
+    inst = irGetCachedConst(m, inst);
 
     return inst;
 }
@@ -782,7 +902,8 @@ static IRInst *irBuildConstBool(IRModule *m, bool value)
     inst->type = irNewBasicType(m, IR_TYPE_BOOL);
     inst->constant_bool.value = value;
 
-    arrPush(m->constants, inst);
+    inst = irGetCachedConst(m, inst);
+
     return inst;
 }
 
@@ -3444,11 +3565,13 @@ static void irModuleInit(IRModule *m, TsCompiler *compiler)
     m->compiler = compiler;
 
     ts__hashInit(&m->type_cache, 0);
+    ts__hashInit(&m->const_cache, 0);
 }
 
 void irModuleDestroy(IRModule *m)
 {
     ts__hashDestroy(&m->type_cache);
+    ts__hashDestroy(&m->const_cache);
     arrFree(m->stream);
 }
 

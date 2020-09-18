@@ -689,6 +689,7 @@ struct IRModule
     Module *mod;
 
     HashMap type_cache;
+    HashMap const_cache;
 
     /*array*/ IRInst **continue_stack;
     /*array*/ IRInst **break_stack;

@@ -54,6 +54,5 @@ Low priority:
 Internals:
 	make sure all allocations are freed at the end
 	some dead code elimination
-	cache duplicate constants
 
 TODAY:
