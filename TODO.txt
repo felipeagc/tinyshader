@@ -13,8 +13,6 @@ Builtin functions:
     InterlockedCompareExchange
     InterlockedCompareStore
     InterlockedExchange
-    InterlockedMax
-    InterlockedMin
     InterlockedOr
     InterlockedXor
 

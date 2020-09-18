@@ -93,6 +93,8 @@ TsCompiler *tsCompilerCreate()
 
     ts__hashSet(&compiler->keyword_table, "InterlockedAdd", (void *)TOKEN_BUILTIN_INTERLOCKED_ADD);
     ts__hashSet(&compiler->keyword_table, "InterlockedAnd", (void *)TOKEN_BUILTIN_INTERLOCKED_AND);
+    ts__hashSet(&compiler->keyword_table, "InterlockedMin", (void *)TOKEN_BUILTIN_INTERLOCKED_MIN);
+    ts__hashSet(&compiler->keyword_table, "InterlockedMax", (void *)TOKEN_BUILTIN_INTERLOCKED_MAX);
 
     ts__hashSet(&compiler->keyword_table, "transpose", (void *)TOKEN_BUILTIN_TRANSPOSE);
     ts__hashSet(

@@ -2144,6 +2144,58 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
                 irModuleEncodeInst(m, SpvOpAtomicAnd, params, 6);
                 break;
             }
+
+            case IR_BUILTIN_INTERLOCKED_MIN: {
+                assert(param_values[0]->type->kind == IR_TYPE_POINTER);
+
+                IRType *int_type = param_values[0]->type->ptr.sub;
+                assert(int_type->kind == IR_TYPE_INT);
+
+                uint32_t params[6] = {
+                    int_type->id,
+                    inst->id,
+                    param_values[0]->id,
+                    param_values[1]->id,
+                    param_values[2]->id,
+                    param_values[3]->id,
+                };
+
+                if (int_type->int_.is_signed)
+                {
+                    irModuleEncodeInst(m, SpvOpAtomicSMin, params, 6);
+                }
+                else
+                {
+                    irModuleEncodeInst(m, SpvOpAtomicUMin, params, 6);
+                }
+                break;
+            }
+
+            case IR_BUILTIN_INTERLOCKED_MAX: {
+                assert(param_values[0]->type->kind == IR_TYPE_POINTER);
+
+                IRType *int_type = param_values[0]->type->ptr.sub;
+                assert(int_type->kind == IR_TYPE_INT);
+
+                uint32_t params[6] = {
+                    int_type->id,
+                    inst->id,
+                    param_values[0]->id,
+                    param_values[1]->id,
+                    param_values[2]->id,
+                    param_values[3]->id,
+                };
+
+                if (int_type->int_.is_signed)
+                {
+                    irModuleEncodeInst(m, SpvOpAtomicSMax, params, 6);
+                }
+                else
+                {
+                    irModuleEncodeInst(m, SpvOpAtomicUMax, params, 6);
+                }
+                break;
+            }
             }
 
             break;
@@ -2795,6 +2847,8 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
 
         switch (expr->builtin_call.kind)
         {
+        case IR_BUILTIN_INTERLOCKED_MIN:
+        case IR_BUILTIN_INTERLOCKED_MAX:
         case IR_BUILTIN_INTERLOCKED_ADD:
         case IR_BUILTIN_INTERLOCKED_AND: {
             param_count = 4;

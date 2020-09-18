@@ -1500,6 +1500,14 @@ static AstExpr *parseAccessFuncCall(Parser *p)
         builtin_kind = IR_BUILTIN_INTERLOCKED_AND;
         expr_kind = EXPR_BUILTIN_CALL;
         break;
+    case TOKEN_BUILTIN_INTERLOCKED_MIN:
+        builtin_kind = IR_BUILTIN_INTERLOCKED_MIN;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
+    case TOKEN_BUILTIN_INTERLOCKED_MAX:
+        builtin_kind = IR_BUILTIN_INTERLOCKED_MAX;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
 
     case TOKEN_BARRIER_ALL_MEMORY:
         expr_kind = EXPR_BARRIER_CALL;
