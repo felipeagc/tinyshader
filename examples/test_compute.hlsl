@@ -26,6 +26,8 @@ void main()
     InterlockedXor(a, 123);
     uint original;
     InterlockedExchange(a, 123, original);
+    InterlockedCompareExchange(a, 123, 1, original);
+    InterlockedCompareStore(a, 123, 1);
 
     uint b = a;
 }

@@ -117,6 +117,14 @@ TsCompiler *tsCompilerCreate()
         &compiler->keyword_table,
         "InterlockedExchange",
         (void *)TOKEN_BUILTIN_INTERLOCKED_EXCHANGE);
+    ts__hashSet(
+        &compiler->keyword_table,
+        "InterlockedCompareExchange",
+        (void *)TOKEN_BUILTIN_INTERLOCKED_COMPARE_EXCHANGE);
+    ts__hashSet(
+        &compiler->keyword_table,
+        "InterlockedCompareStore",
+        (void *)TOKEN_BUILTIN_INTERLOCKED_COMPARE_STORE);
 
     ts__hashSet(&compiler->keyword_table, "transpose", (void *)TOKEN_BUILTIN_TRANSPOSE);
     ts__hashSet(
