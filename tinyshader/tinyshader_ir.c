@@ -2129,6 +2129,21 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
                 irModuleEncodeInst(m, SpvOpAtomicIAdd, params, 6);
                 break;
             }
+
+            case IR_BUILTIN_INTERLOCKED_AND: {
+                assert(param_values[0]->type->kind == IR_TYPE_POINTER);
+
+                uint32_t params[6] = {
+                    param_values[0]->type->ptr.sub->id,
+                    inst->id,
+                    param_values[0]->id,
+                    param_values[1]->id,
+                    param_values[2]->id,
+                    param_values[3]->id,
+                };
+                irModuleEncodeInst(m, SpvOpAtomicAnd, params, 6);
+                break;
+            }
             }
 
             break;
@@ -2780,7 +2795,8 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
 
         switch (expr->builtin_call.kind)
         {
-        case IR_BUILTIN_INTERLOCKED_ADD: {
+        case IR_BUILTIN_INTERLOCKED_ADD:
+        case IR_BUILTIN_INTERLOCKED_AND: {
             param_count = 4;
             param_values = NEW_ARRAY(compiler, IRInst *, param_count);
 

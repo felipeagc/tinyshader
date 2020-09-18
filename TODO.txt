@@ -10,8 +10,6 @@ Builtin functions:
     asfloat
     asdouble
 
-    InterlockedAdd
-    InterlockedAnd
     InterlockedCompareExchange
     InterlockedCompareStore
     InterlockedExchange
