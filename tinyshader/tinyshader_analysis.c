@@ -2253,6 +2253,62 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             break;
         }
 
+        case IR_BUILTIN_INTERLOCKED_EXCHANGE: {
+            expr->type = newBasicType(m, TYPE_VOID);
+
+            if (param_count != 3)
+            {
+                ts__addErr(
+                    compiler, &expr->loc, "Interlocked function requires 3 parameters");
+                break;
+            }
+
+            if (!params[0]->type || !params[1]->type || !params[2]->type) break;
+
+            tryCoerceExprToScalarType(a, params[1], params[0]->type);
+
+            if (params[0]->type != params[1]->type || params[0]->type != params[2]->type)
+            {
+                ts__addErr(
+                    compiler,
+                    &expr->loc,
+                    "mismatched types for Interlocked function parameters");
+                break;
+            }
+
+            if (params[0]->type->kind != TYPE_INT)
+            {
+                ts__addErr(
+                    compiler,
+                    &expr->loc,
+                    "Interlocked function requires scalar integer parameters");
+                break;
+            }
+
+            if ((params[0]->kind != EXPR_IDENT) || (!params[0]->ident.decl) ||
+                (params[0]->ident.decl->kind != DECL_VAR) ||
+                (params[0]->ident.decl->var.kind != VAR_GROUPSHARED))
+            {
+                ts__addErr(
+                    compiler,
+                    &expr->loc,
+                    "Interlocked functions require first parameter to be a groupshared "
+                    "variable");
+                break;
+            }
+
+            if (!params[2]->assignable)
+            {
+                ts__addErr(
+                    compiler,
+                    &expr->loc,
+                    "Interlocked function requires third parameter to be assignable");
+                break;
+            }
+
+            break;
+        }
+
         case IR_BUILTIN_CREATE_SAMPLED_IMAGE: assert(0); break;
         }
 

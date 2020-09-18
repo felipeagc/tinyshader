@@ -24,7 +24,8 @@ void main()
     InterlockedMax(a, 123);
     InterlockedOr(a, 123);
     InterlockedXor(a, 123);
+    uint original;
+    InterlockedExchange(a, 123, original);
 
     uint b = a;
-    InterlockedXor(b, 123);
 }

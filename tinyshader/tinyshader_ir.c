@@ -2234,6 +2234,29 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
                 irModuleEncodeInst(m, SpvOpAtomicXor, params, 6);
                 break;
             }
+
+            case IR_BUILTIN_INTERLOCKED_EXCHANGE: {
+                assert(param_values[0]->type->kind == IR_TYPE_POINTER);
+
+                IRType *int_type = param_values[0]->type->ptr.sub;
+                assert(int_type->kind == IR_TYPE_INT);
+
+                uint32_t params[6] = {
+                    int_type->id,
+                    inst->id,
+                    param_values[0]->id,
+                    param_values[1]->id,
+                    param_values[2]->id,
+                    param_values[3]->id,
+                };
+
+                irModuleEncodeInst(m, SpvOpAtomicExchange, params, 6);
+
+                params[0] = param_values[4]->id;
+                params[1] = inst->id;
+                irModuleEncodeInst(m, SpvOpStore, params, 2);
+                break;
+            }
             }
 
             break;
@@ -2908,6 +2931,32 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
             param_values[1] = irBuildConstInt(m, uint_type, SpvScopeDevice);
             param_values[2] = irBuildConstInt(m, uint_type, SpvMemorySemanticsMaskNone);
             param_values[3] = value->value;
+            break;
+        }
+
+        case IR_BUILTIN_INTERLOCKED_EXCHANGE: {
+            param_count = 5;
+            param_values = NEW_ARRAY(compiler, IRInst *, param_count);
+
+            IRType *uint_type = irNewIntType(m, 32, false);
+
+            AstExpr *ptr = expr->builtin_call.params[0];
+            irModuleBuildExpr(m, ptr);
+            assert(ptr->value);
+
+            AstExpr *value = expr->builtin_call.params[1];
+            irModuleBuildExpr(m, value);
+            assert(value->value);
+
+            AstExpr *original_value = expr->builtin_call.params[2];
+            irModuleBuildExpr(m, original_value);
+            assert(original_value->value);
+
+            param_values[0] = ptr->value;
+            param_values[1] = irBuildConstInt(m, uint_type, SpvScopeDevice);
+            param_values[2] = irBuildConstInt(m, uint_type, SpvMemorySemanticsMaskNone);
+            param_values[3] = value->value;
+            param_values[4] = original_value->value;
             break;
         }
 

@@ -91,12 +91,32 @@ TsCompiler *tsCompilerCreate()
     ts__hashSet(&compiler->keyword_table, "ddx", (void *)TOKEN_BUILTIN_DDX);
     ts__hashSet(&compiler->keyword_table, "ddy", (void *)TOKEN_BUILTIN_DDY);
 
-    ts__hashSet(&compiler->keyword_table, "InterlockedAdd", (void *)TOKEN_BUILTIN_INTERLOCKED_ADD);
-    ts__hashSet(&compiler->keyword_table, "InterlockedAnd", (void *)TOKEN_BUILTIN_INTERLOCKED_AND);
-    ts__hashSet(&compiler->keyword_table, "InterlockedMin", (void *)TOKEN_BUILTIN_INTERLOCKED_MIN);
-    ts__hashSet(&compiler->keyword_table, "InterlockedMax", (void *)TOKEN_BUILTIN_INTERLOCKED_MAX);
-    ts__hashSet(&compiler->keyword_table, "InterlockedOr", (void *)TOKEN_BUILTIN_INTERLOCKED_OR);
-    ts__hashSet(&compiler->keyword_table, "InterlockedXor", (void *)TOKEN_BUILTIN_INTERLOCKED_XOR);
+    ts__hashSet(
+        &compiler->keyword_table,
+        "InterlockedAdd",
+        (void *)TOKEN_BUILTIN_INTERLOCKED_ADD);
+    ts__hashSet(
+        &compiler->keyword_table,
+        "InterlockedAnd",
+        (void *)TOKEN_BUILTIN_INTERLOCKED_AND);
+    ts__hashSet(
+        &compiler->keyword_table,
+        "InterlockedMin",
+        (void *)TOKEN_BUILTIN_INTERLOCKED_MIN);
+    ts__hashSet(
+        &compiler->keyword_table,
+        "InterlockedMax",
+        (void *)TOKEN_BUILTIN_INTERLOCKED_MAX);
+    ts__hashSet(
+        &compiler->keyword_table, "InterlockedOr", (void *)TOKEN_BUILTIN_INTERLOCKED_OR);
+    ts__hashSet(
+        &compiler->keyword_table,
+        "InterlockedXor",
+        (void *)TOKEN_BUILTIN_INTERLOCKED_XOR);
+    ts__hashSet(
+        &compiler->keyword_table,
+        "InterlockedExchange",
+        (void *)TOKEN_BUILTIN_INTERLOCKED_EXCHANGE);
 
     ts__hashSet(&compiler->keyword_table, "transpose", (void *)TOKEN_BUILTIN_TRANSPOSE);
     ts__hashSet(
