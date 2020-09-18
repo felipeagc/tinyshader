@@ -35,8 +35,6 @@ Language features:
     scalar * vector arithmetic
     vector casting: float2(uint2(1, 2))
 
-    shared variables
-    groupshared variables
     static variables
 
 	struct literals

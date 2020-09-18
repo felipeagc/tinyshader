@@ -6,6 +6,8 @@ struct BufType
 
 StructuredBuffer<BufType> Buffer0;
 
+groupshared uint a;
+
 [numthreads(1, 1, 1)]
 void main()
 {
@@ -15,5 +17,5 @@ void main()
     DeviceMemoryBarrierWithGroupSync();
     GroupMemoryBarrier();
     GroupMemoryBarrierWithGroupSync();
-    float f = Buffer0[0].f;
+    float f = Buffer0[0].f + float(a);
 }

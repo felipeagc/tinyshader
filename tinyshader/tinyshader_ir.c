@@ -59,6 +59,7 @@ static char *irTypeToString(TsCompiler *compiler, IRType *type)
         case SpvStorageClassUniform: storage_class = "uniform"; break;
         case SpvStorageClassStorageBuffer: storage_class = "storage"; break;
         case SpvStorageClassFunction: storage_class = "function"; break;
+        case SpvStorageClassWorkgroup: storage_class = "groupshared"; break;
 
         default: assert(0); break;
         }
@@ -3640,8 +3641,10 @@ uint32_t *ts__irModuleCodegen(Module *mod, size_t *word_count)
         case DECL_VAR: {
             IRType *ir_type = convertTypeToIR(m->mod, m, decl->type);
             SpvStorageClass storage_class;
-            if (decl->var.kind == VAR_UNIFORM)
+
+            switch (decl->var.kind)
             {
+            case VAR_UNIFORM: {
                 switch (ir_type->kind)
                 {
                 case IR_TYPE_SAMPLER:
@@ -3651,11 +3654,17 @@ uint32_t *ts__irModuleCodegen(Module *mod, size_t *word_count)
                     break;
                 default: storage_class = SpvStorageClassUniform; break;
                 }
+                break;
             }
-            else
-            {
-                assert(0);
+
+            case VAR_GROUPSHARED: {
+                storage_class = SpvStorageClassWorkgroup;
+                break;
             }
+
+            default: assert(0); break;
+            }
+
             decl->value = irAddGlobal(m, ir_type, storage_class);
             decl->value->decorations = decl->decorations;
             break;

@@ -105,6 +105,9 @@ TsCompiler *tsCompilerCreate()
     ts__hashSet(&compiler->keyword_table, "false", (void *)TOKEN_FALSE);
     ts__hashSet(&compiler->keyword_table, "void", (void *)TOKEN_VOID);
 
+    ts__hashSet(&compiler->keyword_table, "static", (void *)TOKEN_STATIC);
+    ts__hashSet(&compiler->keyword_table, "groupshared", (void *)TOKEN_GROUPSHARED);
+
     ts__hashSet(
         &compiler->keyword_table, "AllMemoryBarrier", (void *)TOKEN_BARRIER_ALL_MEMORY);
     ts__hashSet(

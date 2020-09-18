@@ -2240,6 +2240,27 @@ static AstDecl *parseTopLevel(Parser *p)
         return decl;
     }
 
+    case TOKEN_GROUPSHARED: {
+        parserNext(p, 1);
+        AstDecl *decl = NEW(compiler, AstDecl);
+        decl->kind = DECL_VAR;
+        decl->attributes = attributes;
+        decl->var.kind = VAR_GROUPSHARED;
+
+        AstExpr *type_expr = parsePrefixedUnaryExpr(p);
+        if (!type_expr) return NULL;
+
+        Token *name_tok = parserConsume(p, TOKEN_IDENT);
+        if (!name_tok) return NULL;
+
+        decl->name = name_tok->str;
+        decl->var.type_expr = type_expr;
+
+        if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
+
+        return decl;
+    }
+
     case TOKEN_STRUCT: {
         parserNext(p, 1);
         AstDecl *decl = NEW(compiler, AstDecl);
