@@ -22,5 +22,9 @@ void main()
     InterlockedAnd(a, 123);
     InterlockedMin(a, 123);
     InterlockedMax(a, 123);
+    InterlockedOr(a, 123);
+    InterlockedXor(a, 123);
+
     uint b = a;
+    InterlockedXor(b, 123);
 }

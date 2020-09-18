@@ -13,8 +13,6 @@ Builtin functions:
     InterlockedCompareExchange
     InterlockedCompareStore
     InterlockedExchange
-    InterlockedOr
-    InterlockedXor
 
 Preprocessor:
 	#error
