@@ -966,6 +966,32 @@ static IRInst *irBuildBuiltinCall(
     return inst;
 }
 
+static IRInst *irBuildBarrier(
+    IRModule *m,
+    bool with_group_sync,
+    uint32_t execution_scope,
+    uint32_t memory_scope,
+    uint32_t semantics)
+{
+    IRInst *inst = NEW(m->compiler, IRInst);
+    inst->kind = IR_INST_BARRIER;
+
+    inst->type = irNewBasicType(m, IR_TYPE_VOID);
+    assert(inst->type);
+
+    IRType *uint_type = irNewIntType(m, 32, false);
+
+    inst->barrier.with_group_sync = with_group_sync;
+    inst->barrier.execution_scope = irBuildConstInt(m, uint_type, execution_scope);
+    inst->barrier.memory_scope = irBuildConstInt(m, uint_type, memory_scope);
+    inst->barrier.semantics = irBuildConstInt(m, uint_type, semantics);
+
+    IRInst *block = irGetCurrentBlock(m);
+    arrPush(block->block.insts, inst);
+
+    return inst;
+}
+
 static IRInst *
 irBuildSampleImplicitLod(IRModule *m, IRType *type, IRInst *image_sampler, IRInst *coords)
 {
@@ -1557,6 +1583,42 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             }
 
             irModuleEncodeInst(m, SpvOpFunctionCall, params, param_count);
+            break;
+        }
+
+        case IR_INST_BARRIER: {
+            SpvOp op;
+            uint32_t param_count;
+            uint32_t *params;
+
+            if (inst->barrier.with_group_sync)
+            {
+                op = SpvOpControlBarrier;
+                param_count = 3;
+                params = NEW_ARRAY(m->compiler, uint32_t, param_count);
+
+                assert(inst->barrier.execution_scope->id);
+                assert(inst->barrier.memory_scope->id);
+                assert(inst->barrier.semantics->id);
+
+                params[0] = inst->barrier.execution_scope->id;
+                params[1] = inst->barrier.memory_scope->id;
+                params[2] = inst->barrier.semantics->id;
+            }
+            else
+            {
+                op = SpvOpMemoryBarrier;
+                param_count = 2;
+                params = NEW_ARRAY(m->compiler, uint32_t, param_count);
+
+                assert(inst->barrier.memory_scope->id);
+                assert(inst->barrier.semantics->id);
+
+                params[0] = inst->barrier.memory_scope->id;
+                params[1] = inst->barrier.semantics->id;
+            }
+
+            irModuleEncodeInst(m, op, params, param_count);
             break;
         }
 
@@ -2590,6 +2652,16 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
         expr->value = irBuildBuiltinCall(
             m, expr->builtin_call.kind, result_type, param_values, param_count);
 
+        break;
+    }
+
+    case EXPR_BARRIER_CALL: {
+        expr->value = irBuildBarrier(
+            m,
+            expr->barrier.with_group_sync,
+            expr->barrier.execution_scope,
+            expr->barrier.memory_scope,
+            expr->barrier.semantics);
         break;
     }
 

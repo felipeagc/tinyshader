@@ -1353,6 +1353,11 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
         break;
     }
 
+    case EXPR_BARRIER_CALL: {
+        expr->type = newBasicType(m, TYPE_VOID);
+        break;
+    }
+
     case EXPR_BUILTIN_CALL: {
         uint32_t param_count = arrLength(expr->builtin_call.params);
         AstExpr **params = expr->builtin_call.params;

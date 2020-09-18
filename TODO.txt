@@ -10,13 +10,6 @@ Builtin functions:
     asfloat
     asdouble
 
-    AllMemoryBarrier
-    AllMemoryBarrierWithGroupSync
-    DeviceMemoryBarrier
-    DeviceMemoryBarrierWithGroupSync
-    GroupMemoryBarrier
-    GroupMemoryBarrierWithGroupSync
-
     InterlockedAdd
     InterlockedAnd
     InterlockedCompareExchange

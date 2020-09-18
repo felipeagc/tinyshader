@@ -1319,63 +1319,237 @@ static AstExpr *parseAccessFuncCall(Parser *p)
 
     AstExpr *expr = NULL;
 
-    bool is_builtin = true;
     IRBuiltinInstKind builtin_kind = {0};
+
+    AstExprKind expr_kind = {0};
+
+    bool with_group_sync = false;
+    uint32_t barrier_execution_scope = 0;
+    uint32_t barrier_memory_scope = 0;
+    uint32_t barrier_semantics = 0;
 
     // Check if it's a builtin function
     switch (parserPeek(p, 0)->kind)
     {
-    case TOKEN_BUILTIN_DOT: builtin_kind = IR_BUILTIN_DOT; break;
-    case TOKEN_BUILTIN_CROSS: builtin_kind = IR_BUILTIN_CROSS; break;
-    case TOKEN_BUILTIN_LENGTH: builtin_kind = IR_BUILTIN_LENGTH; break;
-    case TOKEN_BUILTIN_NORMALIZE: builtin_kind = IR_BUILTIN_NORMALIZE; break;
-    case TOKEN_BUILTIN_MUL: builtin_kind = IR_BUILTIN_MUL; break;
-    case TOKEN_BUILTIN_DISTANCE: builtin_kind = IR_BUILTIN_DISTANCE; break;
-    case TOKEN_BUILTIN_DEGREES: builtin_kind = IR_BUILTIN_DEGREES; break;
-    case TOKEN_BUILTIN_RADIANS: builtin_kind = IR_BUILTIN_RADIANS; break;
+    case TOKEN_BUILTIN_DOT:
+        builtin_kind = IR_BUILTIN_DOT;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
 
-    case TOKEN_BUILTIN_SIN: builtin_kind = IR_BUILTIN_SIN; break;
-    case TOKEN_BUILTIN_COS: builtin_kind = IR_BUILTIN_COS; break;
-    case TOKEN_BUILTIN_TAN: builtin_kind = IR_BUILTIN_TAN; break;
-    case TOKEN_BUILTIN_ASIN: builtin_kind = IR_BUILTIN_ASIN; break;
-    case TOKEN_BUILTIN_ACOS: builtin_kind = IR_BUILTIN_ACOS; break;
-    case TOKEN_BUILTIN_ATAN: builtin_kind = IR_BUILTIN_ATAN; break;
-    case TOKEN_BUILTIN_SINH: builtin_kind = IR_BUILTIN_SINH; break;
-    case TOKEN_BUILTIN_COSH: builtin_kind = IR_BUILTIN_COSH; break;
-    case TOKEN_BUILTIN_TANH: builtin_kind = IR_BUILTIN_TANH; break;
-    case TOKEN_BUILTIN_ATAN2: builtin_kind = IR_BUILTIN_ATAN2; break;
+    case TOKEN_BUILTIN_CROSS:
+        builtin_kind = IR_BUILTIN_CROSS;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
+    case TOKEN_BUILTIN_LENGTH:
+        builtin_kind = IR_BUILTIN_LENGTH;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
+    case TOKEN_BUILTIN_NORMALIZE:
+        builtin_kind = IR_BUILTIN_NORMALIZE;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
+    case TOKEN_BUILTIN_MUL:
+        builtin_kind = IR_BUILTIN_MUL;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
+    case TOKEN_BUILTIN_DISTANCE:
+        builtin_kind = IR_BUILTIN_DISTANCE;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
+    case TOKEN_BUILTIN_DEGREES:
+        builtin_kind = IR_BUILTIN_DEGREES;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
+    case TOKEN_BUILTIN_RADIANS:
+        builtin_kind = IR_BUILTIN_RADIANS;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
 
-    case TOKEN_BUILTIN_SQRT: builtin_kind = IR_BUILTIN_SQRT; break;
-    case TOKEN_BUILTIN_RSQRT: builtin_kind = IR_BUILTIN_RSQRT; break;
+    case TOKEN_BUILTIN_SIN:
+        builtin_kind = IR_BUILTIN_SIN;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
+    case TOKEN_BUILTIN_COS:
+        builtin_kind = IR_BUILTIN_COS;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
+    case TOKEN_BUILTIN_TAN:
+        builtin_kind = IR_BUILTIN_TAN;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
+    case TOKEN_BUILTIN_ASIN:
+        builtin_kind = IR_BUILTIN_ASIN;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
+    case TOKEN_BUILTIN_ACOS:
+        builtin_kind = IR_BUILTIN_ACOS;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
+    case TOKEN_BUILTIN_ATAN:
+        builtin_kind = IR_BUILTIN_ATAN;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
+    case TOKEN_BUILTIN_SINH:
+        builtin_kind = IR_BUILTIN_SINH;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
+    case TOKEN_BUILTIN_COSH:
+        builtin_kind = IR_BUILTIN_COSH;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
+    case TOKEN_BUILTIN_TANH:
+        builtin_kind = IR_BUILTIN_TANH;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
+    case TOKEN_BUILTIN_ATAN2:
+        builtin_kind = IR_BUILTIN_ATAN2;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
 
-    case TOKEN_BUILTIN_REFLECT: builtin_kind = IR_BUILTIN_REFLECT; break;
-    case TOKEN_BUILTIN_REFRACT: builtin_kind = IR_BUILTIN_REFRACT; break;
+    case TOKEN_BUILTIN_SQRT:
+        builtin_kind = IR_BUILTIN_SQRT;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
+    case TOKEN_BUILTIN_RSQRT:
+        builtin_kind = IR_BUILTIN_RSQRT;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
 
-    case TOKEN_BUILTIN_POW: builtin_kind = IR_BUILTIN_POW; break;
-    case TOKEN_BUILTIN_EXP: builtin_kind = IR_BUILTIN_EXP; break;
-    case TOKEN_BUILTIN_EXP2: builtin_kind = IR_BUILTIN_EXP2; break;
-    case TOKEN_BUILTIN_LOG: builtin_kind = IR_BUILTIN_LOG; break;
-    case TOKEN_BUILTIN_LOG2: builtin_kind = IR_BUILTIN_LOG2; break;
+    case TOKEN_BUILTIN_REFLECT:
+        builtin_kind = IR_BUILTIN_REFLECT;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
+    case TOKEN_BUILTIN_REFRACT:
+        builtin_kind = IR_BUILTIN_REFRACT;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
 
-    case TOKEN_BUILTIN_ABS: builtin_kind = IR_BUILTIN_ABS; break;
-    case TOKEN_BUILTIN_MIN: builtin_kind = IR_BUILTIN_MIN; break;
-    case TOKEN_BUILTIN_MAX: builtin_kind = IR_BUILTIN_MAX; break;
-    case TOKEN_BUILTIN_LERP: builtin_kind = IR_BUILTIN_LERP; break;
-    case TOKEN_BUILTIN_CLAMP: builtin_kind = IR_BUILTIN_CLAMP; break;
-    case TOKEN_BUILTIN_STEP: builtin_kind = IR_BUILTIN_STEP; break;
-    case TOKEN_BUILTIN_SMOOTHSTEP: builtin_kind = IR_BUILTIN_SMOOTHSTEP; break;
+    case TOKEN_BUILTIN_POW:
+        builtin_kind = IR_BUILTIN_POW;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
+    case TOKEN_BUILTIN_EXP:
+        builtin_kind = IR_BUILTIN_EXP;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
+    case TOKEN_BUILTIN_EXP2:
+        builtin_kind = IR_BUILTIN_EXP2;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
+    case TOKEN_BUILTIN_LOG:
+        builtin_kind = IR_BUILTIN_LOG;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
+    case TOKEN_BUILTIN_LOG2:
+        builtin_kind = IR_BUILTIN_LOG2;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
 
-    case TOKEN_BUILTIN_TRANSPOSE: builtin_kind = IR_BUILTIN_TRANSPOSE; break;
-    case TOKEN_BUILTIN_DETERMINANT: builtin_kind = IR_BUILTIN_DETERMINANT; break;
+    case TOKEN_BUILTIN_ABS:
+        builtin_kind = IR_BUILTIN_ABS;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
+    case TOKEN_BUILTIN_MIN:
+        builtin_kind = IR_BUILTIN_MIN;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
+    case TOKEN_BUILTIN_MAX:
+        builtin_kind = IR_BUILTIN_MAX;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
+    case TOKEN_BUILTIN_LERP:
+        builtin_kind = IR_BUILTIN_LERP;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
+    case TOKEN_BUILTIN_CLAMP:
+        builtin_kind = IR_BUILTIN_CLAMP;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
+    case TOKEN_BUILTIN_STEP:
+        builtin_kind = IR_BUILTIN_STEP;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
+    case TOKEN_BUILTIN_SMOOTHSTEP:
+        builtin_kind = IR_BUILTIN_SMOOTHSTEP;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
 
-    case TOKEN_BUILTIN_DDX: builtin_kind = IR_BUILTIN_DDX; break;
-    case TOKEN_BUILTIN_DDY: builtin_kind = IR_BUILTIN_DDY; break;
+    case TOKEN_BUILTIN_TRANSPOSE:
+        builtin_kind = IR_BUILTIN_TRANSPOSE;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
+    case TOKEN_BUILTIN_DETERMINANT:
+        builtin_kind = IR_BUILTIN_DETERMINANT;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
 
-    default: is_builtin = false; break;
+    case TOKEN_BUILTIN_DDX:
+        builtin_kind = IR_BUILTIN_DDX;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
+    case TOKEN_BUILTIN_DDY:
+        builtin_kind = IR_BUILTIN_DDY;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
+
+    case TOKEN_BARRIER_ALL_MEMORY:
+        expr_kind = EXPR_BARRIER_CALL;
+        with_group_sync = false;
+        barrier_memory_scope = SpvScopeDevice;
+        barrier_semantics =
+            SpvMemorySemanticsAcquireReleaseMask | SpvMemorySemanticsUniformMemoryMask |
+            SpvMemorySemanticsWorkgroupMemoryMask | SpvMemorySemanticsImageMemoryMask;
+        break;
+    case TOKEN_BARRIER_ALL_MEMORY_WITH_GROUP_SYNC:
+        expr_kind = EXPR_BARRIER_CALL;
+        with_group_sync = true;
+        barrier_execution_scope = SpvScopeWorkgroup;
+        barrier_memory_scope = SpvScopeDevice;
+        barrier_semantics =
+            SpvMemorySemanticsAcquireReleaseMask | SpvMemorySemanticsUniformMemoryMask |
+            SpvMemorySemanticsWorkgroupMemoryMask | SpvMemorySemanticsImageMemoryMask;
+        break;
+
+    case TOKEN_BARRIER_DEVICE_MEMORY:
+        expr_kind = EXPR_BARRIER_CALL;
+        with_group_sync = false;
+        barrier_memory_scope = SpvScopeDevice;
+        barrier_semantics = SpvMemorySemanticsAcquireReleaseMask |
+                            SpvMemorySemanticsUniformMemoryMask |
+                            SpvMemorySemanticsImageMemoryMask;
+        break;
+    case TOKEN_BARRIER_DEVICE_MEMORY_WITH_GROUP_SYNC:
+        expr_kind = EXPR_BARRIER_CALL;
+        with_group_sync = true;
+        barrier_execution_scope = SpvScopeWorkgroup;
+        barrier_memory_scope = SpvScopeDevice;
+        barrier_semantics = SpvMemorySemanticsAcquireReleaseMask |
+                            SpvMemorySemanticsUniformMemoryMask |
+                            SpvMemorySemanticsImageMemoryMask;
+        break;
+
+    case TOKEN_BARRIER_GROUP_MEMORY:
+        expr_kind = EXPR_BARRIER_CALL;
+        with_group_sync = false;
+        barrier_memory_scope = SpvScopeWorkgroup;
+        barrier_semantics =
+            SpvMemorySemanticsAcquireReleaseMask | SpvMemorySemanticsWorkgroupMemoryMask;
+        break;
+    case TOKEN_BARRIER_GROUP_MEMORY_WITH_GROUP_SYNC:
+        expr_kind = EXPR_BARRIER_CALL;
+        with_group_sync = true;
+        barrier_execution_scope = SpvScopeWorkgroup;
+        barrier_memory_scope = SpvScopeWorkgroup;
+        barrier_semantics =
+            SpvMemorySemanticsAcquireReleaseMask | SpvMemorySemanticsWorkgroupMemoryMask;
+        break;
+
+    default: break;
     }
 
-    if (is_builtin)
+    switch (expr_kind)
     {
+    case EXPR_BUILTIN_CALL: {
         expr = NEW(p->compiler, AstExpr);
         expr->kind = EXPR_BUILTIN_CALL;
         expr->builtin_call.kind = builtin_kind;
@@ -1400,11 +1574,33 @@ static AstExpr *parseAccessFuncCall(Parser *p)
 
         parserEndLoc(p, &loc);
         expr->loc = loc;
+        return expr;
     }
-    else
-    {
+
+    case EXPR_BARRIER_CALL: {
+        expr = NEW(p->compiler, AstExpr);
+        expr->kind = EXPR_BARRIER_CALL;
+        expr->barrier.with_group_sync = with_group_sync;
+        expr->barrier.execution_scope = barrier_execution_scope;
+        expr->barrier.memory_scope = barrier_memory_scope;
+        expr->barrier.semantics = barrier_semantics;
+
+        parserNext(p, 1); // skip name token
+
+        if (!parserConsume(p, TOKEN_LPAREN)) return NULL;
+
+        if (!parserConsume(p, TOKEN_RPAREN)) return NULL;
+
+        parserEndLoc(p, &loc);
+        expr->loc = loc;
+        return expr;
+    }
+
+    default: {
         expr = parsePrimaryExpr(p);
         if (!expr) return NULL;
+        break;
+    }
     }
 
     // Not a builtin function, must be an access or function call

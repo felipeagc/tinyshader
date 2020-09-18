@@ -281,6 +281,13 @@ typedef enum TokenKind {
 
     TOKEN_VECTOR_TYPE,
     TOKEN_MATRIX_TYPE,
+
+    TOKEN_BARRIER_ALL_MEMORY,
+    TOKEN_BARRIER_ALL_MEMORY_WITH_GROUP_SYNC,
+    TOKEN_BARRIER_DEVICE_MEMORY,
+    TOKEN_BARRIER_DEVICE_MEMORY_WITH_GROUP_SYNC,
+    TOKEN_BARRIER_GROUP_MEMORY,
+    TOKEN_BARRIER_GROUP_MEMORY_WITH_GROUP_SYNC,
 } TokenKind;
 
 typedef struct Token
@@ -444,6 +451,7 @@ typedef enum IRInstKind {
     IR_INST_COND_BRANCH,
 
     IR_INST_BUILTIN_CALL,
+    IR_INST_BARRIER,
     IR_INST_CAST,
     IR_INST_COMPOSITE_CONSTRUCT,
     IR_INST_COMPOSITE_EXTRACT,
@@ -664,6 +672,14 @@ struct IRInst
             IRInst *merge_block;
             IRInst *continue_block;
         } cond_branch;
+
+        struct
+        {
+            bool with_group_sync;
+            IRInst *memory_scope;
+            IRInst *execution_scope;
+            IRInst *semantics;
+        } barrier;
     };
 };
 
@@ -864,6 +880,7 @@ typedef enum AstExprKind {
     EXPR_RW_STRUCTURED_BUFFER_TYPE,
     EXPR_FUNC_CALL,
     EXPR_BUILTIN_CALL,
+    EXPR_BARRIER_CALL,
     EXPR_UNARY,
     EXPR_BINARY,
 } AstExprKind;
@@ -1067,6 +1084,14 @@ struct AstExpr
             AstExpr *left;
             AstExpr *right;
         } binary;
+
+        struct
+        {
+            bool with_group_sync;
+            uint32_t memory_scope;
+            uint32_t execution_scope;
+            uint32_t semantics;
+        } barrier;
     };
 };
 

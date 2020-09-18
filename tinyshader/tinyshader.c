@@ -39,7 +39,9 @@ TsCompiler *tsCompilerCreate()
     ts__hashSet(
         &compiler->keyword_table, "StructuredBuffer", (void *)TOKEN_STRUCTURED_BUFFER);
     ts__hashSet(
-        &compiler->keyword_table, "RWStructuredBuffer", (void *)TOKEN_RW_STRUCTURED_BUFFER);
+        &compiler->keyword_table,
+        "RWStructuredBuffer",
+        (void *)TOKEN_RW_STRUCTURED_BUFFER);
     ts__hashSet(&compiler->keyword_table, "SamplerState", (void *)TOKEN_SAMPLER_STATE);
     ts__hashSet(&compiler->keyword_table, "Texture1D", (void *)TOKEN_TEXTURE_1D);
     ts__hashSet(&compiler->keyword_table, "Texture2D", (void *)TOKEN_TEXTURE_2D);
@@ -102,6 +104,31 @@ TsCompiler *tsCompilerCreate()
     ts__hashSet(&compiler->keyword_table, "true", (void *)TOKEN_TRUE);
     ts__hashSet(&compiler->keyword_table, "false", (void *)TOKEN_FALSE);
     ts__hashSet(&compiler->keyword_table, "void", (void *)TOKEN_VOID);
+
+    ts__hashSet(
+        &compiler->keyword_table, "AllMemoryBarrier", (void *)TOKEN_BARRIER_ALL_MEMORY);
+    ts__hashSet(
+        &compiler->keyword_table,
+        "AllMemoryBarrierWithGroupSync",
+        (void *)TOKEN_BARRIER_ALL_MEMORY_WITH_GROUP_SYNC);
+
+    ts__hashSet(
+        &compiler->keyword_table,
+        "DeviceMemoryBarrier",
+        (void *)TOKEN_BARRIER_DEVICE_MEMORY);
+    ts__hashSet(
+        &compiler->keyword_table,
+        "DeviceMemoryBarrierWithGroupSync",
+        (void *)TOKEN_BARRIER_DEVICE_MEMORY_WITH_GROUP_SYNC);
+
+    ts__hashSet(
+        &compiler->keyword_table,
+        "GroupMemoryBarrier",
+        (void *)TOKEN_BARRIER_GROUP_MEMORY);
+    ts__hashSet(
+        &compiler->keyword_table,
+        "GroupMemoryBarrierWithGroupSync",
+        (void *)TOKEN_BARRIER_GROUP_MEMORY_WITH_GROUP_SYNC);
 
     return compiler;
 }
