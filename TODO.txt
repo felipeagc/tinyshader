@@ -40,6 +40,7 @@ Vulkan-specifics:
 
 Language features:
     scalar * vector arithmetic
+    vector casting: float2(uint2(1, 2))
 
     shared variables
     groupshared variables
@@ -50,11 +51,6 @@ Language features:
 	typedefs
 	texture arrays
 	arrays of textures
-
-	compute shaders
-	structured buffers
-
-    vector casting: float2(uint2(1, 2))
 
 Low priority:
 	1-dimentional vector types

@@ -434,7 +434,7 @@ static IRType *convertTypeToIR(Module *module, IRModule *ir_module, AstType *typ
 
     case TYPE_CONSTANT_BUFFER: {
         IRType *struct_type = convertTypeToIR(module, ir_module, type->buffer.sub);
-        
+
         IRDecoration struct_dec = {0};
         struct_dec.kind = SpvDecorationBlock;
 
@@ -469,8 +469,8 @@ static IRType *convertTypeToIR(Module *module, IRModule *ir_module, AstType *typ
         member_decs[1].kind = SpvDecorationNonWritable;
         member_decs[1].member_index = 0;
 
-        IRType *struct_wrapper = irNewStructType(
-            ir_module, struct_name, &array_type, 1, member_decs, 2);
+        IRType *struct_wrapper =
+            irNewStructType(ir_module, struct_name, &array_type, 1, member_decs, 2);
 
         IRDecoration struct_dec = {0};
         struct_dec.kind = SpvDecorationBufferBlock;
@@ -2303,6 +2303,42 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
         AstDecl *decl = expr->ident.decl;
         assert(decl);
         expr->value = decl->value;
+        break;
+    }
+
+    case EXPR_SUBSCRIPT: {
+        irModuleBuildExpr(m, expr->subscript.left);
+        irModuleBuildExpr(m, expr->subscript.right);
+        assert(expr->subscript.left->value);
+        assert(expr->subscript.right->value);
+
+        IRType *ir_type = convertTypeToIR(m->mod, m, expr->type);
+
+        uint32_t index_count = 0;
+        IRInst **indices = NULL;
+
+        IRType *index_type = irNewIntType(m, 32, false);
+
+        switch (expr->subscript.left->type->kind)
+        {
+        case TYPE_RW_STRUCTURED_BUFFER:
+        case TYPE_STRUCTURED_BUFFER: {
+            index_count = 2;
+            indices = NEW_ARRAY(compiler, IRInst *, index_count);
+
+            indices[0] = irBuildConstInt(m, index_type, 0);
+            indices[1] = expr->subscript.right->value;
+            break;
+        }
+
+        default: assert(0); break;
+        }
+
+        assert(index_count > 0);
+
+        expr->value = irBuildAccessChain(
+            m, ir_type, expr->subscript.left->value, indices, index_count);
+
         break;
     }
 

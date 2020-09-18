@@ -680,8 +680,7 @@ AstType *ts__getStructType(AstType *type)
     switch (type->kind)
     {
     case TYPE_STRUCT: return type;
-    case TYPE_CONSTANT_BUFFER:
-    {
+    case TYPE_CONSTANT_BUFFER: {
         return ts__getStructType(type->buffer.sub);
     }
 
@@ -1021,6 +1020,54 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
         expr->as_type = decl->as_type;
         expr->scope = decl->scope;
         expr->resolved_int = decl->resolved_int;
+        break;
+    }
+
+    case EXPR_SUBSCRIPT: {
+        AstExpr *left = expr->subscript.left;
+        analyzerAnalyzeExpr(a, left, NULL);
+
+        AstExpr *right = expr->subscript.right;
+        analyzerAnalyzeExpr(a, right, NULL);
+
+        if (!left->type || !right->type) break;
+
+        switch (left->type->kind)
+        {
+        case TYPE_STRUCTURED_BUFFER: {
+            expr->assignable = false;
+            expr->type = left->type->buffer.sub;
+            break;
+        }
+        case TYPE_RW_STRUCTURED_BUFFER: {
+            expr->assignable = true;
+            expr->type = left->type->buffer.sub;
+            break;
+        }
+        default: {
+            ts__addErr(compiler, &left->loc, "expression is not subscriptable");
+            break;
+        }
+        }
+
+        AstType *struct_type = ts__getStructType(expr->type);
+        if (struct_type)
+        {
+            expr->scope = NEW(compiler, Scope);
+            scopeInit(expr->scope, NULL, NULL);
+            for (uint32_t i = 0; i < struct_type->struct_.field_count; ++i)
+            {
+                AstDecl *field_decl = struct_type->struct_.field_decls[i];
+                scopeAdd(expr->scope, field_decl->name, field_decl);
+            }
+        }
+
+        if (right->type->kind != TYPE_INT)
+        {
+            ts__addErr(compiler, &right->loc, "subscript index must be of integer type");
+            break;
+        }
+
         break;
     }
 

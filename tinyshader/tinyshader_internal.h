@@ -856,6 +856,7 @@ typedef enum AstExprKind {
     EXPR_PRIMARY,
     EXPR_IDENT,
     EXPR_ACCESS,
+    EXPR_SUBSCRIPT,
     EXPR_SAMPLER_TYPE,
     EXPR_TEXTURE_TYPE,
     EXPR_CONSTANT_BUFFER_TYPE,
@@ -1023,6 +1024,12 @@ struct AstExpr
             AstExpr *base;
             /*array*/ AstExpr **chain;
         } access;
+
+        struct
+        {
+            AstExpr *left;
+            AstExpr *right;
+        } subscript;
 
         struct
         {

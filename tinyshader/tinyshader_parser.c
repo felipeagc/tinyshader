@@ -1410,7 +1410,8 @@ static AstExpr *parseAccessFuncCall(Parser *p)
     // Not a builtin function, must be an access or function call
 
     while (!parserIsAtEnd(p) && (parserPeek(p, 0)->kind == TOKEN_LPAREN ||
-                                 parserPeek(p, 0)->kind == TOKEN_PERIOD))
+                                 parserPeek(p, 0)->kind == TOKEN_PERIOD ||
+                                 parserPeek(p, 0)->kind == TOKEN_LBRACK))
     {
         if (parserPeek(p, 0)->kind == TOKEN_LPAREN)
         {
@@ -1457,6 +1458,27 @@ static AstExpr *parseAccessFuncCall(Parser *p)
                 if (!ident) return NULL;
 
                 arrPush(expr->access.chain, ident);
+            }
+
+            parserEndLoc(p, &loc);
+            expr->loc = loc;
+        }
+        else if (parserPeek(p, 0)->kind == TOKEN_LBRACK)
+        {
+            // Subscript expression
+
+            while (parserPeek(p, 0)->kind == TOKEN_LBRACK)
+            {
+                parserNext(p, 1);
+
+                AstExpr *left_expr = expr;
+                expr = NEW(compiler, AstExpr);
+                expr->kind = EXPR_SUBSCRIPT;
+                expr->subscript.left = left_expr;
+                expr->subscript.right = parseExpr(p);
+                if (!expr->subscript.right) return NULL;
+
+                if (!parserConsume(p, TOKEN_RBRACK)) return NULL;
             }
 
             parserEndLoc(p, &loc);
