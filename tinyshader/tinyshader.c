@@ -91,6 +91,10 @@ TsCompiler *tsCompilerCreate()
     ts__hashSet(&compiler->keyword_table, "ddx", (void *)TOKEN_BUILTIN_DDX);
     ts__hashSet(&compiler->keyword_table, "ddy", (void *)TOKEN_BUILTIN_DDY);
 
+    ts__hashSet(&compiler->keyword_table, "asuint", (void *)TOKEN_BUILTIN_ASUINT);
+    ts__hashSet(&compiler->keyword_table, "asint", (void *)TOKEN_BUILTIN_ASINT);
+    ts__hashSet(&compiler->keyword_table, "asfloat", (void *)TOKEN_BUILTIN_ASFLOAT);
+
     ts__hashSet(
         &compiler->keyword_table,
         "InterlockedAdd",

@@ -2192,11 +2192,62 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
             if (a->type->kind != TYPE_FLOAT)
             {
-                ts__addErr(compiler, &expr->loc, "ddx/ddycall needs a float parameter");
+                ts__addErr(compiler, &expr->loc, "ddx/ddy call needs a float parameter");
                 break;
             }
 
             expr->type = a->type;
+
+            break;
+        }
+
+        case IR_BUILTIN_ASFLOAT:
+        case IR_BUILTIN_ASINT:
+        case IR_BUILTIN_ASUINT: {
+            if (param_count != 1)
+            {
+                ts__addErr(compiler, &expr->loc, "bitcast needs 1 parameter");
+                break;
+            }
+
+            AstExpr *a = params[0];
+            if (!a->type) break;
+
+            uint32_t dim = 0;
+            if (a->type->kind == TYPE_VECTOR)
+            {
+                dim = a->type->vector.size;
+            }
+
+            AstType *scalar_type = ts__getScalarType(a->type);
+            if (!scalar_type)
+            {
+                ts__addErr(
+                    compiler, &expr->loc, "bitcast needs a scalar/vector parameter");
+                break;
+            }
+
+            switch (expr->builtin_call.kind)
+            {
+            case IR_BUILTIN_ASFLOAT: {
+                expr->type = newFloatType(m, 32);
+                break;
+            }
+            case IR_BUILTIN_ASINT: {
+                expr->type = newIntType(m, 32, true);
+                break;
+            }
+            case IR_BUILTIN_ASUINT: {
+                expr->type = newIntType(m, 32, false);
+                break;
+            }
+            default: assert(0); break;
+            }
+
+            if (dim > 0)
+            {
+                expr->type = newVectorType(m, expr->type, dim);
+            }
 
             break;
         }

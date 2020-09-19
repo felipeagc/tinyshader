@@ -5,11 +5,6 @@ Builtin functions:
 	ceil
 	floor
 
-    asuint
-    asint
-    asfloat
-    asdouble
-
 Preprocessor:
 	#error
 	#if
@@ -34,6 +29,7 @@ Language features:
 	struct literals
 	arrays
 	typedefs
+    TextureBuffer
 	texture arrays
 	arrays of textures
 

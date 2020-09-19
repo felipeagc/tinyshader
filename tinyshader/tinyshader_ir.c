@@ -2115,6 +2115,14 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
                 break;
             }
 
+            case IR_BUILTIN_ASFLOAT:
+            case IR_BUILTIN_ASINT:
+            case IR_BUILTIN_ASUINT: {
+                uint32_t params[3] = {inst->type->id, inst->id, param_values[0]->id};
+                irModuleEncodeInst(m, SpvOpBitcast, params, 3);
+                break;
+            }
+
             case IR_BUILTIN_INTERLOCKED_ADD: {
                 assert(param_values[0]->type->kind == IR_TYPE_POINTER);
 

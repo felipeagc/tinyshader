@@ -34,4 +34,9 @@ void main(
     // InterlockedCompareStore(a, 123, 1);
 
     // uint b = a;
+    float3 c = float3(1, 2, 3);
+    uint3 d = asuint(c);
+    float3 e = asfloat(c);
+    int3 f = asint(e);
+    int3 g = asint(f);
 }

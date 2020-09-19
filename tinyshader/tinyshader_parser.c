@@ -1492,6 +1492,19 @@ static AstExpr *parseAccessFuncCall(Parser *p)
         expr_kind = EXPR_BUILTIN_CALL;
         break;
 
+    case TOKEN_BUILTIN_ASUINT:
+        builtin_kind = IR_BUILTIN_ASUINT;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
+    case TOKEN_BUILTIN_ASINT:
+        builtin_kind = IR_BUILTIN_ASINT;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
+    case TOKEN_BUILTIN_ASFLOAT:
+        builtin_kind = IR_BUILTIN_ASFLOAT;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
+
     case TOKEN_BUILTIN_INTERLOCKED_ADD:
         builtin_kind = IR_BUILTIN_INTERLOCKED_ADD;
         expr_kind = EXPR_BUILTIN_CALL;
