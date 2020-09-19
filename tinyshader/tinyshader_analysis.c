@@ -3043,6 +3043,42 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                     dec.value = SpvBuiltInVertexIndex;
                     arrPush(param_decl->decorations, dec);
                 }
+                else if (
+                    strcmp(param_decl->var.semantic, "SV_DispatchThreadID") == 0 &&
+                    *decl->func.execution_model == SpvExecutionModelGLCompute)
+                {
+                    IRDecoration dec = {0};
+                    dec.kind = SpvDecorationBuiltIn;
+                    dec.value = SpvBuiltInGlobalInvocationId;
+                    arrPush(param_decl->decorations, dec);
+                }
+                else if (
+                    strcmp(param_decl->var.semantic, "SV_GroupID") == 0 &&
+                    *decl->func.execution_model == SpvExecutionModelGLCompute)
+                {
+                    IRDecoration dec = {0};
+                    dec.kind = SpvDecorationBuiltIn;
+                    dec.value = SpvBuiltInWorkgroupId;
+                    arrPush(param_decl->decorations, dec);
+                }
+                else if (
+                    strcmp(param_decl->var.semantic, "SV_GroupIndex") == 0 &&
+                    *decl->func.execution_model == SpvExecutionModelGLCompute)
+                {
+                    IRDecoration dec = {0};
+                    dec.kind = SpvDecorationBuiltIn;
+                    dec.value = SpvBuiltInLocalInvocationIndex;
+                    arrPush(param_decl->decorations, dec);
+                }
+                else if (
+                    strcmp(param_decl->var.semantic, "SV_GroupThreadID") == 0 &&
+                    *decl->func.execution_model == SpvExecutionModelGLCompute)
+                {
+                    IRDecoration dec = {0};
+                    dec.kind = SpvDecorationBuiltIn;
+                    dec.value = SpvBuiltInLocalInvocationId;
+                    arrPush(param_decl->decorations, dec);
+                }
                 else
                 {
                     IRDecoration dec = {0};
