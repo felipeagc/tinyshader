@@ -401,6 +401,10 @@ static void preprocessFile(Preprocessor *p, File *file)
                     preprocessFile(p, new_file);
                 }
             }
+            else if (strncmp(curr, "#pragma", strlen("#pragma")) == 0)
+            {
+                preprocNext(f, strlen("#pragma"));
+            }
             else
             {
                 Location err_loc = preprocErrLoc(f);
