@@ -29,6 +29,22 @@ extern char **environ;
 #define TS_PATHSEP '\\'
 #endif
 
+#define ARRAY_INITIAL_CAPACITY 16
+
+void *ts__arrayGrow(void *ptr, size_t *cap, size_t wanted_cap, size_t item_size)
+{
+    if (!ptr)
+    {
+        size_t desired_cap = ((wanted_cap == 0) ? ARRAY_INITIAL_CAPACITY : wanted_cap);
+        *cap = desired_cap;
+        return malloc(item_size * desired_cap);
+    }
+
+    size_t desired_cap = ((wanted_cap == 0) ? ((*cap) * 2) : wanted_cap);
+    *cap = desired_cap;
+    return realloc(ptr, (desired_cap * item_size));
+}
+
 ////////////////////////////////
 //
 // Paths
@@ -284,9 +300,9 @@ static uint64_t hashSetInternal(HashMap *map, const char *key, uint64_t index)
 void *ts__hashSet(HashMap *map, const char *key, void *value)
 {
     size_t index = arrLength(map->values);
-    arrPush(map->values, value);
+    arrPush(&map->values, value);
     hashSetInternal(map, key, index);
-    return map->values[index];
+    return map->values.ptr[index];
 }
 
 bool ts__hashGet(HashMap *map, const char *key, void **result)
@@ -307,7 +323,7 @@ bool ts__hashGet(HashMap *map, const char *key, void **result)
 
     if (map->hashes[i] != 0)
     {
-        if (result) *result = map->values[map->indices[i]];
+        if (result) *result = map->values.ptr[map->indices[i]];
         return true;
     }
 
@@ -366,7 +382,7 @@ void ts__hashDestroy(HashMap *map)
     free(map->hashes);
     free(map->indices);
     free(map->keys);
-    arrFree(map->values);
+    arrFree(&map->values);
 }
 
 ////////////////////////////////
@@ -397,9 +413,14 @@ static void blockDestroy(BumpBlock *block)
 
 static void *blockAlloc(BumpBlock *block, size_t size)
 {
-    assert((block->size - block->pos) >= size);
-    void *data = block->data + block->pos;
-    block->pos += size;
+    size_t padding = (block->pos % 8);
+    if (padding > 0) padding = 8 - padding;
+
+    assert((block->size - block->pos) >= (size+padding));
+
+    void *data = block->data + block->pos + padding;
+    assert((uintptr_t)data % 8 == 0);
+    block->pos += size + padding;
     return data;
 }
 
@@ -418,8 +439,11 @@ void *ts__bumpAlloc(BumpAlloc *alloc, size_t size)
         return NULL;
     }
 
+    size_t padding = (alloc->last_block->pos % 8);
+    if (padding > 0) padding = 8 - padding;
+
     size_t space = alloc->last_block->size - alloc->last_block->pos;
-    if (space < size)
+    if (space < (size+padding))
     {
         // Append new block
         alloc->last_block->next = malloc(sizeof(BumpBlock));
@@ -434,7 +458,9 @@ void *ts__bumpAlloc(BumpAlloc *alloc, size_t size)
 
 void *ts__bumpZeroAlloc(BumpAlloc *alloc, size_t size)
 {
+    assert(size > 0);
     void *data = ts__bumpAlloc(alloc, size);
+    assert(data);
     memset(data, 0, size);
     return data;
 }

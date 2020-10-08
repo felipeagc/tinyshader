@@ -336,7 +336,7 @@ static uint32_t typeSizeOf(Module *m, AstType *type)
             member_dec.kind = SpvDecorationOffset;
             member_dec.member_index = i;
             member_dec.value = size;
-            arrPush(type->struct_.field_decorations, member_dec);
+            arrPush(&type->struct_.field_decorations, member_dec);
 
             size += typeSizeOf(m, field);
         }
@@ -796,7 +796,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl);
 static void analyzerPushScope(Analyzer *a, Scope *scope)
 {
     assert(scope);
-    arrPush(a->scope_stack, scope);
+    arrPush(&a->scope_stack, scope);
     if (scope->owner && scope->owner->kind == DECL_FUNC)
     {
         a->scope_func = scope->owner;
@@ -808,17 +808,17 @@ static void analyzerPopScope(Analyzer *a, Scope *scope)
     assert(scope);
     assert(arrLength(a->scope_stack) > 0);
 
-    Scope *last_scope = a->scope_stack[arrLength(a->scope_stack) - 1];
+    Scope *last_scope = a->scope_stack.ptr[arrLength(a->scope_stack) - 1];
     assert(last_scope == scope);
 
-    arrPop(a->scope_stack);
+    arrPop(&a->scope_stack);
 
     a->scope_func = NULL;
     for (uint32_t i = 0; i < arrLength(a->scope_stack); ++i)
     {
-        if (a->scope_stack[i]->owner && a->scope_stack[i]->owner->kind == DECL_FUNC)
+        if (a->scope_stack.ptr[i]->owner && a->scope_stack.ptr[i]->owner->kind == DECL_FUNC)
         {
-            a->scope_func = a->scope_stack[i]->owner;
+            a->scope_func = a->scope_stack.ptr[i]->owner;
         }
     }
 }
@@ -827,7 +827,7 @@ static Scope *analyzerCurrentScope(Analyzer *a)
 {
     if (arrLength(a->scope_stack) > 0)
     {
-        return a->scope_stack[arrLength(a->scope_stack) - 1];
+        return a->scope_stack.ptr[arrLength(a->scope_stack) - 1];
     }
     return NULL;
 }
@@ -1079,7 +1079,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
         for (uint32_t i = 0; i < arrLength(expr->access.chain); ++i)
         {
-            AstExpr *right = expr->access.chain[i];
+            AstExpr *right = expr->access.chain.ptr[i];
 
             if (!left->type)
             {
@@ -1186,12 +1186,12 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
         if (func_expr->kind == EXPR_ACCESS)
         {
             AstExpr *method_name_expr =
-                func_expr->access.chain[arrLength(func_expr->access.chain) - 1];
+                func_expr->access.chain.ptr[arrLength(func_expr->access.chain) - 1];
             assert(method_name_expr->kind == EXPR_IDENT);
             char *method_name = method_name_expr->ident.name;
 
-            arrPop(func_expr->access
-                       .chain); // Remove last element from access (the method name)
+            // Remove last element from access (the method name)
+            arrPop(&func_expr->access.chain); 
 
             if (arrLength(func_expr->access.chain) == 0)
             {
@@ -1246,7 +1246,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
                 for (uint32_t i = 0; i < arrLength(expr->func_call.params); ++i)
                 {
-                    AstExpr *param = expr->func_call.params[i];
+                    AstExpr *param = expr->func_call.params.ptr[i];
                     analyzerAnalyzeExpr(a, param, func_param_types[i]);
                 }
 
@@ -1277,7 +1277,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             expr->type = constructed_type;
 
             uint32_t param_count = arrLength(expr->func_call.params);
-            AstExpr **params = expr->func_call.params;
+            ArrayOfAstExprPtr params = expr->func_call.params;
 
             if (constructed_type->kind == TYPE_VECTOR)
             {
@@ -1286,12 +1286,12 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                     for (uint32_t i = 0; i < param_count; ++i)
                     {
                         analyzerAnalyzeExpr(
-                            a, params[i], constructed_type->vector.elem_type);
+                            a, params.ptr[i], constructed_type->vector.elem_type);
                     }
                 }
                 else if (param_count == 1)
                 {
-                    analyzerAnalyzeExpr(a, params[0], constructed_type->vector.elem_type);
+                    analyzerAnalyzeExpr(a, params.ptr[0], constructed_type->vector.elem_type);
                 }
                 else
                 {
@@ -1302,13 +1302,13 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             }
             else if (param_count == 1)
             {
-                analyzerAnalyzeExpr(a, params[0], NULL);
-                if (!params[0]->type) break;
+                analyzerAnalyzeExpr(a, params.ptr[0], NULL);
+                if (!params.ptr[0]->type) break;
 
-                if (!isTypeCastable(params[0]->type, constructed_type))
+                if (!isTypeCastable(params.ptr[0]->type, constructed_type))
                 {
                     ts__addErr(
-                        compiler, &params[0]->loc, "value is not castable to this type");
+                        compiler, &params.ptr[0]->loc, "value is not castable to this type");
                     break;
                 }
             }
@@ -1331,7 +1331,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
             for (uint32_t i = 0; i < func_type->func.param_count; ++i)
             {
-                AstExpr *param = expr->func_call.params[i];
+                AstExpr *param = expr->func_call.params.ptr[i];
                 AstType *param_expected = func_type->func.params[i];
                 if (param_expected->kind == TYPE_POINTER)
                 {
@@ -1360,13 +1360,13 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
     case EXPR_BUILTIN_CALL: {
         uint32_t param_count = arrLength(expr->builtin_call.params);
-        AstExpr **params = expr->builtin_call.params;
+        ArrayOfAstExprPtr params = expr->builtin_call.params;
 
         bool got_param_types = true;
 
         for (uint32_t i = 0; i < param_count; ++i)
         {
-            AstExpr *param = params[i];
+            AstExpr *param = params.ptr[i];
             analyzerAnalyzeExpr(a, param, NULL);
             if (!param->type)
             {
@@ -1386,8 +1386,8 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            AstExpr *a = params[0];
-            AstExpr *b = params[1];
+            AstExpr *a = params.ptr[0];
+            AstExpr *b = params.ptr[1];
 
             if ((a->type->kind != TYPE_VECTOR) || (b->type->kind != TYPE_VECTOR))
             {
@@ -1412,8 +1412,8 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            AstExpr *a = params[0];
-            AstExpr *b = params[1];
+            AstExpr *a = params.ptr[0];
+            AstExpr *b = params.ptr[1];
 
             if ((a->type->kind != TYPE_VECTOR) || (b->type->kind != TYPE_VECTOR))
             {
@@ -1445,7 +1445,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            AstExpr *a = params[0];
+            AstExpr *a = params.ptr[0];
 
             if (a->type->kind != TYPE_VECTOR)
             {
@@ -1464,7 +1464,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            AstExpr *a = params[0];
+            AstExpr *a = params.ptr[0];
 
             if (a->type->kind != TYPE_VECTOR)
             {
@@ -1483,8 +1483,8 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            AstExpr *a = params[0];
-            AstExpr *b = params[1];
+            AstExpr *a = params.ptr[0];
+            AstExpr *b = params.ptr[1];
 
             if (!((a->type->kind == TYPE_VECTOR && b->type->kind == TYPE_MATRIX) ||
                   (a->type->kind == TYPE_MATRIX && b->type->kind == TYPE_VECTOR) ||
@@ -1560,11 +1560,11 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            tryCoerceExprToScalarType(a, params[0], newFloatType(m, 32));
-            tryCoerceExprToScalarType(a, params[1], newFloatType(m, 32));
+            tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
+            tryCoerceExprToScalarType(a, params.ptr[1], newFloatType(m, 32));
 
-            AstExpr *a = params[0];
-            AstExpr *b = params[1];
+            AstExpr *a = params.ptr[0];
+            AstExpr *b = params.ptr[1];
 
             if ((a->type->kind != TYPE_VECTOR) || (b->type->kind != TYPE_VECTOR))
             {
@@ -1592,9 +1592,9 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            tryCoerceExprToScalarType(a, params[0], newFloatType(m, 32));
+            tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
 
-            AstExpr *a = params[0];
+            AstExpr *a = params.ptr[0];
             if (!a->type) break;
 
             if (a->type->kind != TYPE_FLOAT)
@@ -1625,9 +1625,9 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            tryCoerceExprToScalarType(a, params[0], newFloatType(m, 32));
+            tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
 
-            AstExpr *a = params[0];
+            AstExpr *a = params.ptr[0];
 
             if (a->kind == EXPR_PRIMARY && a->type->kind == TYPE_INT)
             {
@@ -1652,11 +1652,11 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            tryCoerceExprToScalarType(a, params[0], newFloatType(m, 32));
-            tryCoerceExprToScalarType(a, params[1], newFloatType(m, 32));
+            tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
+            tryCoerceExprToScalarType(a, params.ptr[1], newFloatType(m, 32));
 
-            AstExpr *a = params[0];
-            AstExpr *b = params[1];
+            AstExpr *a = params.ptr[0];
+            AstExpr *b = params.ptr[1];
 
             if (a->kind == EXPR_PRIMARY && a->type->kind == TYPE_INT)
             {
@@ -1695,9 +1695,9 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            tryCoerceExprToScalarType(a, params[0], newFloatType(m, 32));
+            tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
 
-            AstExpr *a = params[0];
+            AstExpr *a = params.ptr[0];
             if (!a->type) break;
 
             AstType *scalar_type = ts__getScalarType(a->type);
@@ -1722,8 +1722,8 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            AstExpr *a = params[0];
-            AstExpr *b = params[1];
+            AstExpr *a = params.ptr[0];
+            AstExpr *b = params.ptr[1];
 
             if ((a->type->kind != TYPE_VECTOR) || (b->type->kind != TYPE_VECTOR))
             {
@@ -1752,11 +1752,11 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            tryCoerceExprToScalarType(a, params[2], newFloatType(m, 32));
+            tryCoerceExprToScalarType(a, params.ptr[2], newFloatType(m, 32));
 
-            AstExpr *a = params[0];
-            AstExpr *b = params[1];
-            AstExpr *c = params[2];
+            AstExpr *a = params.ptr[0];
+            AstExpr *b = params.ptr[1];
+            AstExpr *c = params.ptr[2];
 
             if (!a->type || !b->type || !c->type) break;
 
@@ -1796,11 +1796,11 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            tryCoerceExprToScalarType(a, params[0], newFloatType(m, 32));
-            tryCoerceExprToScalarType(a, params[1], newFloatType(m, 32));
+            tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
+            tryCoerceExprToScalarType(a, params.ptr[1], newFloatType(m, 32));
 
-            AstExpr *a = params[0];
-            AstExpr *b = params[1];
+            AstExpr *a = params.ptr[0];
+            AstExpr *b = params.ptr[1];
             if (!a->type || !b->type) break;
 
             if (a->type != b->type)
@@ -1833,9 +1833,9 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            tryCoerceExprToScalarType(a, params[0], newFloatType(m, 32));
+            tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
 
-            AstExpr *a = params[0];
+            AstExpr *a = params.ptr[0];
             if (!a->type) break;
 
             AstType *scalar_type = ts__getScalarType(a->type);
@@ -1861,9 +1861,9 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            tryCoerceExprToScalarType(a, params[0], newFloatType(m, 32));
+            tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
 
-            AstExpr *a = params[0];
+            AstExpr *a = params.ptr[0];
             if (!a->type) break;
 
             AstType *scalar_type = ts__getScalarType(a->type);
@@ -1890,10 +1890,10 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
             if (expected_type)
             {
-                tryCoerceExprToScalarType(a, params[0], expected_type);
+                tryCoerceExprToScalarType(a, params.ptr[0], expected_type);
             }
 
-            AstExpr *a = params[0];
+            AstExpr *a = params.ptr[0];
             if (!a->type) break;
 
             AstType *scalar_type = ts__getScalarType(a->type);
@@ -1917,15 +1917,15 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            if (expected_type && canCoerceExprToScalarType(a, params[0], expected_type) &&
-                canCoerceExprToScalarType(a, params[1], expected_type))
+            if (expected_type && canCoerceExprToScalarType(a, params.ptr[0], expected_type) &&
+                canCoerceExprToScalarType(a, params.ptr[1], expected_type))
             {
-                tryCoerceExprToScalarType(a, params[0], expected_type);
-                tryCoerceExprToScalarType(a, params[1], expected_type);
+                tryCoerceExprToScalarType(a, params.ptr[0], expected_type);
+                tryCoerceExprToScalarType(a, params.ptr[1], expected_type);
             }
 
-            AstExpr *a = params[0];
-            AstExpr *b = params[1];
+            AstExpr *a = params.ptr[0];
+            AstExpr *b = params.ptr[1];
             if (!a->type || !b->type) break;
 
             if (a->type != b->type)
@@ -1956,18 +1956,18 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            if (expected_type && canCoerceExprToScalarType(a, params[0], expected_type) &&
-                canCoerceExprToScalarType(a, params[1], expected_type) &&
-                canCoerceExprToScalarType(a, params[2], expected_type))
+            if (expected_type && canCoerceExprToScalarType(a, params.ptr[0], expected_type) &&
+                canCoerceExprToScalarType(a, params.ptr[1], expected_type) &&
+                canCoerceExprToScalarType(a, params.ptr[2], expected_type))
             {
-                tryCoerceExprToScalarType(a, params[0], expected_type);
-                tryCoerceExprToScalarType(a, params[1], expected_type);
-                tryCoerceExprToScalarType(a, params[2], expected_type);
+                tryCoerceExprToScalarType(a, params.ptr[0], expected_type);
+                tryCoerceExprToScalarType(a, params.ptr[1], expected_type);
+                tryCoerceExprToScalarType(a, params.ptr[2], expected_type);
             }
 
-            AstExpr *a = params[0];
-            AstExpr *b = params[1];
-            AstExpr *c = params[2];
+            AstExpr *a = params.ptr[0];
+            AstExpr *b = params.ptr[1];
+            AstExpr *c = params.ptr[2];
             if (!a->type || !b->type || !c->type) break;
 
             if (a->type != b->type || a->type != c->type)
@@ -1999,25 +1999,25 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            if (expected_type && canCoerceExprToScalarType(a, params[0], expected_type) &&
-                canCoerceExprToScalarType(a, params[1], expected_type) &&
-                canCoerceExprToScalarType(a, params[2], expected_type))
+            if (expected_type && canCoerceExprToScalarType(a, params.ptr[0], expected_type) &&
+                canCoerceExprToScalarType(a, params.ptr[1], expected_type) &&
+                canCoerceExprToScalarType(a, params.ptr[2], expected_type))
             {
-                tryCoerceExprToScalarType(a, params[0], expected_type);
-                tryCoerceExprToScalarType(a, params[1], expected_type);
-                tryCoerceExprToScalarType(a, params[2], expected_type);
+                tryCoerceExprToScalarType(a, params.ptr[0], expected_type);
+                tryCoerceExprToScalarType(a, params.ptr[1], expected_type);
+                tryCoerceExprToScalarType(a, params.ptr[2], expected_type);
             }
             else if (
-                canCoerceExprToScalarType(a, params[1], params[0]->type) &&
-                canCoerceExprToScalarType(a, params[2], params[0]->type))
+                canCoerceExprToScalarType(a, params.ptr[1], params.ptr[0]->type) &&
+                canCoerceExprToScalarType(a, params.ptr[2], params.ptr[0]->type))
             {
-                tryCoerceExprToScalarType(a, params[1], params[0]->type);
-                tryCoerceExprToScalarType(a, params[2], params[0]->type);
+                tryCoerceExprToScalarType(a, params.ptr[1], params.ptr[0]->type);
+                tryCoerceExprToScalarType(a, params.ptr[2], params.ptr[0]->type);
             }
 
-            AstExpr *a = params[0];
-            AstExpr *b = params[1];
-            AstExpr *c = params[2];
+            AstExpr *a = params.ptr[0];
+            AstExpr *b = params.ptr[1];
+            AstExpr *c = params.ptr[2];
             if (!a->type || !b->type || !c->type) break;
 
             if (a->type != b->type || a->type != c->type)
@@ -2050,11 +2050,11 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            tryCoerceExprToScalarType(a, params[0], newFloatType(m, 32));
-            tryCoerceExprToScalarType(a, params[1], newFloatType(m, 32));
+            tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
+            tryCoerceExprToScalarType(a, params.ptr[1], newFloatType(m, 32));
 
-            AstExpr *a = params[0];
-            AstExpr *b = params[1];
+            AstExpr *a = params.ptr[0];
+            AstExpr *b = params.ptr[1];
             if (!a->type || !b->type) break;
 
             if (a->type != b->type)
@@ -2086,13 +2086,13 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            tryCoerceExprToScalarType(a, params[0], newFloatType(m, 32));
-            tryCoerceExprToScalarType(a, params[1], newFloatType(m, 32));
-            tryCoerceExprToScalarType(a, params[2], newFloatType(m, 32));
+            tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
+            tryCoerceExprToScalarType(a, params.ptr[1], newFloatType(m, 32));
+            tryCoerceExprToScalarType(a, params.ptr[2], newFloatType(m, 32));
 
-            AstExpr *a = params[0];
-            AstExpr *b = params[1];
-            AstExpr *c = params[2];
+            AstExpr *a = params.ptr[0];
+            AstExpr *b = params.ptr[1];
+            AstExpr *c = params.ptr[2];
             if (!a->type || !b->type || !c->type) break;
 
             if ((a->type != b->type) || (a->type != c->type))
@@ -2126,7 +2126,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            AstExpr *a = params[0];
+            AstExpr *a = params.ptr[0];
             if (!a->type) break;
 
             if (a->type->kind != TYPE_MATRIX)
@@ -2152,7 +2152,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            AstExpr *a = params[0];
+            AstExpr *a = params.ptr[0];
             if (!a->type) break;
 
             if (a->type->kind != TYPE_MATRIX)
@@ -2185,9 +2185,9 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            tryCoerceExprToScalarType(a, params[0], newFloatType(m, 32));
+            tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
 
-            AstExpr *a = params[0];
+            AstExpr *a = params.ptr[0];
             if (!a->type) break;
 
             if (a->type->kind != TYPE_FLOAT)
@@ -2210,7 +2210,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            AstExpr *a = params[0];
+            AstExpr *a = params.ptr[0];
             if (!a->type) break;
 
             uint32_t dim = 0;
@@ -2267,11 +2267,11 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            if (!params[0]->type || !params[1]->type) break;
+            if (!params.ptr[0]->type || !params.ptr[1]->type) break;
 
-            tryCoerceExprToScalarType(a, params[1], params[0]->type);
+            tryCoerceExprToScalarType(a, params.ptr[1], params.ptr[0]->type);
 
-            if (params[0]->type != params[1]->type)
+            if (params.ptr[0]->type != params.ptr[1]->type)
             {
                 ts__addErr(
                     compiler,
@@ -2280,7 +2280,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            if (params[0]->type->kind != TYPE_INT)
+            if (params.ptr[0]->type->kind != TYPE_INT)
             {
                 ts__addErr(
                     compiler,
@@ -2289,9 +2289,9 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            if ((params[0]->kind != EXPR_IDENT) || (!params[0]->ident.decl) ||
-                (params[0]->ident.decl->kind != DECL_VAR) ||
-                (params[0]->ident.decl->var.kind != VAR_GROUPSHARED))
+            if ((params.ptr[0]->kind != EXPR_IDENT) || (!params.ptr[0]->ident.decl) ||
+                (params.ptr[0]->ident.decl->kind != DECL_VAR) ||
+                (params.ptr[0]->ident.decl->var.kind != VAR_GROUPSHARED))
             {
                 ts__addErr(
                     compiler,
@@ -2314,11 +2314,11 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            if (!params[0]->type || !params[1]->type || !params[2]->type) break;
+            if (!params.ptr[0]->type || !params.ptr[1]->type || !params.ptr[2]->type) break;
 
-            tryCoerceExprToScalarType(a, params[1], params[0]->type);
+            tryCoerceExprToScalarType(a, params.ptr[1], params.ptr[0]->type);
 
-            if (params[0]->type != params[1]->type || params[0]->type != params[2]->type)
+            if (params.ptr[0]->type != params.ptr[1]->type || params.ptr[0]->type != params.ptr[2]->type)
             {
                 ts__addErr(
                     compiler,
@@ -2327,7 +2327,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            if (params[0]->type->kind != TYPE_INT)
+            if (params.ptr[0]->type->kind != TYPE_INT)
             {
                 ts__addErr(
                     compiler,
@@ -2336,9 +2336,9 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            if ((params[0]->kind != EXPR_IDENT) || (!params[0]->ident.decl) ||
-                (params[0]->ident.decl->kind != DECL_VAR) ||
-                (params[0]->ident.decl->var.kind != VAR_GROUPSHARED))
+            if ((params.ptr[0]->kind != EXPR_IDENT) || (!params.ptr[0]->ident.decl) ||
+                (params.ptr[0]->ident.decl->kind != DECL_VAR) ||
+                (params.ptr[0]->ident.decl->var.kind != VAR_GROUPSHARED))
             {
                 ts__addErr(
                     compiler,
@@ -2348,7 +2348,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            if (!params[2]->assignable)
+            if (!params.ptr[2]->assignable)
             {
                 ts__addErr(
                     compiler,
@@ -2370,15 +2370,15 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            if (!params[0]->type || !params[1]->type || !params[2]->type ||
-                !params[3]->type)
+            if (!params.ptr[0]->type || !params.ptr[1]->type || !params.ptr[2]->type ||
+                !params.ptr[3]->type)
                 break;
 
-            tryCoerceExprToScalarType(a, params[1], params[0]->type);
-            tryCoerceExprToScalarType(a, params[2], params[0]->type);
+            tryCoerceExprToScalarType(a, params.ptr[1], params.ptr[0]->type);
+            tryCoerceExprToScalarType(a, params.ptr[2], params.ptr[0]->type);
 
-            if (params[0]->type != params[1]->type ||
-                params[0]->type != params[2]->type || params[0]->type != params[3]->type)
+            if (params.ptr[0]->type != params.ptr[1]->type ||
+                params.ptr[0]->type != params.ptr[2]->type || params.ptr[0]->type != params.ptr[3]->type)
             {
                 ts__addErr(
                     compiler,
@@ -2387,7 +2387,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            if (params[0]->type->kind != TYPE_INT)
+            if (params.ptr[0]->type->kind != TYPE_INT)
             {
                 ts__addErr(
                     compiler,
@@ -2396,9 +2396,9 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            if ((params[0]->kind != EXPR_IDENT) || (!params[0]->ident.decl) ||
-                (params[0]->ident.decl->kind != DECL_VAR) ||
-                (params[0]->ident.decl->var.kind != VAR_GROUPSHARED))
+            if ((params.ptr[0]->kind != EXPR_IDENT) || (!params.ptr[0]->ident.decl) ||
+                (params.ptr[0]->ident.decl->kind != DECL_VAR) ||
+                (params.ptr[0]->ident.decl->var.kind != VAR_GROUPSHARED))
             {
                 ts__addErr(
                     compiler,
@@ -2408,7 +2408,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            if (!params[3]->assignable)
+            if (!params.ptr[3]->assignable)
             {
                 ts__addErr(
                     compiler,
@@ -2430,12 +2430,12 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            if (!params[0]->type || !params[1]->type || !params[2]->type) break;
+            if (!params.ptr[0]->type || !params.ptr[1]->type || !params.ptr[2]->type) break;
 
-            tryCoerceExprToScalarType(a, params[1], params[0]->type);
-            tryCoerceExprToScalarType(a, params[2], params[0]->type);
+            tryCoerceExprToScalarType(a, params.ptr[1], params.ptr[0]->type);
+            tryCoerceExprToScalarType(a, params.ptr[2], params.ptr[0]->type);
 
-            if (params[0]->type != params[1]->type || params[0]->type != params[2]->type)
+            if (params.ptr[0]->type != params.ptr[1]->type || params.ptr[0]->type != params.ptr[2]->type)
             {
                 ts__addErr(
                     compiler,
@@ -2444,7 +2444,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            if (params[0]->type->kind != TYPE_INT)
+            if (params.ptr[0]->type->kind != TYPE_INT)
             {
                 ts__addErr(
                     compiler,
@@ -2453,9 +2453,9 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            if ((params[0]->kind != EXPR_IDENT) || (!params[0]->ident.decl) ||
-                (params[0]->ident.decl->kind != DECL_VAR) ||
-                (params[0]->ident.decl->var.kind != VAR_GROUPSHARED))
+            if ((params.ptr[0]->kind != EXPR_IDENT) || (!params.ptr[0]->ident.decl) ||
+                (params.ptr[0]->ident.decl->kind != DECL_VAR) ||
+                (params.ptr[0]->ident.decl->var.kind != VAR_GROUPSHARED))
             {
                 ts__addErr(
                     compiler,
@@ -2827,7 +2827,7 @@ static void analyzerAnalyzeStmt(Analyzer *a, AstStmt *stmt)
         analyzerPushScope(a, stmt->block.scope);
         for (uint32_t i = 0; i < arrLength(stmt->block.stmts); ++i)
         {
-            AstStmt *sub_stmt = stmt->block.stmts[i];
+            AstStmt *sub_stmt = stmt->block.stmts.ptr[i];
             analyzerAnalyzeStmt(a, sub_stmt);
         }
         analyzerPopScope(a, stmt->block.scope);
@@ -2857,11 +2857,11 @@ static void analyzerAnalyzeStmt(Analyzer *a, AstStmt *stmt)
             ts__addErr(compiler, &stmt->while_.cond->loc, "expression is not comparable");
         }
 
-        arrPush(a->continue_stack, stmt);
-        arrPush(a->break_stack, stmt);
+        arrPush(&a->continue_stack, stmt);
+        arrPush(&a->break_stack, stmt);
         analyzerAnalyzeStmt(a, stmt->while_.stmt);
-        arrPop(a->continue_stack);
-        arrPop(a->break_stack);
+        arrPop(&a->continue_stack);
+        arrPop(&a->break_stack);
         break;
     }
 
@@ -2874,11 +2874,11 @@ static void analyzerAnalyzeStmt(Analyzer *a, AstStmt *stmt)
                 compiler, &stmt->do_while.cond->loc, "expression is not comparable");
         }
 
-        arrPush(a->continue_stack, stmt);
-        arrPush(a->break_stack, stmt);
+        arrPush(&a->continue_stack, stmt);
+        arrPush(&a->break_stack, stmt);
         analyzerAnalyzeStmt(a, stmt->do_while.stmt);
-        arrPop(a->continue_stack);
-        arrPop(a->break_stack);
+        arrPop(&a->continue_stack);
+        arrPop(&a->break_stack);
         break;
     }
 
@@ -2903,11 +2903,11 @@ static void analyzerAnalyzeStmt(Analyzer *a, AstStmt *stmt)
             analyzerAnalyzeExpr(a, stmt->for_.inc, NULL);
         }
 
-        arrPush(a->continue_stack, stmt);
-        arrPush(a->break_stack, stmt);
+        arrPush(&a->continue_stack, stmt);
+        arrPush(&a->break_stack, stmt);
         analyzerAnalyzeStmt(a, stmt->for_.stmt);
-        arrPop(a->continue_stack);
-        arrPop(a->break_stack);
+        arrPop(&a->continue_stack);
+        arrPop(&a->break_stack);
         break;
     }
     }
@@ -2921,10 +2921,10 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
 
     for (uint32_t i = 0; i < arrLength(decl->attributes); ++i)
     {
-        AstAttribute *attr = &decl->attributes[i];
+        AstAttribute *attr = &decl->attributes.ptr[i];
         for (uint32_t j = 0; j < arrLength(attr->values); ++j)
         {
-            analyzerAnalyzeExpr(a, attr->values[j], NULL);
+            analyzerAnalyzeExpr(a, attr->values.ptr[j], NULL);
         }
     }
 
@@ -2951,7 +2951,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
 
                 for (uint32_t i = 0; i < arrLength(decl->attributes); ++i)
                 {
-                    AstAttribute *attr = &decl->attributes[i];
+                    AstAttribute *attr = &decl->attributes.ptr[i];
 
                     if (strcmp(attr->name, "numthreads") == 0)
                     {
@@ -2968,17 +2968,17 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                         {
                             for (size_t j = 0; j < 3; ++j)
                             {
-                                if (!attr->values[j]->resolved_int)
+                                if (!attr->values.ptr[j]->resolved_int)
                                 {
                                     ts__addErr(
                                         compiler,
-                                        &attr->values[j]->loc,
+                                        &attr->values.ptr[j]->loc,
                                         "could not resolve integer from expression");
                                 }
                                 else
                                 {
                                     uint32_t dim =
-                                        (uint32_t)*attr->values[j]->resolved_int;
+                                        (uint32_t)*attr->values.ptr[j]->resolved_int;
 
                                     decl->func.compute_dims[j] = dim;
                                 }
@@ -3002,7 +3002,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
 
         for (uint32_t i = 0; i < arrLength(decl->func.all_params); ++i)
         {
-            AstDecl *param_decl = decl->func.all_params[i];
+            AstDecl *param_decl = decl->func.all_params.ptr[i];
 
             if (decl->func.execution_model)
             {
@@ -3017,18 +3017,18 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                 if (param_decl->var.kind == VAR_IN_PARAM ||
                     param_decl->var.kind == VAR_PLAIN)
                 {
-                    arrPush(decl->func.inputs, param_decl);
+                    arrPush(&decl->func.inputs, param_decl);
                 }
                 else if (
                     param_decl->var.kind == VAR_OUT_PARAM ||
                     param_decl->var.kind == VAR_INOUT_PARAM)
                 {
-                    arrPush(decl->func.outputs, param_decl);
+                    arrPush(&decl->func.outputs, param_decl);
                 }
             }
             else
             {
-                arrPush(decl->func.func_params, param_decl);
+                arrPush(&decl->func.func_params, param_decl);
             }
         }
 
@@ -3064,7 +3064,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
         analyzerPushScope(a, decl->scope);
         for (uint32_t i = 0; i < arrLength(decl->func.inputs); ++i)
         {
-            AstDecl *param_decl = decl->func.inputs[i];
+            AstDecl *param_decl = decl->func.inputs.ptr[i];
 
             if (param_decl->var.semantic)
             {
@@ -3074,7 +3074,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                     IRDecoration dec = {0};
                     dec.kind = SpvDecorationBuiltIn;
                     dec.value = SpvBuiltInFragCoord;
-                    arrPush(param_decl->decorations, dec);
+                    arrPush(&param_decl->decorations, dec);
                 }
                 else if (
                     strcmp(param_decl->var.semantic, "SV_InstanceID") == 0 &&
@@ -3083,7 +3083,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                     IRDecoration dec = {0};
                     dec.kind = SpvDecorationBuiltIn;
                     dec.value = SpvBuiltInInstanceIndex;
-                    arrPush(param_decl->decorations, dec);
+                    arrPush(&param_decl->decorations, dec);
                 }
                 else if (
                     strcmp(param_decl->var.semantic, "SV_VertexID") == 0 &&
@@ -3092,7 +3092,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                     IRDecoration dec = {0};
                     dec.kind = SpvDecorationBuiltIn;
                     dec.value = SpvBuiltInVertexIndex;
-                    arrPush(param_decl->decorations, dec);
+                    arrPush(&param_decl->decorations, dec);
                 }
                 else if (
                     strcmp(param_decl->var.semantic, "SV_DispatchThreadID") == 0 &&
@@ -3101,7 +3101,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                     IRDecoration dec = {0};
                     dec.kind = SpvDecorationBuiltIn;
                     dec.value = SpvBuiltInGlobalInvocationId;
-                    arrPush(param_decl->decorations, dec);
+                    arrPush(&param_decl->decorations, dec);
                 }
                 else if (
                     strcmp(param_decl->var.semantic, "SV_GroupID") == 0 &&
@@ -3110,7 +3110,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                     IRDecoration dec = {0};
                     dec.kind = SpvDecorationBuiltIn;
                     dec.value = SpvBuiltInWorkgroupId;
-                    arrPush(param_decl->decorations, dec);
+                    arrPush(&param_decl->decorations, dec);
                 }
                 else if (
                     strcmp(param_decl->var.semantic, "SV_GroupIndex") == 0 &&
@@ -3119,7 +3119,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                     IRDecoration dec = {0};
                     dec.kind = SpvDecorationBuiltIn;
                     dec.value = SpvBuiltInLocalInvocationIndex;
-                    arrPush(param_decl->decorations, dec);
+                    arrPush(&param_decl->decorations, dec);
                 }
                 else if (
                     strcmp(param_decl->var.semantic, "SV_GroupThreadID") == 0 &&
@@ -3128,14 +3128,14 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                     IRDecoration dec = {0};
                     dec.kind = SpvDecorationBuiltIn;
                     dec.value = SpvBuiltInLocalInvocationId;
-                    arrPush(param_decl->decorations, dec);
+                    arrPush(&param_decl->decorations, dec);
                 }
                 else
                 {
                     IRDecoration dec = {0};
                     dec.kind = SpvDecorationLocation;
                     dec.value = input_loc++;
-                    arrPush(param_decl->decorations, dec);
+                    arrPush(&param_decl->decorations, dec);
                 }
             }
 
@@ -3145,7 +3145,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
 
         for (uint32_t i = 0; i < arrLength(decl->func.outputs); ++i)
         {
-            AstDecl *param_decl = decl->func.outputs[i];
+            AstDecl *param_decl = decl->func.outputs.ptr[i];
 
             if (param_decl->var.semantic)
             {
@@ -3155,14 +3155,14 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                     IRDecoration dec = {0};
                     dec.kind = SpvDecorationBuiltIn;
                     dec.value = SpvBuiltInPosition;
-                    arrPush(param_decl->decorations, dec);
+                    arrPush(&param_decl->decorations, dec);
                 }
                 else
                 {
                     IRDecoration dec = {0};
                     dec.kind = SpvDecorationLocation;
                     dec.value = output_loc++;
-                    arrPush(param_decl->decorations, dec);
+                    arrPush(&param_decl->decorations, dec);
                 }
             }
 
@@ -3172,7 +3172,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
 
         for (uint32_t i = 0; i < arrLength(decl->func.func_params); ++i)
         {
-            AstDecl *param_decl = decl->func.func_params[i];
+            AstDecl *param_decl = decl->func.func_params.ptr[i];
             assert(param_decl->kind == DECL_VAR);
 
             analyzerTryRegisterDecl(a, param_decl);
@@ -3205,7 +3205,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
 
         for (uint32_t i = 0; i < arrLength(decl->func.stmts); ++i)
         {
-            AstStmt *stmt = decl->func.stmts[i];
+            AstStmt *stmt = decl->func.stmts.ptr[i];
             analyzerAnalyzeStmt(a, stmt);
         }
         analyzerPopScope(a, decl->scope);
@@ -3236,7 +3236,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
 
         if (decl->var.kind == VAR_PLAIN && a->scope_func)
         {
-            arrPush(a->scope_func->func.var_decls, decl);
+            arrPush(&a->scope_func->func.var_decls, decl);
         }
 
         AstType *struct_type = ts__getStructType(decl->type);
@@ -3260,38 +3260,38 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
         // Retrieve set & binding from attributes
         for (uint32_t i = 0; i < arrLength(decl->attributes); ++i)
         {
-            AstAttribute *attr = &decl->attributes[i];
+            AstAttribute *attr = &decl->attributes.ptr[i];
 
             if (decl->var.kind == VAR_UNIFORM && strcmp(attr->name, "vk::binding") == 0)
             {
                 if (arrLength(attr->values) >= 1)
                 {
-                    if (!attr->values[0]->resolved_int)
+                    if (!attr->values.ptr[0]->resolved_int)
                     {
                         ts__addErr(
                             compiler,
-                            &attr->values[0]->loc,
+                            &attr->values.ptr[0]->loc,
                             "could not resolve integer from expression");
                     }
                     else
                     {
-                        binding_index = (uint32_t)*attr->values[0]->resolved_int;
+                        binding_index = (uint32_t)*attr->values.ptr[0]->resolved_int;
                         got_binding_index = true;
                     }
                 }
 
                 if (arrLength(attr->values) >= 2)
                 {
-                    if (!attr->values[1]->resolved_int)
+                    if (!attr->values.ptr[1]->resolved_int)
                     {
                         ts__addErr(
                             compiler,
-                            &attr->values[1]->loc,
+                            &attr->values.ptr[1]->loc,
                             "could not resolve integer from expression");
                     }
                     else
                     {
-                        set_index = (uint32_t)*attr->values[1]->resolved_int;
+                        set_index = (uint32_t)*attr->values.ptr[1]->resolved_int;
                     }
                 }
             }
@@ -3311,11 +3311,11 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
             IRDecoration dec = {0};
             dec.kind = SpvDecorationBinding;
             dec.value = binding_index;
-            arrPush(decl->decorations, dec);
+            arrPush(&decl->decorations, dec);
 
             dec.kind = SpvDecorationDescriptorSet;
             dec.value = set_index;
-            arrPush(decl->decorations, dec);
+            arrPush(&decl->decorations, dec);
         }
 
         break;
@@ -3377,7 +3377,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
         analyzerPushScope(a, decl->scope);
         for (uint32_t i = 0; i < arrLength(decl->struct_.fields); ++i)
         {
-            AstDecl *field = decl->struct_.fields[i];
+            AstDecl *field = decl->struct_.fields.ptr[i];
             field->struct_field.index = i;
             analyzerTryRegisterDecl(a, field);
             analyzerAnalyzeDecl(a, field);
@@ -3388,7 +3388,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
 
         decl->type = newBasicType(m, TYPE_TYPE);
         decl->as_type =
-            newStructType(m, decl->name, field_types, decl->struct_.fields, field_count);
+            newStructType(m, decl->name, field_types, decl->struct_.fields.ptr, field_count);
 
         for (uint32_t i = 0; i < arrLength(decl->struct_.fields); ++i)
         {
@@ -3397,7 +3397,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                 IRMemberDecoration member_dec = {0};
                 member_dec.kind = SpvDecorationRowMajor;
                 member_dec.member_index = i;
-                arrPush(decl->as_type->struct_.field_decorations, member_dec);
+                arrPush(&decl->as_type->struct_.field_decorations, member_dec);
 
                 uint32_t row_stride =
                     field_types[i]->matrix.col_count *
@@ -3406,7 +3406,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                 member_dec.kind = SpvDecorationMatrixStride;
                 member_dec.member_index = i;
                 member_dec.value = row_stride;
-                arrPush(decl->as_type->struct_.field_decorations, member_dec);
+                arrPush(&decl->as_type->struct_.field_decorations, member_dec);
             }
         }
 

@@ -5,7 +5,7 @@ void ts__addErr(TsCompiler *compiler, Location *loc, const char *msg)
     Error err = {0};
     err.loc = *loc;
     err.message = msg;
-    arrPush(compiler->errors, err);
+    arrPush(&compiler->errors, err);
 }
 
 TsCompiler *tsCompilerCreate()
@@ -207,7 +207,7 @@ static bool handleErrors(TsCompiler *compiler, TsCompilerOutput *output)
 
         for (uint32_t i = 0; i < arrLength(compiler->errors); ++i)
         {
-            Error *err = &compiler->errors[i];
+            Error *err = &compiler->errors.ptr[i];
             if (err->loc.path)
             {
                 ts__sbAppend(&compiler->sb, err->loc.path);
@@ -243,8 +243,9 @@ void tsCompile(TsCompiler *compiler, TsCompilerInput *input, TsCompilerOutput *o
     assert(compiler);
     assert(input);
     assert(output);
-
     assert(input->entry_point);
+
+    memset(output, 0, sizeof(*output));
 
     File *file = ts__createFile(compiler, input->input, input->input_size, input->path);
 
@@ -261,12 +262,12 @@ void tsCompile(TsCompiler *compiler, TsCompilerInput *input, TsCompilerOutput *o
     if (handleErrors(compiler, output)) return;
 
     Parser parser = {0};
-    ts__parserParse(&parser, compiler, lexer.tokens, arrLength(lexer.tokens));
+    ts__parserParse(&parser, compiler, lexer.tokens.ptr, arrLength(lexer.tokens));
     if (handleErrors(compiler, output)) return;
 
     Analyzer analyzer = {0};
     ts__analyzerAnalyze(
-        &analyzer, compiler, module, parser.decls, arrLength(parser.decls));
+        &analyzer, compiler, module, parser.decls.ptr, arrLength(parser.decls));
     if (handleErrors(compiler, output)) return;
 
     size_t word_count;

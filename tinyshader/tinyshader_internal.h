@@ -2,7 +2,7 @@
 #define TINYSHADER_INTERNAL_H
 
 #ifdef _MSC_VER
-#pragma warning(disable:4996)
+#pragma warning(disable : 4996)
 #endif
 
 #include <assert.h>
@@ -16,49 +16,49 @@
 #include "GLSL.std.450.h"
 #include "tinyshader.h"
 
+void *ts__arrayGrow(void *ptr, size_t *cap, size_t wanted_cap, size_t item_size);
+
+#define ARRAY_OF(type)                                                                   \
+    struct                                                                               \
+    {                                                                                    \
+        type *ptr;                                                                       \
+        size_t len;                                                                      \
+        size_t cap;                                                                      \
+    }
+
+#define arrFull(a) ((a)->ptr ? ((a)->len >= (a)->cap) : 1)
+
+#define arrLast(a) (&(a).ptr[(a).len - 1])
+
+#define arrLength(a) ((a).len)
+
+#define arrPush(a, item)                                                                 \
+    (arrFull(a) ? (a)->ptr = ts__arrayGrow((a)->ptr, &(a)->cap, 0, sizeof(*((a)->ptr)))  \
+                : 0,                                                                     \
+     (a)->ptr[(a)->len++] = (item))
+
+#define arrPop(a) ((a)->len > 0 ? ((a)->len--, &(a)->ptr[(a)->len]) : NULL)
+
+#define arrReserve(a, capacity)                                                          \
+    (arrFull(a)                                                                          \
+         ? (a)->ptr = ts__arrayGrow((a)->ptr, &(a)->cap, capacity, sizeof(*((a)->ptr)))  \
+         : 0)
+
+#define arrFree(a)                                                                       \
+    do                                                                                   \
+    {                                                                                    \
+        if ((a)->ptr) free((a)->ptr);                                                    \
+        (a)->ptr = NULL;                                                                 \
+    } while (0)
+
 // Rounds to the next multiple of four
 #define ROUND_TO_4(x) (((x) + 3) & ~0x03)
 
 #define NEW(compiler, type) ts__bumpZeroAlloc(&(compiler)->alloc, sizeof(type))
 #define NEW_ARRAY(compiler, type, count)                                                 \
-    ts__bumpZeroAlloc(&(compiler)->alloc, sizeof(type) * (count))
+    ts__bumpZeroAlloc(&(compiler)->alloc, sizeof(type) * ((count) > 0 ? (count) : 1))
 #define NEW_ARRAY_UNINIT(compiler, type, count)                                          \
     ts__bumpAlloc(&(compiler)->alloc, sizeof(type) * (count))
-
-#define arrFree(a) ((a) ? free(arr__sbraw(a)), 0 : 0)
-#define arrPush(a, v) (arr__sbmaybegrow(a, 1), (a)[arr__sbn(a)++] = (v))
-#define arrPop(a) (--arr__sbn(a))
-#define arrLength(a) ((a) ? arr__sbn(a) : 0)
-#define arrAdd(a, n) (arr__sbmaybegrow(a, n), arr__sbn(a) += (n), &(a)[arr__sbn(a) - (n)])
-#define arrLast(a) (&((a)[arr__sbn(a) - 1]))
-
-#define arr__sbraw(a) ((uint32_t *)(void *)(a)-2)
-#define arr__sbm(a) arr__sbraw(a)[0]
-#define arr__sbn(a) arr__sbraw(a)[1]
-
-#define arr__sbneedgrow(a, n) ((a) == 0 || arr__sbn(a) + (n) >= arr__sbm(a))
-#define arr__sbmaybegrow(a, n) (arr__sbneedgrow(a, (n)) ? arr__sbgrow(a, n) : 0)
-#define arr__sbgrow(a, n) (*((void **)&(a)) = arr__sbgrowf((a), (n), sizeof(*(a))))
-
-static void *arr__sbgrowf(void *arr, uint32_t increment, uint32_t itemsize)
-{
-    uint32_t dbl_cur = arr ? 2 * arr__sbm(arr) : 0;
-    uint32_t min_needed = arrLength(arr) + increment;
-    uint32_t m = dbl_cur > min_needed ? dbl_cur : min_needed;
-    uint32_t *p = (uint32_t *)realloc(
-        arr ? arr__sbraw(arr) : 0, itemsize * m + sizeof(uint32_t) * 2);
-    if (p)
-    {
-        if (!arr) p[1] = 0;
-        p[0] = m;
-        return p + 2;
-    }
-    else
-    {
-        return (
-            void *)(2 * sizeof(uint32_t)); // try to force a NULL pointer exception later
-    }
-}
 
 ////////////////////////////////
 //
@@ -73,7 +73,7 @@ typedef struct HashMap
     uint64_t *indices;
     uint64_t size;
 
-    /*array*/ void **values;
+    ARRAY_OF(void *) values;
 } HashMap;
 
 typedef struct BumpBlock
@@ -104,10 +104,15 @@ typedef struct File File;
 typedef struct Module Module;
 
 typedef struct Scope Scope;
+typedef ARRAY_OF(Scope *) ArrayOfScopePtr;
 
 typedef struct AstExpr AstExpr;
 typedef struct AstStmt AstStmt;
 typedef struct AstDecl AstDecl;
+
+typedef ARRAY_OF(AstExpr *) ArrayOfAstExprPtr;
+typedef ARRAY_OF(AstStmt *) ArrayOfAstStmtPtr;
+typedef ARRAY_OF(AstDecl *) ArrayOfAstDeclPtr;
 
 typedef struct Location
 {
@@ -123,6 +128,7 @@ typedef struct Error
     Location loc;
     const char *message;
 } Error;
+typedef ARRAY_OF(Error) ArrayOfError;
 
 //
 // Token
@@ -255,7 +261,7 @@ typedef enum TokenKind {
     TOKEN_BUILTIN_CLAMP,
     TOKEN_BUILTIN_STEP,
     TOKEN_BUILTIN_SMOOTHSTEP,
-    
+
     TOKEN_BUILTIN_DDX,
     TOKEN_BUILTIN_DDY,
 
@@ -329,6 +335,7 @@ typedef struct Token
         } matrix_type;
     };
 } Token;
+typedef ARRAY_OF(Token) ArrayOfToken;
 
 //
 // IR
@@ -342,6 +349,7 @@ typedef struct IRDecoration
         uint32_t value;
     };
 } IRDecoration;
+typedef ARRAY_OF(IRDecoration) ArrayOfIRDecoration;
 
 typedef struct IRMemberDecoration
 {
@@ -352,6 +360,7 @@ typedef struct IRMemberDecoration
         uint32_t value;
     };
 } IRMemberDecoration;
+typedef ARRAY_OF(IRMemberDecoration) ArrayOfIRMemberDecoration;
 
 typedef enum IRTypeKind {
     IR_TYPE_VOID,
@@ -449,6 +458,7 @@ typedef struct IRType
 
 typedef struct IRModule IRModule;
 typedef struct IRInst IRInst;
+typedef ARRAY_OF(IRInst *) ArrayOfIRInstPtr;
 
 typedef enum IRInstKind {
     IR_INST_ENTRY_POINT,
@@ -549,7 +559,7 @@ struct IRInst
     IRInstKind kind;
     uint32_t id;
     IRType *type;
-    /*array*/ IRDecoration *decorations;
+    ArrayOfIRDecoration decorations;
 
     union
     {
@@ -569,16 +579,16 @@ struct IRInst
 
         struct
         {
-            /*array*/ IRInst **params;
-            /*array*/ IRInst **blocks;
-            /*array*/ IRInst **inputs;
-            /*array*/ IRInst **outputs;
+            ArrayOfIRInstPtr params;
+            ArrayOfIRInstPtr blocks;
+            ArrayOfIRInstPtr inputs;
+            ArrayOfIRInstPtr outputs;
         } func;
 
         struct
         {
             IRInst *func;
-            /*array*/ IRInst **insts;
+            ArrayOfIRInstPtr insts;
         } block;
 
         struct
@@ -722,14 +732,14 @@ struct IRModule
     HashMap type_cache;
     HashMap const_cache;
 
-    /*array*/ IRInst **continue_stack;
-    /*array*/ IRInst **break_stack;
+    ArrayOfIRInstPtr continue_stack;
+    ArrayOfIRInstPtr break_stack;
 
-    /*array*/ IRInst **entry_points;
-    /*array*/ IRInst **constants;
-    /*array*/ IRInst **functions;
-    /*array*/ IRInst **globals;     /* This only counts uniforms/storage variables */
-    /*array*/ IRInst **all_globals; /* This counts uniforms/storage variables and all
+    ArrayOfIRInstPtr entry_points;
+    ArrayOfIRInstPtr constants;
+    ArrayOfIRInstPtr functions;
+    ArrayOfIRInstPtr globals;     /* This only counts uniforms/storage variables */
+    ArrayOfIRInstPtr all_globals; /* This counts uniforms/storage variables and all
                                        inputs/outputs of every stage */
 
     uint32_t glsl_ext_inst; // ID of the imported GLSL instruction set
@@ -737,7 +747,7 @@ struct IRModule
     IRInst *current_block;
 
     uint32_t id_bound;
-    /*array*/ uint32_t *stream;
+    ARRAY_OF(uint32_t) stream;
 };
 
 //
@@ -814,7 +824,7 @@ typedef struct AstType
 
             AstDecl **field_decls;
             struct AstType **fields;
-            /*array*/ IRMemberDecoration *field_decorations;
+            ArrayOfIRMemberDecoration field_decorations;
             uint32_t field_count;
         } struct_;
         struct
@@ -841,8 +851,9 @@ typedef struct AstType
 typedef struct AstAttribute
 {
     char *name;
-    /*array*/ AstExpr **values;
+    ArrayOfAstExprPtr values;
 } AstAttribute;
+typedef ARRAY_OF(AstAttribute) ArrayOfAstAttribute;
 
 typedef enum AstUnaryOp {
     UNOP_NEG,
@@ -939,7 +950,7 @@ struct AstStmt
 
         struct
         {
-            /*array*/ AstStmt **stmts;
+            ArrayOfAstStmtPtr stmts;
             Scope *scope;
         } block;
 
@@ -982,8 +993,8 @@ struct AstDecl
     AstType *as_type;
     IRInst *value;
     Scope *scope;
-    /*array*/ AstAttribute *attributes;
-    /*array*/ IRDecoration *decorations;
+    ArrayOfAstAttribute attributes;
+    ArrayOfIRDecoration decorations;
     int64_t *resolved_int;
 
     union
@@ -992,15 +1003,15 @@ struct AstDecl
         {
             SpvExecutionModel *execution_model;
 
-            /*array*/ AstStmt **stmts;
-            /*array*/ AstDecl **all_params;
+            ArrayOfAstStmtPtr stmts;
+            ArrayOfAstDeclPtr all_params;
             AstExpr *return_type;
 
             // To be filled later:
-            /*array*/ AstDecl **var_decls;
-            /*array*/ AstDecl **func_params;
-            /*array*/ AstDecl **inputs;
-            /*array*/ AstDecl **outputs;
+            ArrayOfAstDeclPtr var_decls;
+            ArrayOfAstDeclPtr func_params;
+            ArrayOfAstDeclPtr inputs;
+            ArrayOfAstDeclPtr outputs;
 
             bool called; // if this function was called or if it's an entry point
 
@@ -1023,7 +1034,7 @@ struct AstDecl
 
         struct
         {
-            /*array*/ AstDecl **fields;
+            ArrayOfAstDeclPtr fields;
         } struct_;
 
         struct
@@ -1036,7 +1047,7 @@ struct AstDecl
         struct
         {
             uint32_t set_index;
-            /*array*/ AstDecl **params;
+            ArrayOfAstDeclPtr params;
         } parameter_block;
     };
 };
@@ -1072,7 +1083,7 @@ struct AstExpr
         struct
         {
             AstExpr *base;
-            /*array*/ AstExpr **chain;
+            ArrayOfAstExprPtr chain;
         } access;
 
         struct
@@ -1084,14 +1095,14 @@ struct AstExpr
         struct
         {
             AstExpr *func_expr;
-            /*array*/ AstExpr **params;
+            ArrayOfAstExprPtr params;
             AstExpr *self_param;
         } func_call;
 
         struct
         {
             IRBuiltinInstKind kind;
-            /*array*/ AstExpr **params;
+            ArrayOfAstExprPtr params;
         } builtin_call;
 
         struct
@@ -1151,7 +1162,7 @@ typedef struct TsCompiler
     HashMap keyword_table;
     HashMap files; // Maps absolute paths to files
 
-    /*array*/ Error *errors;
+    ArrayOfError errors;
 
     uint32_t counter; // General purpose unique number generator
 } TsCompiler;
@@ -1206,7 +1217,7 @@ typedef struct Lexer
     size_t text_size;
     Token token;
 
-    /*array*/ Token *tokens;
+    ArrayOfToken tokens;
 
     char *file_path;
     size_t pos;
@@ -1224,7 +1235,7 @@ typedef struct Parser
     Token *tokens;
     size_t token_count;
 
-    /*array*/ AstDecl **decls;
+    ArrayOfAstDeclPtr decls;
 
     size_t pos;
 } Parser;
@@ -1239,10 +1250,10 @@ typedef struct Analyzer
     Module *module;
 
     AstDecl *scope_func;
-    /*array*/ Scope **scope_stack;
+    ArrayOfScopePtr scope_stack;
 
-    /*array*/ AstStmt **continue_stack;
-    /*array*/ AstStmt **break_stack;
+    ArrayOfAstStmtPtr continue_stack;
+    ArrayOfAstStmtPtr break_stack;
 
     uint32_t last_uniform_binding;
 } Analyzer;
@@ -1282,7 +1293,8 @@ char *ts__sbBuild(StringBuilder *sb, BumpAlloc *bump);
 
 void ts__addErr(TsCompiler *compiler, Location *loc, const char *msg);
 
-File *ts__createFile(TsCompiler *compiler, const char *text, size_t text_size, const char *path);
+File *ts__createFile(
+    TsCompiler *compiler, const char *text, size_t text_size, const char *path);
 
 char *ts__preprocessRootFile(
     Preprocessor *p, TsCompiler *compiler, File *file, size_t *out_length);

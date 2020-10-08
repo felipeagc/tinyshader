@@ -493,7 +493,7 @@ static IRType *convertTypeToIR(Module *module, IRModule *ir_module, AstType *typ
             type->struct_.name,
             field_types,
             type->struct_.field_count,
-            type->struct_.field_decorations,
+            type->struct_.field_decorations.ptr,
             arrLength(type->struct_.field_decorations));
 
         return struct_type;
@@ -566,7 +566,7 @@ static IRInst *irAddEntryPoint(
     inst->entry_point.globals = globals;
     inst->entry_point.global_count = global_count;
 
-    arrPush(m->entry_points, inst);
+    arrPush(&m->entry_points, inst);
     return inst;
 }
 
@@ -585,7 +585,7 @@ static IRInst *irAddFunction(IRModule *m, IRType *func_type)
     inst->kind = IR_INST_FUNCTION;
     inst->type = func_type;
 
-    arrPush(m->functions, inst);
+    arrPush(&m->functions, inst);
 
     return inst;
 }
@@ -599,7 +599,7 @@ irAddFuncParam(IRModule *m, IRInst *func, IRType *type, bool is_by_reference)
     inst->type = type;
     inst->func_param.is_by_reference = is_by_reference;
 
-    arrPush(func->func.params, inst);
+    arrPush(&func->func.params, inst);
 
     return inst;
 }
@@ -621,7 +621,7 @@ static IRInst *irCreateBlock(IRModule *m, IRInst *func)
 static void irAddBlock(IRInst *block)
 {
     assert(block->block.func->kind == IR_INST_FUNCTION);
-    arrPush(block->block.func->func.blocks, block);
+    arrPush(&block->block.func->func.blocks, block);
 }
 
 static IRInst *irAddGlobal(IRModule *m, IRType *type, SpvStorageClass storage_class)
@@ -632,8 +632,8 @@ static IRInst *irAddGlobal(IRModule *m, IRType *type, SpvStorageClass storage_cl
     inst->var.storage_class = storage_class;
     inst->type = irNewPointerType(m, inst->var.storage_class, type);
 
-    arrPush(m->globals, inst);
-    arrPush(m->all_globals, inst);
+    arrPush(&m->globals, inst);
+    arrPush(&m->all_globals, inst);
 
     return inst;
 }
@@ -646,8 +646,8 @@ static IRInst *irAddInput(IRModule *m, IRInst *func, IRType *type)
     inst->var.storage_class = SpvStorageClassInput;
     inst->type = irNewPointerType(m, inst->var.storage_class, type);
 
-    arrPush(func->func.inputs, inst);
-    arrPush(m->all_globals, inst);
+    arrPush(&func->func.inputs, inst);
+    arrPush(&m->all_globals, inst);
 
     return inst;
 }
@@ -660,8 +660,8 @@ static IRInst *irAddOutput(IRModule *m, IRInst *func, IRType *type)
     inst->var.storage_class = SpvStorageClassOutput;
     inst->type = irNewPointerType(m, inst->var.storage_class, type);
 
-    arrPush(func->func.outputs, inst);
-    arrPush(m->all_globals, inst);
+    arrPush(&func->func.outputs, inst);
+    arrPush(&m->all_globals, inst);
 
     return inst;
 }
@@ -680,7 +680,7 @@ static bool irBlockHasTerminator(IRInst *block)
 {
     if (arrLength(block->block.insts) == 0) return false;
 
-    IRInst *last_inst = block->block.insts[arrLength(block->block.insts) - 1];
+    IRInst *last_inst = block->block.insts.ptr[arrLength(block->block.insts) - 1];
     switch (last_inst->kind)
     {
     case IR_INST_COND_BRANCH:
@@ -808,7 +808,7 @@ static IRInst *irGetCachedConst(IRModule *m, IRInst *inst)
     }
 
     ts__hashSet(&m->const_cache, const_string, inst);
-    arrPush(m->constants, inst);
+    arrPush(&m->constants, inst);
 
     return inst;
 }
@@ -916,7 +916,7 @@ static IRInst *irBuildAlloca(IRModule *m, IRType *type)
     inst->type = irNewPointerType(m, inst->var.storage_class, type);
 
     IRInst *block = irGetCurrentBlock(m);
-    arrPush(block->block.insts, inst);
+    arrPush(&block->block.insts, inst);
 
     return inst;
 }
@@ -929,7 +929,7 @@ static void irBuildStore(IRModule *m, IRInst *pointer, IRInst *value)
     inst->store.value = value;
 
     IRInst *block = irGetCurrentBlock(m);
-    arrPush(block->block.insts, inst);
+    arrPush(&block->block.insts, inst);
 }
 
 static IRInst *irBuildLoad(IRModule *m, IRInst *pointer)
@@ -944,7 +944,7 @@ static IRInst *irBuildLoad(IRModule *m, IRInst *pointer)
     inst->load.pointer = pointer;
 
     IRInst *block = irGetCurrentBlock(m);
-    arrPush(block->block.insts, inst);
+    arrPush(&block->block.insts, inst);
 
     return inst;
 }
@@ -964,7 +964,7 @@ static IRInst *irBuildAccessChain(
     inst->access_chain.index_count = index_count;
 
     IRInst *block = irGetCurrentBlock(m);
-    arrPush(block->block.insts, inst);
+    arrPush(&block->block.insts, inst);
 
     return inst;
 }
@@ -991,7 +991,7 @@ static IRInst *irBuildVectorShuffle(
     inst->vector_shuffle.index_count = index_count;
 
     IRInst *block = irGetCurrentBlock(m);
-    arrPush(block->block.insts, inst);
+    arrPush(&block->block.insts, inst);
 
     return inst;
 }
@@ -1023,7 +1023,7 @@ static IRInst *irBuildCompositeExtract(
     inst->composite_extract.index_count = index_count;
 
     IRInst *block = irGetCurrentBlock(m);
-    arrPush(block->block.insts, inst);
+    arrPush(&block->block.insts, inst);
 
     return inst;
 }
@@ -1041,7 +1041,7 @@ static IRInst *irBuildCompositeConstruct(
 
     IRInst *block = irGetCurrentBlock(m);
     assert(block);
-    arrPush(block->block.insts, inst);
+    arrPush(&block->block.insts, inst);
 
     return inst;
 }
@@ -1060,7 +1060,7 @@ irBuildFuncCall(IRModule *m, IRInst *function, IRInst **params, uint32_t param_c
     inst->func_call.param_count = param_count;
 
     IRInst *block = irGetCurrentBlock(m);
-    arrPush(block->block.insts, inst);
+    arrPush(&block->block.insts, inst);
 
     return inst;
 }
@@ -1083,7 +1083,7 @@ static IRInst *irBuildBuiltinCall(
     inst->builtin_call.param_count = param_count;
 
     IRInst *block = irGetCurrentBlock(m);
-    arrPush(block->block.insts, inst);
+    arrPush(&block->block.insts, inst);
 
     return inst;
 }
@@ -1109,7 +1109,7 @@ static IRInst *irBuildBarrier(
     inst->barrier.semantics = irBuildConstInt(m, uint_type, semantics);
 
     IRInst *block = irGetCurrentBlock(m);
-    arrPush(block->block.insts, inst);
+    arrPush(&block->block.insts, inst);
 
     return inst;
 }
@@ -1126,7 +1126,7 @@ irBuildSampleImplicitLod(IRModule *m, IRType *type, IRInst *image_sampler, IRIns
     inst->sample.coords = coords;
 
     IRInst *block = irGetCurrentBlock(m);
-    arrPush(block->block.insts, inst);
+    arrPush(&block->block.insts, inst);
 
     return inst;
 }
@@ -1152,7 +1152,7 @@ static IRInst *irBuildCast(IRModule *m, IRType *dst_type, IRInst *value)
     inst->cast.value = value;
 
     IRInst *block = irGetCurrentBlock(m);
-    arrPush(block->block.insts, inst);
+    arrPush(&block->block.insts, inst);
 
     return inst;
 }
@@ -1168,7 +1168,7 @@ static IRInst *irBuildUnary(IRModule *m, SpvOp op, IRType *type, IRInst *right)
     inst->unary.right = right;
 
     IRInst *block = irGetCurrentBlock(m);
-    arrPush(block->block.insts, inst);
+    arrPush(&block->block.insts, inst);
 
     return inst;
 }
@@ -1186,7 +1186,7 @@ irBuildBinary(IRModule *m, SpvOp op, IRType *type, IRInst *left, IRInst *right)
     inst->binary.right = right;
 
     IRInst *block = irGetCurrentBlock(m);
-    arrPush(block->block.insts, inst);
+    arrPush(&block->block.insts, inst);
 
     return inst;
 }
@@ -1198,7 +1198,7 @@ static void irBuildReturn(IRModule *m, IRInst *value)
     inst->return_.value = value;
 
     IRInst *block = irGetCurrentBlock(m);
-    arrPush(block->block.insts, inst);
+    arrPush(&block->block.insts, inst);
 }
 
 static void irBuildDiscard(IRModule *m)
@@ -1207,7 +1207,7 @@ static void irBuildDiscard(IRModule *m)
     inst->kind = IR_INST_DISCARD;
 
     IRInst *block = irGetCurrentBlock(m);
-    arrPush(block->block.insts, inst);
+    arrPush(&block->block.insts, inst);
 }
 
 static void
@@ -1220,7 +1220,7 @@ irBuildBr(IRModule *m, IRInst *target, IRInst *merge_block, IRInst *continue_blo
     inst->branch.continue_block = continue_block;
 
     IRInst *block = irGetCurrentBlock(m);
-    arrPush(block->block.insts, inst);
+    arrPush(&block->block.insts, inst);
 }
 
 static void irBuildCondBr(
@@ -1240,7 +1240,7 @@ static void irBuildCondBr(
     inst->cond_branch.continue_block = continue_block;
 
     IRInst *block = irGetCurrentBlock(m);
-    arrPush(block->block.insts, inst);
+    arrPush(&block->block.insts, inst);
 }
 
 static void
@@ -1249,10 +1249,10 @@ irModuleEncodeInst(IRModule *m, SpvOp opcode, uint32_t *params, size_t params_co
     uint32_t opcode_word = opcode;
     opcode_word |= ((uint16_t)(params_count + 1)) << 16;
 
-    arrPush(m->stream, opcode_word);
+    arrPush(&m->stream, opcode_word);
     for (uint32_t i = 0; i < params_count; ++i)
     {
-        arrPush(m->stream, params[i]);
+        arrPush(&m->stream, params[i]);
     }
 }
 
@@ -1274,7 +1274,7 @@ static void irModuleReserveTypeIds(IRModule *m)
 {
     for (uint32_t i = 0; i < arrLength(m->type_cache.values); ++i)
     {
-        IRType *type = (IRType *)m->type_cache.values[i];
+        IRType *type = (IRType *)m->type_cache.values.ptr[i];
         type->id = irModuleReserveId(m);
     }
 }
@@ -1283,13 +1283,13 @@ static void irModuleEncodeDecorations(IRModule *m)
 {
     for (uint32_t i = 0; i < arrLength(m->all_globals); ++i)
     {
-        IRInst *inst = m->all_globals[i];
+        IRInst *inst = m->all_globals.ptr[i];
         assert(inst->kind == IR_INST_VARIABLE);
         assert(inst->id);
 
         for (uint32_t j = 0; j < arrLength(inst->decorations); ++j)
         {
-            IRDecoration *dec = &inst->decorations[j];
+            IRDecoration *dec = &inst->decorations.ptr[j];
             uint32_t param_count = 3;
             uint32_t params[3] = {inst->id, dec->kind, dec->value};
             switch (dec->kind)
@@ -1303,7 +1303,7 @@ static void irModuleEncodeDecorations(IRModule *m)
 
     for (uint32_t i = 0; i < arrLength(m->type_cache.values); ++i)
     {
-        IRType *type = (IRType *)m->type_cache.values[i];
+        IRType *type = (IRType *)m->type_cache.values.ptr[i];
         assert(type->id > 0);
 
         if (type->kind == IR_TYPE_STRUCT)
@@ -1352,7 +1352,7 @@ static void irModuleEncodeTypes(IRModule *m)
 {
     for (uint32_t i = 0; i < arrLength(m->type_cache.values); ++i)
     {
-        IRType *type = (IRType *)m->type_cache.values[i];
+        IRType *type = (IRType *)m->type_cache.values.ptr[i];
 
         switch (type->kind)
         {
@@ -1477,7 +1477,7 @@ static void irModuleEncodeEntryPoints(IRModule *m)
 
     for (uint32_t i = 0; i < arrLength(m->entry_points); ++i)
     {
-        IRInst *inst = m->entry_points[i];
+        IRInst *inst = m->entry_points.ptr[i];
         assert(inst->kind == IR_INST_ENTRY_POINT);
         assert(inst->entry_point.func);
         assert(inst->entry_point.func->id);
@@ -1535,7 +1535,7 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
 
     for (uint32_t i = 0; i < arrLength(block->block.insts); ++i)
     {
-        IRInst *inst = block->block.insts[i];
+        IRInst *inst = block->block.insts.ptr[i];
         switch (inst->kind)
         {
         case IR_INST_VARIABLE: {
@@ -2423,7 +2423,7 @@ static void irModuleEncodeConstants(IRModule *m)
 {
     for (uint32_t i = 0; i < arrLength(m->constants); ++i)
     {
-        IRInst *inst = m->constants[i];
+        IRInst *inst = m->constants.ptr[i];
         switch (inst->kind)
         {
         case IR_INST_CONSTANT: {
@@ -2466,7 +2466,7 @@ static void irModuleEncodeGlobals(IRModule *m)
 {
     for (uint32_t i = 0; i < arrLength(m->all_globals); ++i)
     {
-        IRInst *inst = m->all_globals[i];
+        IRInst *inst = m->all_globals.ptr[i];
         assert(inst->kind == IR_INST_VARIABLE);
 
         uint32_t params[3] = {inst->type->id, inst->id, inst->var.storage_class};
@@ -2478,7 +2478,7 @@ static void irModuleEncodeFunctions(IRModule *m)
 {
     for (uint32_t i = 0; i < arrLength(m->functions); ++i)
     {
-        IRInst *inst = m->functions[i];
+        IRInst *inst = m->functions.ptr[i];
         assert(inst->kind == IR_INST_FUNCTION);
         assert(inst->id);
 
@@ -2494,7 +2494,7 @@ static void irModuleEncodeFunctions(IRModule *m)
 
         for (uint32_t j = 0; j < arrLength(inst->func.params); ++j)
         {
-            IRInst *func_param = inst->func.params[j];
+            IRInst *func_param = inst->func.params.ptr[j];
             uint32_t params[2] = {
                 func_param->type->id,
                 func_param->id,
@@ -2504,7 +2504,7 @@ static void irModuleEncodeFunctions(IRModule *m)
 
         for (uint32_t j = 0; j < arrLength(inst->func.blocks); ++j)
         {
-            IRInst *block = inst->func.blocks[j];
+            IRInst *block = inst->func.blocks.ptr[j];
             irModuleEncodeBlock(m, block);
         }
 
@@ -2514,17 +2514,17 @@ static void irModuleEncodeFunctions(IRModule *m)
 
 static void irModuleEncodeModule(IRModule *m)
 {
-    assert(m->stream == NULL);
+    assert(m->stream.ptr == NULL);
 
     static const uint8_t MAGIC_NUMBER[4] = {'T', 'I', 'N', 'Y'};
     uint32_t uint_magic_number;
     memcpy(&uint_magic_number, MAGIC_NUMBER, sizeof(uint32_t));
 
-    arrPush(m->stream, SpvMagicNumber);
-    arrPush(m->stream, SpvVersion);
-    arrPush(m->stream, uint_magic_number);
-    arrPush(m->stream, 0); // ID Bound (fill out later)
-    arrPush(m->stream, 0);
+    arrPush(&m->stream, SpvMagicNumber);
+    arrPush(&m->stream, SpvVersion);
+    arrPush(&m->stream, uint_magic_number);
+    arrPush(&m->stream, 0); // ID Bound (fill out later)
+    arrPush(&m->stream, 0);
 
     {
         uint32_t params[1] = {SpvCapabilityShader};
@@ -2566,7 +2566,7 @@ static void irModuleEncodeModule(IRModule *m)
     irModuleEncodeFunctions(m);
 
     // Fill out ID bound
-    m->stream[3] = m->id_bound;
+    m->stream.ptr[3] = m->id_bound;
 }
 
 ////////////////////////////////
@@ -2744,7 +2744,7 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
 
             for (uint32_t i = 0; i < arrLength(expr->access.chain); ++i)
             {
-                AstExpr *field_ident = expr->access.chain[i];
+                AstExpr *field_ident = expr->access.chain.ptr[i];
                 assert(field_ident->kind == EXPR_IDENT);
 
                 if (!field_ident->ident.decl) break;
@@ -2758,7 +2758,7 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
                     irBuildConstInt(m, index_type, field_decl->struct_field.index);
             }
 
-            AstType *last_type = expr->access.chain[index_count - 1]->type;
+            AstType *last_type = expr->access.chain.ptr[index_count - 1]->type;
             IRType *ir_last_type = convertTypeToIR(m->mod, m, last_type);
             value =
                 irBuildAccessChain(m, ir_last_type, base->value, indices, index_count);
@@ -2768,7 +2768,7 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
         {
             // Must be a vector swizzle
 
-            AstExpr *field_ident = expr->access.chain[i];
+            AstExpr *field_ident = expr->access.chain.ptr[i];
             assert(field_ident->kind == EXPR_IDENT);
             assert(!field_ident->ident.decl);
             assert(field_ident->ident.shuffle_indices);
@@ -2829,7 +2829,7 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
 
             for (uint32_t i = 0; i < arrLength(expr->func_call.params); ++i)
             {
-                AstExpr *param = expr->func_call.params[i];
+                AstExpr *param = expr->func_call.params.ptr[i];
                 irModuleBuildExpr(m, param);
                 assert(param->value);
                 param_values[i] = irLoadVal(m, param->value);
@@ -2871,7 +2871,7 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
             IRType *ir_constructed_type = convertTypeToIR(m->mod, m, constructed_type);
 
             uint32_t param_count = arrLength(expr->func_call.params);
-            AstExpr **params = expr->func_call.params;
+            ArrayOfAstExprPtr params = expr->func_call.params;
 
             if (constructed_type->kind == TYPE_VECTOR)
             {
@@ -2882,9 +2882,9 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
 
                     for (uint32_t i = 0; i < constructed_type->vector.size; ++i)
                     {
-                        irModuleBuildExpr(m, params[i]);
-                        assert(params[i]->value);
-                        fields[i] = irLoadVal(m, params[i]->value);
+                        irModuleBuildExpr(m, params.ptr[i]);
+                        assert(params.ptr[i]->value);
+                        fields[i] = irLoadVal(m, params.ptr[i]->value);
                     }
 
                     expr->value = irBuildCompositeConstruct(
@@ -2895,9 +2895,9 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
                     IRInst **fields =
                         NEW_ARRAY(compiler, IRInst *, constructed_type->vector.size);
 
-                    irModuleBuildExpr(m, params[0]);
-                    assert(params[0]->value);
-                    IRInst *field_val = irLoadVal(m, params[0]->value);
+                    irModuleBuildExpr(m, params.ptr[0]);
+                    assert(params.ptr[0]->value);
+                    IRInst *field_val = irLoadVal(m, params.ptr[0]->value);
 
                     for (uint32_t i = 0; i < constructed_type->vector.size; ++i)
                     {
@@ -2914,10 +2914,10 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
             }
             else if (param_count == 1)
             {
-                irModuleBuildExpr(m, params[0]);
-                assert(params[0]->value);
+                irModuleBuildExpr(m, params.ptr[0]);
+                assert(params.ptr[0]->value);
                 expr->value =
-                    irBuildCast(m, ir_constructed_type, irLoadVal(m, params[0]->value));
+                    irBuildCast(m, ir_constructed_type, irLoadVal(m, params.ptr[0]->value));
             }
             else
             {
@@ -2938,7 +2938,7 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
 
             for (uint32_t i = 0; i < param_count; ++i)
             {
-                AstExpr *param = expr->func_call.params[i];
+                AstExpr *param = expr->func_call.params.ptr[i];
                 irModuleBuildExpr(m, param);
                 assert(param->value);
                 param_values[i] = param->value;
@@ -2973,11 +2973,11 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
 
             IRType *uint_type = irNewIntType(m, 32, false);
 
-            AstExpr *ptr = expr->builtin_call.params[0];
+            AstExpr *ptr = expr->builtin_call.params.ptr[0];
             irModuleBuildExpr(m, ptr);
             assert(ptr->value);
 
-            AstExpr *value = expr->builtin_call.params[1];
+            AstExpr *value = expr->builtin_call.params.ptr[1];
             irModuleBuildExpr(m, value);
             assert(value->value);
 
@@ -2994,15 +2994,15 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
 
             IRType *uint_type = irNewIntType(m, 32, false);
 
-            AstExpr *ptr = expr->builtin_call.params[0];
+            AstExpr *ptr = expr->builtin_call.params.ptr[0];
             irModuleBuildExpr(m, ptr);
             assert(ptr->value);
 
-            AstExpr *value = expr->builtin_call.params[1];
+            AstExpr *value = expr->builtin_call.params.ptr[1];
             irModuleBuildExpr(m, value);
             assert(value->value);
 
-            AstExpr *original_value = expr->builtin_call.params[2];
+            AstExpr *original_value = expr->builtin_call.params.ptr[2];
             irModuleBuildExpr(m, original_value);
             assert(original_value->value);
 
@@ -3020,19 +3020,19 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
 
             IRType *uint_type = irNewIntType(m, 32, false);
 
-            AstExpr *ptr = expr->builtin_call.params[0];
+            AstExpr *ptr = expr->builtin_call.params.ptr[0];
             irModuleBuildExpr(m, ptr);
             assert(ptr->value);
 
-            AstExpr *compare_value = expr->builtin_call.params[1];
+            AstExpr *compare_value = expr->builtin_call.params.ptr[1];
             irModuleBuildExpr(m, compare_value);
             assert(compare_value->value);
 
-            AstExpr *value = expr->builtin_call.params[2];
+            AstExpr *value = expr->builtin_call.params.ptr[2];
             irModuleBuildExpr(m, value);
             assert(value->value);
 
-            AstExpr *original_value = expr->builtin_call.params[3];
+            AstExpr *original_value = expr->builtin_call.params.ptr[3];
             irModuleBuildExpr(m, original_value);
             assert(original_value->value);
 
@@ -3052,15 +3052,15 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
 
             IRType *uint_type = irNewIntType(m, 32, false);
 
-            AstExpr *ptr = expr->builtin_call.params[0];
+            AstExpr *ptr = expr->builtin_call.params.ptr[0];
             irModuleBuildExpr(m, ptr);
             assert(ptr->value);
 
-            AstExpr *compare_value = expr->builtin_call.params[1];
+            AstExpr *compare_value = expr->builtin_call.params.ptr[1];
             irModuleBuildExpr(m, compare_value);
             assert(compare_value->value);
 
-            AstExpr *value = expr->builtin_call.params[2];
+            AstExpr *value = expr->builtin_call.params.ptr[2];
             irModuleBuildExpr(m, value);
             assert(value->value);
 
@@ -3079,7 +3079,7 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
 
             for (uint32_t i = 0; i < param_count; ++i)
             {
-                AstExpr *param = expr->builtin_call.params[i];
+                AstExpr *param = expr->builtin_call.params.ptr[i];
                 irModuleBuildExpr(m, param);
                 assert(param->value);
                 param_values[i] = irLoadVal(m, param->value);
@@ -3472,14 +3472,14 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
 
     case STMT_CONTINUE: {
         assert(arrLength(m->continue_stack) > 0);
-        IRInst *block = m->continue_stack[arrLength(m->continue_stack) - 1];
+        IRInst *block = m->continue_stack.ptr[arrLength(m->continue_stack) - 1];
         irBuildBr(m, block, NULL, NULL);
         break;
     }
 
     case STMT_BREAK: {
         assert(arrLength(m->break_stack) > 0);
-        IRInst *block = m->break_stack[arrLength(m->break_stack) - 1];
+        IRInst *block = m->break_stack.ptr[arrLength(m->break_stack) - 1];
         irBuildBr(m, block, NULL, NULL);
         break;
     }
@@ -3501,7 +3501,7 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
     case STMT_BLOCK: {
         for (uint32_t i = 0; i < arrLength(stmt->block.stmts); ++i)
         {
-            AstStmt *sub_stmt = stmt->block.stmts[i];
+            AstStmt *sub_stmt = stmt->block.stmts.ptr[i];
             irModuleBuildStmt(m, sub_stmt);
 
             if (irBlockHasTerminator(irGetCurrentBlock(m)))
@@ -3598,11 +3598,11 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
             irPositionAtEnd(m, body_block);
             irAddBlock(body_block);
 
-            arrPush(m->continue_stack, continue_block);
-            arrPush(m->break_stack, merge_block);
+            arrPush(&m->continue_stack, continue_block);
+            arrPush(&m->break_stack, merge_block);
             irModuleBuildStmt(m, stmt->while_.stmt);
-            arrPop(m->continue_stack);
-            arrPop(m->break_stack);
+            arrPop(&m->continue_stack);
+            arrPop(&m->break_stack);
 
             if (!irBlockHasTerminator(irGetCurrentBlock(m)))
             {
@@ -3645,11 +3645,11 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
             irPositionAtEnd(m, body_block);
             irAddBlock(body_block);
 
-            arrPush(m->continue_stack, continue_block);
-            arrPush(m->break_stack, merge_block);
+            arrPush(&m->continue_stack, continue_block);
+            arrPush(&m->break_stack, merge_block);
             irModuleBuildStmt(m, stmt->do_while.stmt);
-            arrPop(m->continue_stack);
-            arrPop(m->break_stack);
+            arrPop(&m->continue_stack);
+            arrPop(&m->break_stack);
 
             if (!irBlockHasTerminator(irGetCurrentBlock(m)))
             {
@@ -3725,11 +3725,11 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
             irPositionAtEnd(m, body_block);
             irAddBlock(body_block);
 
-            arrPush(m->continue_stack, continue_block);
-            arrPush(m->break_stack, merge_block);
+            arrPush(&m->continue_stack, continue_block);
+            arrPush(&m->break_stack, merge_block);
             irModuleBuildStmt(m, stmt->for_.stmt);
-            arrPop(m->continue_stack);
-            arrPop(m->break_stack);
+            arrPop(&m->continue_stack);
+            arrPop(&m->break_stack);
 
             if (!irBlockHasTerminator(irGetCurrentBlock(m)))
             {
@@ -3766,23 +3766,23 @@ static void irModuleBuildDecl(IRModule *m, AstDecl *decl)
 
         if (decl->func.execution_model)
         {
-            IRInst **globals = NULL;
+            ArrayOfIRInstPtr globals = {0};
 
             // Only required for spir-v 1.5:
             //
             // for (uint32_t i = 0; i < arrLength(m->globals); ++i)
             // {
-            //     arrPush(globals, m->globals[i]);
+            //     arrPush(&globals, m->globals[i]);
             // }
 
             for (uint32_t i = 0; i < arrLength(decl->value->func.inputs); ++i)
             {
-                arrPush(globals, decl->value->func.inputs[i]);
+                arrPush(&globals, decl->value->func.inputs.ptr[i]);
             }
 
             for (uint32_t i = 0; i < arrLength(decl->value->func.outputs); ++i)
             {
-                arrPush(globals, decl->value->func.outputs[i]);
+                arrPush(&globals, decl->value->func.outputs.ptr[i]);
             }
 
             IRInst *entry_point = irAddEntryPoint(
@@ -3790,7 +3790,7 @@ static void irModuleBuildDecl(IRModule *m, AstDecl *decl)
                 decl->name,
                 decl->value,
                 *decl->func.execution_model,
-                globals,
+                globals.ptr,
                 arrLength(globals));
 
             if (*decl->func.execution_model == SpvExecutionModelGLCompute)
@@ -3812,7 +3812,7 @@ static void irModuleBuildDecl(IRModule *m, AstDecl *decl)
 
         for (uint32_t i = 0; i < arrLength(decl->func.inputs); ++i)
         {
-            AstDecl *var = decl->func.inputs[i];
+            AstDecl *var = decl->func.inputs.ptr[i];
             old_inputs[i] = var->value;
 
             IRType *ir_type = convertTypeToIR(m->mod, m, var->type);
@@ -3821,21 +3821,21 @@ static void irModuleBuildDecl(IRModule *m, AstDecl *decl)
 
         for (uint32_t i = 0; i < arrLength(decl->func.var_decls); ++i)
         {
-            AstDecl *var = decl->func.var_decls[i];
+            AstDecl *var = decl->func.var_decls.ptr[i];
             IRType *ir_type = convertTypeToIR(m->mod, m, var->type);
             var->value = irBuildAlloca(m, ir_type);
         }
 
         for (uint32_t i = 0; i < arrLength(decl->func.inputs); ++i)
         {
-            AstDecl *var = decl->func.inputs[i];
+            AstDecl *var = decl->func.inputs.ptr[i];
             IRInst *loaded = irBuildLoad(m, old_inputs[i]);
             irBuildStore(m, var->value, loaded);
         }
 
         for (uint32_t i = 0; i < arrLength(decl->func.stmts); ++i)
         {
-            AstStmt *stmt = decl->func.stmts[i];
+            AstStmt *stmt = decl->func.stmts.ptr[i];
             irModuleBuildStmt(m, stmt);
             if (irBlockHasTerminator(irGetCurrentBlock(m)))
             {
@@ -3890,7 +3890,7 @@ void irModuleDestroy(IRModule *m)
 {
     ts__hashDestroy(&m->type_cache);
     ts__hashDestroy(&m->const_cache);
-    arrFree(m->stream);
+    arrFree(&m->stream);
 }
 
 uint32_t *ts__irModuleCodegen(Module *mod, size_t *word_count)
@@ -3922,7 +3922,7 @@ uint32_t *ts__irModuleCodegen(Module *mod, size_t *word_count)
 
             for (uint32_t k = 0; k < arrLength(decl->func.func_params); ++k)
             {
-                AstDecl *param = decl->func.func_params[k];
+                AstDecl *param = decl->func.func_params.ptr[k];
                 IRType *ir_param_type = convertTypeToIR(m->mod, m, param->type);
                 bool by_reference = false;
                 if (param->var.kind == VAR_IN_PARAM || param->var.kind == VAR_OUT_PARAM ||
@@ -3938,7 +3938,7 @@ uint32_t *ts__irModuleCodegen(Module *mod, size_t *word_count)
 
             for (uint32_t k = 0; k < arrLength(decl->func.inputs); ++k)
             {
-                AstDecl *input = decl->func.inputs[k];
+                AstDecl *input = decl->func.inputs.ptr[k];
                 IRType *ir_param_type = convertTypeToIR(m->mod, m, input->type);
                 input->value = irAddInput(m, decl->value, ir_param_type);
                 input->value->decorations = input->decorations;
@@ -3946,7 +3946,7 @@ uint32_t *ts__irModuleCodegen(Module *mod, size_t *word_count)
 
             for (uint32_t k = 0; k < arrLength(decl->func.outputs); ++k)
             {
-                AstDecl *output = decl->func.outputs[k];
+                AstDecl *output = decl->func.outputs.ptr[k];
                 IRType *ir_param_type = convertTypeToIR(m->mod, m, output->type);
                 output->value = irAddOutput(m, decl->value, ir_param_type);
                 output->value->decorations = output->decorations;
@@ -4001,7 +4001,7 @@ uint32_t *ts__irModuleCodegen(Module *mod, size_t *word_count)
 
     *word_count = arrLength(m->stream);
     uint32_t *result = malloc((*word_count) * 4);
-    memcpy(result, m->stream, (*word_count) * 4);
+    memcpy(result, m->stream.ptr, (*word_count) * 4);
 
     irModuleDestroy(m);
 

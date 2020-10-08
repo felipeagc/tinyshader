@@ -34,7 +34,7 @@ typedef struct PreprocessorFile
     uint32_t line;
     uint32_t col;
 
-    /*array*/ bool *if_stack;
+    ARRAY_OF(bool) if_stack;
 } PreprocessorFile;
 
 static inline bool preprocIsAtEnd(PreprocessorFile *f)
@@ -269,7 +269,7 @@ static void preprocessFile(Preprocessor *p, File *file)
                     ident[ident_length] = '\0';
 
                     void *result;
-                    arrPush(f->if_stack, ts__hashGet(&p->defines, ident, &result));
+                    arrPush(&f->if_stack, ts__hashGet(&p->defines, ident, &result));
                 }
             }
             else if (strncmp(curr, "#ifndef", strlen("#ifndef")) == 0)
@@ -301,7 +301,7 @@ static void preprocessFile(Preprocessor *p, File *file)
                     ident[ident_length] = '\0';
 
                     void *result;
-                    arrPush(f->if_stack, !ts__hashGet(&p->defines, ident, &result));
+                    arrPush(&f->if_stack, !ts__hashGet(&p->defines, ident, &result));
                 }
             }
             else if (strncmp(curr, "#else", strlen("#else")) == 0)
@@ -315,7 +315,7 @@ static void preprocessFile(Preprocessor *p, File *file)
                     break;
                 }
 
-                bool *insert = &f->if_stack[arrLength(f->if_stack) - 1];
+                bool *insert = &f->if_stack.ptr[arrLength(f->if_stack) - 1];
                 *insert = !(*insert); // Invert the condition
             }
             else if (strncmp(curr, "#endif", strlen("#endif")) == 0)
@@ -328,7 +328,7 @@ static void preprocessFile(Preprocessor *p, File *file)
                     ts__addErr(p->compiler, &err_loc, "unmatched #endif");
                     break;
                 }
-                arrPop(f->if_stack);
+                arrPop(&f->if_stack);
             }
             else if (strncmp(curr, "#include", strlen("#include")) == 0)
             {
@@ -564,7 +564,7 @@ static void preprocessFile(Preprocessor *p, File *file)
         ts__addErr(p->compiler, &err_loc, "expected #endif");
     }
 
-    arrFree(f->if_stack);
+    arrFree(&f->if_stack);
 }
 
 char *ts__preprocessRootFile(
@@ -1172,7 +1172,7 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
 
         if (l->token.loc.length > 0)
         {
-            arrPush(l->tokens, l->token);
+            arrPush(&l->tokens, l->token);
         }
     }
 
@@ -1194,12 +1194,12 @@ static AstExpr *parseExpr(Parser *p);
 
 static inline bool parserIsAtEnd(Parser *p)
 {
-    return p->pos >= arrLength(p->tokens);
+    return p->pos >= p->token_count;
 }
 
 static inline Token *parserPeek(Parser *p, size_t offset)
 {
-    if (p->pos + offset >= arrLength(p->tokens))
+    if (p->pos + offset >= p->token_count)
     {
         return &p->tokens[p->token_count - 1];
     }
@@ -1616,7 +1616,7 @@ static AstExpr *parseAccessFuncCall(Parser *p)
         {
             AstExpr *param = parseExpr(p);
             if (!param) return NULL;
-            arrPush(expr->builtin_call.params, param);
+            arrPush(&expr->builtin_call.params, param);
 
             if (parserPeek(p, 0)->kind != TOKEN_RPAREN)
             {
@@ -1676,7 +1676,7 @@ static AstExpr *parseAccessFuncCall(Parser *p)
             {
                 AstExpr *param = parseExpr(p);
                 if (!param) return NULL;
-                arrPush(func_call->func_call.params, param);
+                arrPush(&func_call->func_call.params, param);
 
                 if (parserPeek(p, 0)->kind != TOKEN_RPAREN)
                 {
@@ -1707,7 +1707,7 @@ static AstExpr *parseAccessFuncCall(Parser *p)
                 AstExpr *ident = parseIdentExpr(p);
                 if (!ident) return NULL;
 
-                arrPush(expr->access.chain, ident);
+                arrPush(&expr->access.chain, ident);
             }
 
             parserEndLoc(p, &loc);
@@ -2097,7 +2097,7 @@ static AstStmt *parseStmt(Parser *p)
             AstStmt *sub_stmt = parseStmt(p);
             if (sub_stmt)
             {
-                arrPush(stmt->block.stmts, sub_stmt);
+                arrPush(&stmt->block.stmts, sub_stmt);
             }
         }
 
@@ -2182,9 +2182,10 @@ static AstStmt *parseStmt(Parser *p)
 
 static AstDecl *parseTopLevel(Parser *p)
 {
+    assert(p);
     TsCompiler *compiler = p->compiler;
 
-    /*array*/ AstAttribute *attributes = NULL;
+    ArrayOfAstAttribute attributes = {0};
 
     int attr_start = 0;
     if (parserPeek(p, 0)->kind == TOKEN_LBRACK)
@@ -2242,7 +2243,7 @@ static AstDecl *parseTopLevel(Parser *p)
                 AstExpr *value = parseExpr(p);
                 if (!value) return NULL;
 
-                arrPush(attr.values, value);
+                arrPush(&attr.values, value);
 
                 if (parserPeek(p, 0)->kind != TOKEN_RPAREN)
                 {
@@ -2253,7 +2254,7 @@ static AstDecl *parseTopLevel(Parser *p)
             if (!parserConsume(p, TOKEN_RPAREN)) return NULL;
         }
 
-        arrPush(attributes, attr);
+        arrPush(&attributes, attr);
 
         for (int i = 0; i < attr_start; ++i)
         {
@@ -2350,7 +2351,7 @@ static AstDecl *parseTopLevel(Parser *p)
 
             if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
 
-            arrPush(decl->struct_.fields, field_decl);
+            arrPush(&decl->struct_.fields, field_decl);
         }
 
         if (!parserConsume(p, TOKEN_RCURLY)) return NULL;
@@ -2569,7 +2570,7 @@ static AstDecl *parseTopLevel(Parser *p)
                     param_decl->var.semantic = semantic_tok->str;
                 }
 
-                arrPush(decl->func.all_params, param_decl);
+                arrPush(&decl->func.all_params, param_decl);
 
                 if (parserPeek(p, 0)->kind != TOKEN_RPAREN)
                 {
@@ -2586,7 +2587,7 @@ static AstDecl *parseTopLevel(Parser *p)
                 AstStmt *stmt = parseStmt(p);
                 if (stmt)
                 {
-                    arrPush(decl->func.stmts, stmt);
+                    arrPush(&decl->func.stmts, stmt);
                 }
             }
 
@@ -2610,6 +2611,9 @@ static AstDecl *parseTopLevel(Parser *p)
 
 void ts__parserParse(Parser *p, TsCompiler *compiler, Token *tokens, size_t token_count)
 {
+    assert(compiler);
+    assert(p);
+
     memset(p, 0, sizeof(*p));
     p->compiler = compiler;
     p->tokens = tokens;
@@ -2620,7 +2624,7 @@ void ts__parserParse(Parser *p, TsCompiler *compiler, Token *tokens, size_t toke
         AstDecl *decl = parseTopLevel(p);
         if (decl)
         {
-            arrPush(p->decls, decl);
+            arrPush(&p->decls, decl);
         }
     }
 }
