@@ -1,0 +1,5 @@
+#include "tinyshader.c"
+#include "tinyshader_misc.c"
+#include "tinyshader_parser.c"
+#include "tinyshader_analysis.c"
+#include "tinyshader_ir.c"
