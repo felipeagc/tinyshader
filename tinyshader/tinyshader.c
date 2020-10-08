@@ -229,7 +229,7 @@ static bool handleErrors(TsCompiler *compiler, TsCompilerOutput *output)
     return false;
 }
 
-File *ts__createFile(TsCompiler *compiler, char *text, size_t text_size, char *path)
+File *ts__createFile(TsCompiler *compiler, const char *text, size_t text_size, const char *path)
 {
     File *file = NEW(compiler, File);
     file->path = ts__getAbsolutePath(compiler, path);

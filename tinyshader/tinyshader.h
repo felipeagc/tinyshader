@@ -16,8 +16,8 @@ typedef enum TsShaderStage {
 } TsShaderStage;
 
 typedef struct TsCompilerInput {
-  char *path; // optional
-  char *input;
+  const char *path; // optional
+  const char *input;
   size_t input_size;
 
   const char *entry_point;

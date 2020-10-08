@@ -1162,7 +1162,7 @@ typedef struct TsCompiler
 
 struct File
 {
-    char *text;
+    const char *text;
     size_t text_size;
 
     char *path;
@@ -1282,7 +1282,7 @@ char *ts__sbBuild(StringBuilder *sb, BumpAlloc *bump);
 
 void ts__addErr(TsCompiler *compiler, Location *loc, const char *msg);
 
-File *ts__createFile(TsCompiler *compiler, char *text, size_t text_size, char *path);
+File *ts__createFile(TsCompiler *compiler, const char *text, size_t text_size, const char *path);
 
 char *ts__preprocessRootFile(
     Preprocessor *p, TsCompiler *compiler, File *file, size_t *out_length);

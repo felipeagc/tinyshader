@@ -156,7 +156,7 @@ static void preprocessFile(Preprocessor *p, File *file)
         switch ((c = preprocPeek(f, 0)))
         {
         case '#': {
-            char *curr = &f->file->text[f->pos];
+            const char *curr = &f->file->text[f->pos];
             if (strncmp(curr, "#define", strlen("#define")) == 0)
             {
                 if (preprocCanInsert(f))
