@@ -18,7 +18,9 @@ else()
 	target_compile_options(tinyshader PRIVATE -Wall -Wextra -Wno-unused-function)
 endif()
 
+
 target_include_directories(tinyshader PUBLIC tinyshader)
 
 add_executable(tsc tsc/tsc.c)
 target_link_libraries(tsc PRIVATE tinyshader)
+target_compile_options(tsc PRIVATE -Wall -Wextra -Wno-unused-function)

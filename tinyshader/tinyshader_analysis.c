@@ -1,9 +1,9 @@
 #include "tinyshader_internal.h"
 
-static void scopeInit(Scope *scope, Scope *parent, AstDecl *owner)
+static void scopeInit(TsCompiler *compiler, Scope *scope, Scope *parent, AstDecl *owner)
 {
     memset(scope, 0, sizeof(*scope));
-    ts__hashInit(&scope->map, 0);
+    ts__hashInit(compiler, &scope->map, 0);
     scope->parent = parent;
     scope->owner = owner;
 }
@@ -336,7 +336,7 @@ static uint32_t typeSizeOf(Module *m, AstType *type)
             member_dec.kind = SpvDecorationOffset;
             member_dec.member_index = i;
             member_dec.value = size;
-            arrPush(&type->struct_.field_decorations, member_dec);
+            arrPush(m->compiler, &type->struct_.field_decorations, member_dec);
 
             size += typeSizeOf(m, field);
         }
@@ -796,7 +796,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl);
 static void analyzerPushScope(Analyzer *a, Scope *scope)
 {
     assert(scope);
-    arrPush(&a->scope_stack, scope);
+    arrPush(a->compiler, &a->scope_stack, scope);
     if (scope->owner && scope->owner->kind == DECL_FUNC)
     {
         a->scope_func = scope->owner;
@@ -1054,7 +1054,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
         if (struct_type)
         {
             expr->scope = NEW(compiler, Scope);
-            scopeInit(expr->scope, NULL, NULL);
+            scopeInit(compiler, expr->scope, NULL, NULL);
             for (uint32_t i = 0; i < struct_type->struct_.field_count; ++i)
             {
                 AstDecl *field_decl = struct_type->struct_.field_decls[i];
@@ -2822,7 +2822,7 @@ static void analyzerAnalyzeStmt(Analyzer *a, AstStmt *stmt)
         Scope *scope = analyzerCurrentScope(a);
 
         stmt->block.scope = NEW(compiler, Scope);
-        scopeInit(stmt->block.scope, scope, NULL);
+        scopeInit(compiler, stmt->block.scope, scope, NULL);
 
         analyzerPushScope(a, stmt->block.scope);
         for (uint32_t i = 0; i < arrLength(stmt->block.stmts); ++i)
@@ -2857,8 +2857,8 @@ static void analyzerAnalyzeStmt(Analyzer *a, AstStmt *stmt)
             ts__addErr(compiler, &stmt->while_.cond->loc, "expression is not comparable");
         }
 
-        arrPush(&a->continue_stack, stmt);
-        arrPush(&a->break_stack, stmt);
+        arrPush(a->compiler, &a->continue_stack, stmt);
+        arrPush(a->compiler, &a->break_stack, stmt);
         analyzerAnalyzeStmt(a, stmt->while_.stmt);
         arrPop(&a->continue_stack);
         arrPop(&a->break_stack);
@@ -2874,8 +2874,8 @@ static void analyzerAnalyzeStmt(Analyzer *a, AstStmt *stmt)
                 compiler, &stmt->do_while.cond->loc, "expression is not comparable");
         }
 
-        arrPush(&a->continue_stack, stmt);
-        arrPush(&a->break_stack, stmt);
+        arrPush(a->compiler, &a->continue_stack, stmt);
+        arrPush(a->compiler, &a->break_stack, stmt);
         analyzerAnalyzeStmt(a, stmt->do_while.stmt);
         arrPop(&a->continue_stack);
         arrPop(&a->break_stack);
@@ -2903,8 +2903,8 @@ static void analyzerAnalyzeStmt(Analyzer *a, AstStmt *stmt)
             analyzerAnalyzeExpr(a, stmt->for_.inc, NULL);
         }
 
-        arrPush(&a->continue_stack, stmt);
-        arrPush(&a->break_stack, stmt);
+        arrPush(a->compiler, &a->continue_stack, stmt);
+        arrPush(a->compiler, &a->break_stack, stmt);
         analyzerAnalyzeStmt(a, stmt->for_.stmt);
         arrPop(&a->continue_stack);
         arrPop(&a->break_stack);
@@ -3017,18 +3017,18 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                 if (param_decl->var.kind == VAR_IN_PARAM ||
                     param_decl->var.kind == VAR_PLAIN)
                 {
-                    arrPush(&decl->func.inputs, param_decl);
+                    arrPush(compiler, &decl->func.inputs, param_decl);
                 }
                 else if (
                     param_decl->var.kind == VAR_OUT_PARAM ||
                     param_decl->var.kind == VAR_INOUT_PARAM)
                 {
-                    arrPush(&decl->func.outputs, param_decl);
+                    arrPush(compiler, &decl->func.outputs, param_decl);
                 }
             }
             else
             {
-                arrPush(&decl->func.func_params, param_decl);
+                arrPush(compiler, &decl->func.func_params, param_decl);
             }
         }
 
@@ -3038,7 +3038,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
         }
 
         decl->scope = NEW(compiler, Scope);
-        scopeInit(decl->scope, scope, decl);
+        scopeInit(compiler, decl->scope, scope, decl);
 
         analyzerAnalyzeExpr(a, decl->func.return_type, newBasicType(m, TYPE_TYPE));
         AstType *return_type = decl->func.return_type->as_type;
@@ -3074,7 +3074,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                     IRDecoration dec = {0};
                     dec.kind = SpvDecorationBuiltIn;
                     dec.value = SpvBuiltInFragCoord;
-                    arrPush(&param_decl->decorations, dec);
+                    arrPush(compiler, &param_decl->decorations, dec);
                 }
                 else if (
                     strcmp(param_decl->var.semantic, "SV_InstanceID") == 0 &&
@@ -3083,7 +3083,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                     IRDecoration dec = {0};
                     dec.kind = SpvDecorationBuiltIn;
                     dec.value = SpvBuiltInInstanceIndex;
-                    arrPush(&param_decl->decorations, dec);
+                    arrPush(compiler, &param_decl->decorations, dec);
                 }
                 else if (
                     strcmp(param_decl->var.semantic, "SV_VertexID") == 0 &&
@@ -3092,7 +3092,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                     IRDecoration dec = {0};
                     dec.kind = SpvDecorationBuiltIn;
                     dec.value = SpvBuiltInVertexIndex;
-                    arrPush(&param_decl->decorations, dec);
+                    arrPush(compiler, &param_decl->decorations, dec);
                 }
                 else if (
                     strcmp(param_decl->var.semantic, "SV_DispatchThreadID") == 0 &&
@@ -3101,7 +3101,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                     IRDecoration dec = {0};
                     dec.kind = SpvDecorationBuiltIn;
                     dec.value = SpvBuiltInGlobalInvocationId;
-                    arrPush(&param_decl->decorations, dec);
+                    arrPush(compiler, &param_decl->decorations, dec);
                 }
                 else if (
                     strcmp(param_decl->var.semantic, "SV_GroupID") == 0 &&
@@ -3110,7 +3110,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                     IRDecoration dec = {0};
                     dec.kind = SpvDecorationBuiltIn;
                     dec.value = SpvBuiltInWorkgroupId;
-                    arrPush(&param_decl->decorations, dec);
+                    arrPush(compiler, &param_decl->decorations, dec);
                 }
                 else if (
                     strcmp(param_decl->var.semantic, "SV_GroupIndex") == 0 &&
@@ -3119,7 +3119,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                     IRDecoration dec = {0};
                     dec.kind = SpvDecorationBuiltIn;
                     dec.value = SpvBuiltInLocalInvocationIndex;
-                    arrPush(&param_decl->decorations, dec);
+                    arrPush(compiler, &param_decl->decorations, dec);
                 }
                 else if (
                     strcmp(param_decl->var.semantic, "SV_GroupThreadID") == 0 &&
@@ -3128,14 +3128,14 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                     IRDecoration dec = {0};
                     dec.kind = SpvDecorationBuiltIn;
                     dec.value = SpvBuiltInLocalInvocationId;
-                    arrPush(&param_decl->decorations, dec);
+                    arrPush(compiler, &param_decl->decorations, dec);
                 }
                 else
                 {
                     IRDecoration dec = {0};
                     dec.kind = SpvDecorationLocation;
                     dec.value = input_loc++;
-                    arrPush(&param_decl->decorations, dec);
+                    arrPush(compiler, &param_decl->decorations, dec);
                 }
             }
 
@@ -3155,14 +3155,14 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                     IRDecoration dec = {0};
                     dec.kind = SpvDecorationBuiltIn;
                     dec.value = SpvBuiltInPosition;
-                    arrPush(&param_decl->decorations, dec);
+                    arrPush(compiler, &param_decl->decorations, dec);
                 }
                 else
                 {
                     IRDecoration dec = {0};
                     dec.kind = SpvDecorationLocation;
                     dec.value = output_loc++;
-                    arrPush(&param_decl->decorations, dec);
+                    arrPush(compiler, &param_decl->decorations, dec);
                 }
             }
 
@@ -3236,7 +3236,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
 
         if (decl->var.kind == VAR_PLAIN && a->scope_func)
         {
-            arrPush(&a->scope_func->func.var_decls, decl);
+            arrPush(compiler, &a->scope_func->func.var_decls, decl);
         }
 
         AstType *struct_type = ts__getStructType(decl->type);
@@ -3244,7 +3244,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
         if (struct_type)
         {
             decl->scope = NEW(compiler, Scope);
-            scopeInit(decl->scope, NULL, decl);
+            scopeInit(compiler, decl->scope, NULL, decl);
             for (uint32_t i = 0; i < struct_type->struct_.field_count; ++i)
             {
                 AstDecl *field_decl = struct_type->struct_.field_decls[i];
@@ -3311,11 +3311,11 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
             IRDecoration dec = {0};
             dec.kind = SpvDecorationBinding;
             dec.value = binding_index;
-            arrPush(&decl->decorations, dec);
+            arrPush(compiler, &decl->decorations, dec);
 
             dec.kind = SpvDecorationDescriptorSet;
             dec.value = set_index;
-            arrPush(&decl->decorations, dec);
+            arrPush(compiler, &decl->decorations, dec);
         }
 
         break;
@@ -3356,7 +3356,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
         if (struct_type)
         {
             decl->scope = NEW(compiler, Scope);
-            scopeInit(decl->scope, NULL, decl);
+            scopeInit(compiler, decl->scope, NULL, decl);
             for (uint32_t i = 0; i < struct_type->struct_.field_count; ++i)
             {
                 AstDecl *field_decl = struct_type->struct_.field_decls[i];
@@ -3372,7 +3372,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
         AstType **field_types = NEW_ARRAY(compiler, AstType *, field_count);
 
         decl->scope = NEW(compiler, Scope);
-        scopeInit(decl->scope, scope, NULL);
+        scopeInit(compiler, decl->scope, scope, NULL);
 
         analyzerPushScope(a, decl->scope);
         for (uint32_t i = 0; i < arrLength(decl->struct_.fields); ++i)
@@ -3397,7 +3397,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                 IRMemberDecoration member_dec = {0};
                 member_dec.kind = SpvDecorationRowMajor;
                 member_dec.member_index = i;
-                arrPush(&decl->as_type->struct_.field_decorations, member_dec);
+                arrPush(compiler, &decl->as_type->struct_.field_decorations, member_dec);
 
                 uint32_t row_stride =
                     field_types[i]->matrix.col_count *
@@ -3406,7 +3406,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                 member_dec.kind = SpvDecorationMatrixStride;
                 member_dec.member_index = i;
                 member_dec.value = row_stride;
-                arrPush(&decl->as_type->struct_.field_decorations, member_dec);
+                arrPush(compiler, &decl->as_type->struct_.field_decorations, member_dec);
             }
         }
 
@@ -3427,7 +3427,7 @@ void ts__analyzerAnalyze(
     assert(!module->scope);
 
     module->scope = NEW(compiler, Scope);
-    scopeInit(module->scope, NULL, NULL);
+    scopeInit(compiler, module->scope, NULL, NULL);
 
     analyzerPushScope(a, a->module->scope);
 

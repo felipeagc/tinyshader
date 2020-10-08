@@ -566,7 +566,7 @@ static IRInst *irAddEntryPoint(
     inst->entry_point.globals = globals;
     inst->entry_point.global_count = global_count;
 
-    arrPush(&m->entry_points, inst);
+    arrPush(m->compiler, &m->entry_points, inst);
     return inst;
 }
 
@@ -585,7 +585,7 @@ static IRInst *irAddFunction(IRModule *m, IRType *func_type)
     inst->kind = IR_INST_FUNCTION;
     inst->type = func_type;
 
-    arrPush(&m->functions, inst);
+    arrPush(m->compiler, &m->functions, inst);
 
     return inst;
 }
@@ -599,7 +599,7 @@ irAddFuncParam(IRModule *m, IRInst *func, IRType *type, bool is_by_reference)
     inst->type = type;
     inst->func_param.is_by_reference = is_by_reference;
 
-    arrPush(&func->func.params, inst);
+    arrPush(m->compiler, &func->func.params, inst);
 
     return inst;
 }
@@ -618,10 +618,10 @@ static IRInst *irCreateBlock(IRModule *m, IRInst *func)
 }
 
 // Finally adds the block to the function
-static void irAddBlock(IRInst *block)
+static void irAddBlock(IRModule *m, IRInst *block)
 {
     assert(block->block.func->kind == IR_INST_FUNCTION);
-    arrPush(&block->block.func->func.blocks, block);
+    arrPush(m->compiler, &block->block.func->func.blocks, block);
 }
 
 static IRInst *irAddGlobal(IRModule *m, IRType *type, SpvStorageClass storage_class)
@@ -632,8 +632,8 @@ static IRInst *irAddGlobal(IRModule *m, IRType *type, SpvStorageClass storage_cl
     inst->var.storage_class = storage_class;
     inst->type = irNewPointerType(m, inst->var.storage_class, type);
 
-    arrPush(&m->globals, inst);
-    arrPush(&m->all_globals, inst);
+    arrPush(m->compiler, &m->globals, inst);
+    arrPush(m->compiler, &m->all_globals, inst);
 
     return inst;
 }
@@ -646,8 +646,8 @@ static IRInst *irAddInput(IRModule *m, IRInst *func, IRType *type)
     inst->var.storage_class = SpvStorageClassInput;
     inst->type = irNewPointerType(m, inst->var.storage_class, type);
 
-    arrPush(&func->func.inputs, inst);
-    arrPush(&m->all_globals, inst);
+    arrPush(m->compiler, &func->func.inputs, inst);
+    arrPush(m->compiler, &m->all_globals, inst);
 
     return inst;
 }
@@ -660,8 +660,8 @@ static IRInst *irAddOutput(IRModule *m, IRInst *func, IRType *type)
     inst->var.storage_class = SpvStorageClassOutput;
     inst->type = irNewPointerType(m, inst->var.storage_class, type);
 
-    arrPush(&func->func.outputs, inst);
-    arrPush(&m->all_globals, inst);
+    arrPush(m->compiler, &func->func.outputs, inst);
+    arrPush(m->compiler, &m->all_globals, inst);
 
     return inst;
 }
@@ -808,7 +808,7 @@ static IRInst *irGetCachedConst(IRModule *m, IRInst *inst)
     }
 
     ts__hashSet(&m->const_cache, const_string, inst);
-    arrPush(&m->constants, inst);
+    arrPush(m->compiler, &m->constants, inst);
 
     return inst;
 }
@@ -916,7 +916,7 @@ static IRInst *irBuildAlloca(IRModule *m, IRType *type)
     inst->type = irNewPointerType(m, inst->var.storage_class, type);
 
     IRInst *block = irGetCurrentBlock(m);
-    arrPush(&block->block.insts, inst);
+    arrPush(m->compiler, &block->block.insts, inst);
 
     return inst;
 }
@@ -929,7 +929,7 @@ static void irBuildStore(IRModule *m, IRInst *pointer, IRInst *value)
     inst->store.value = value;
 
     IRInst *block = irGetCurrentBlock(m);
-    arrPush(&block->block.insts, inst);
+    arrPush(m->compiler, &block->block.insts, inst);
 }
 
 static IRInst *irBuildLoad(IRModule *m, IRInst *pointer)
@@ -944,7 +944,7 @@ static IRInst *irBuildLoad(IRModule *m, IRInst *pointer)
     inst->load.pointer = pointer;
 
     IRInst *block = irGetCurrentBlock(m);
-    arrPush(&block->block.insts, inst);
+    arrPush(m->compiler, &block->block.insts, inst);
 
     return inst;
 }
@@ -964,7 +964,7 @@ static IRInst *irBuildAccessChain(
     inst->access_chain.index_count = index_count;
 
     IRInst *block = irGetCurrentBlock(m);
-    arrPush(&block->block.insts, inst);
+    arrPush(m->compiler, &block->block.insts, inst);
 
     return inst;
 }
@@ -991,7 +991,7 @@ static IRInst *irBuildVectorShuffle(
     inst->vector_shuffle.index_count = index_count;
 
     IRInst *block = irGetCurrentBlock(m);
-    arrPush(&block->block.insts, inst);
+    arrPush(m->compiler, &block->block.insts, inst);
 
     return inst;
 }
@@ -1023,7 +1023,7 @@ static IRInst *irBuildCompositeExtract(
     inst->composite_extract.index_count = index_count;
 
     IRInst *block = irGetCurrentBlock(m);
-    arrPush(&block->block.insts, inst);
+    arrPush(m->compiler, &block->block.insts, inst);
 
     return inst;
 }
@@ -1041,7 +1041,7 @@ static IRInst *irBuildCompositeConstruct(
 
     IRInst *block = irGetCurrentBlock(m);
     assert(block);
-    arrPush(&block->block.insts, inst);
+    arrPush(m->compiler, &block->block.insts, inst);
 
     return inst;
 }
@@ -1060,7 +1060,7 @@ irBuildFuncCall(IRModule *m, IRInst *function, IRInst **params, uint32_t param_c
     inst->func_call.param_count = param_count;
 
     IRInst *block = irGetCurrentBlock(m);
-    arrPush(&block->block.insts, inst);
+    arrPush(m->compiler, &block->block.insts, inst);
 
     return inst;
 }
@@ -1083,7 +1083,7 @@ static IRInst *irBuildBuiltinCall(
     inst->builtin_call.param_count = param_count;
 
     IRInst *block = irGetCurrentBlock(m);
-    arrPush(&block->block.insts, inst);
+    arrPush(m->compiler, &block->block.insts, inst);
 
     return inst;
 }
@@ -1109,7 +1109,7 @@ static IRInst *irBuildBarrier(
     inst->barrier.semantics = irBuildConstInt(m, uint_type, semantics);
 
     IRInst *block = irGetCurrentBlock(m);
-    arrPush(&block->block.insts, inst);
+    arrPush(m->compiler, &block->block.insts, inst);
 
     return inst;
 }
@@ -1126,7 +1126,7 @@ irBuildSampleImplicitLod(IRModule *m, IRType *type, IRInst *image_sampler, IRIns
     inst->sample.coords = coords;
 
     IRInst *block = irGetCurrentBlock(m);
-    arrPush(&block->block.insts, inst);
+    arrPush(m->compiler, &block->block.insts, inst);
 
     return inst;
 }
@@ -1152,7 +1152,7 @@ static IRInst *irBuildCast(IRModule *m, IRType *dst_type, IRInst *value)
     inst->cast.value = value;
 
     IRInst *block = irGetCurrentBlock(m);
-    arrPush(&block->block.insts, inst);
+    arrPush(m->compiler, &block->block.insts, inst);
 
     return inst;
 }
@@ -1168,7 +1168,7 @@ static IRInst *irBuildUnary(IRModule *m, SpvOp op, IRType *type, IRInst *right)
     inst->unary.right = right;
 
     IRInst *block = irGetCurrentBlock(m);
-    arrPush(&block->block.insts, inst);
+    arrPush(m->compiler, &block->block.insts, inst);
 
     return inst;
 }
@@ -1186,7 +1186,7 @@ irBuildBinary(IRModule *m, SpvOp op, IRType *type, IRInst *left, IRInst *right)
     inst->binary.right = right;
 
     IRInst *block = irGetCurrentBlock(m);
-    arrPush(&block->block.insts, inst);
+    arrPush(m->compiler, &block->block.insts, inst);
 
     return inst;
 }
@@ -1198,7 +1198,7 @@ static void irBuildReturn(IRModule *m, IRInst *value)
     inst->return_.value = value;
 
     IRInst *block = irGetCurrentBlock(m);
-    arrPush(&block->block.insts, inst);
+    arrPush(m->compiler, &block->block.insts, inst);
 }
 
 static void irBuildDiscard(IRModule *m)
@@ -1207,7 +1207,7 @@ static void irBuildDiscard(IRModule *m)
     inst->kind = IR_INST_DISCARD;
 
     IRInst *block = irGetCurrentBlock(m);
-    arrPush(&block->block.insts, inst);
+    arrPush(m->compiler, &block->block.insts, inst);
 }
 
 static void
@@ -1220,7 +1220,7 @@ irBuildBr(IRModule *m, IRInst *target, IRInst *merge_block, IRInst *continue_blo
     inst->branch.continue_block = continue_block;
 
     IRInst *block = irGetCurrentBlock(m);
-    arrPush(&block->block.insts, inst);
+    arrPush(m->compiler, &block->block.insts, inst);
 }
 
 static void irBuildCondBr(
@@ -1240,7 +1240,7 @@ static void irBuildCondBr(
     inst->cond_branch.continue_block = continue_block;
 
     IRInst *block = irGetCurrentBlock(m);
-    arrPush(&block->block.insts, inst);
+    arrPush(m->compiler, &block->block.insts, inst);
 }
 
 static void
@@ -1249,10 +1249,10 @@ irModuleEncodeInst(IRModule *m, SpvOp opcode, uint32_t *params, size_t params_co
     uint32_t opcode_word = opcode;
     opcode_word |= ((uint16_t)(params_count + 1)) << 16;
 
-    arrPush(&m->stream, opcode_word);
+    arrPush(m->compiler, &m->stream, opcode_word);
     for (uint32_t i = 0; i < params_count; ++i)
     {
-        arrPush(&m->stream, params[i]);
+        arrPush(m->compiler, &m->stream, params[i]);
     }
 }
 
@@ -2520,11 +2520,11 @@ static void irModuleEncodeModule(IRModule *m)
     uint32_t uint_magic_number;
     memcpy(&uint_magic_number, MAGIC_NUMBER, sizeof(uint32_t));
 
-    arrPush(&m->stream, SpvMagicNumber);
-    arrPush(&m->stream, SpvVersion);
-    arrPush(&m->stream, uint_magic_number);
-    arrPush(&m->stream, 0); // ID Bound (fill out later)
-    arrPush(&m->stream, 0);
+    arrPush(m->compiler, &m->stream, SpvMagicNumber);
+    arrPush(m->compiler, &m->stream, SpvVersion);
+    arrPush(m->compiler, &m->stream, uint_magic_number);
+    arrPush(m->compiler, &m->stream, 0); // ID Bound (fill out later)
+    arrPush(m->compiler, &m->stream, 0);
 
     {
         uint32_t params[1] = {SpvCapabilityShader};
@@ -3536,7 +3536,7 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
         // Then
         {
             irPositionAtEnd(m, then_block);
-            irAddBlock(then_block);
+            irAddBlock(m, then_block);
 
             irModuleBuildStmt(m, stmt->if_.if_stmt);
 
@@ -3550,7 +3550,7 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
         if (stmt->if_.else_stmt)
         {
             irPositionAtEnd(m, else_block);
-            irAddBlock(else_block);
+            irAddBlock(m, else_block);
 
             irModuleBuildStmt(m, stmt->if_.else_stmt);
 
@@ -3561,7 +3561,7 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
         }
 
         irPositionAtEnd(m, merge_block);
-        irAddBlock(merge_block);
+        irAddBlock(m, merge_block);
 
         break;
     }
@@ -3579,7 +3579,7 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
 
         {
             irPositionAtEnd(m, check_block);
-            irAddBlock(check_block);
+            irAddBlock(m, check_block);
 
             irModuleBuildExpr(m, stmt->while_.cond);
             IRInst *cond = stmt->while_.cond->value;
@@ -3596,10 +3596,10 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
 
         {
             irPositionAtEnd(m, body_block);
-            irAddBlock(body_block);
+            irAddBlock(m, body_block);
 
-            arrPush(&m->continue_stack, continue_block);
-            arrPush(&m->break_stack, merge_block);
+            arrPush(m->compiler, &m->continue_stack, continue_block);
+            arrPush(m->compiler, &m->break_stack, merge_block);
             irModuleBuildStmt(m, stmt->while_.stmt);
             arrPop(&m->continue_stack);
             arrPop(&m->break_stack);
@@ -3612,13 +3612,13 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
 
         {
             irPositionAtEnd(m, continue_block);
-            irAddBlock(continue_block);
+            irAddBlock(m, continue_block);
 
             irBuildBr(m, check_block, NULL, NULL);
         }
 
         irPositionAtEnd(m, merge_block);
-        irAddBlock(merge_block);
+        irAddBlock(m, merge_block);
 
         break;
     }
@@ -3636,17 +3636,17 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
 
         {
             irPositionAtEnd(m, header_block);
-            irAddBlock(header_block);
+            irAddBlock(m, header_block);
 
             irBuildBr(m, body_block, merge_block, continue_block);
         }
 
         {
             irPositionAtEnd(m, body_block);
-            irAddBlock(body_block);
+            irAddBlock(m, body_block);
 
-            arrPush(&m->continue_stack, continue_block);
-            arrPush(&m->break_stack, merge_block);
+            arrPush(m->compiler, &m->continue_stack, continue_block);
+            arrPush(m->compiler, &m->break_stack, merge_block);
             irModuleBuildStmt(m, stmt->do_while.stmt);
             arrPop(&m->continue_stack);
             arrPop(&m->break_stack);
@@ -3659,7 +3659,7 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
 
         {
             irPositionAtEnd(m, continue_block);
-            irAddBlock(continue_block);
+            irAddBlock(m, continue_block);
 
             irModuleBuildExpr(m, stmt->do_while.cond);
             IRInst *cond = stmt->do_while.cond->value;
@@ -3674,7 +3674,7 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
         }
 
         irPositionAtEnd(m, merge_block);
-        irAddBlock(merge_block);
+        irAddBlock(m, merge_block);
 
         break;
     }
@@ -3697,7 +3697,7 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
 
         {
             irPositionAtEnd(m, check_block);
-            irAddBlock(check_block);
+            irAddBlock(m, check_block);
 
             IRInst *cond = NULL;
 
@@ -3723,10 +3723,10 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
 
         {
             irPositionAtEnd(m, body_block);
-            irAddBlock(body_block);
+            irAddBlock(m, body_block);
 
-            arrPush(&m->continue_stack, continue_block);
-            arrPush(&m->break_stack, merge_block);
+            arrPush(m->compiler, &m->continue_stack, continue_block);
+            arrPush(m->compiler, &m->break_stack, merge_block);
             irModuleBuildStmt(m, stmt->for_.stmt);
             arrPop(&m->continue_stack);
             arrPop(&m->break_stack);
@@ -3739,7 +3739,7 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
 
         {
             irPositionAtEnd(m, continue_block);
-            irAddBlock(continue_block);
+            irAddBlock(m, continue_block);
 
             if (stmt->for_.inc)
             {
@@ -3750,7 +3750,7 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
         }
 
         irPositionAtEnd(m, merge_block);
-        irAddBlock(merge_block);
+        irAddBlock(m, merge_block);
 
         break;
     }
@@ -3772,17 +3772,17 @@ static void irModuleBuildDecl(IRModule *m, AstDecl *decl)
             //
             // for (uint32_t i = 0; i < arrLength(m->globals); ++i)
             // {
-            //     arrPush(&globals, m->globals[i]);
+            //     arrPush(m->compiler, &globals, m->globals[i]);
             // }
 
             for (uint32_t i = 0; i < arrLength(decl->value->func.inputs); ++i)
             {
-                arrPush(&globals, decl->value->func.inputs.ptr[i]);
+                arrPush(m->compiler, &globals, decl->value->func.inputs.ptr[i]);
             }
 
             for (uint32_t i = 0; i < arrLength(decl->value->func.outputs); ++i)
             {
-                arrPush(&globals, decl->value->func.outputs.ptr[i]);
+                arrPush(m->compiler, &globals, decl->value->func.outputs.ptr[i]);
             }
 
             IRInst *entry_point = irAddEntryPoint(
@@ -3805,7 +3805,7 @@ static void irModuleBuildDecl(IRModule *m, AstDecl *decl)
 
         IRInst *entry_block = irCreateBlock(m, decl->value);
         irPositionAtEnd(m, entry_block);
-        irAddBlock(entry_block);
+        irAddBlock(m, entry_block);
 
         IRInst **old_inputs =
             NEW_ARRAY(m->compiler, IRInst *, arrLength(decl->func.inputs));
@@ -3882,15 +3882,15 @@ static void irModuleInit(IRModule *m, TsCompiler *compiler)
     memset(m, 0, sizeof(*m));
     m->compiler = compiler;
 
-    ts__hashInit(&m->type_cache, 0);
-    ts__hashInit(&m->const_cache, 0);
+    ts__hashInit(compiler, &m->type_cache, 0);
+    ts__hashInit(compiler, &m->const_cache, 0);
 }
 
 void irModuleDestroy(IRModule *m)
 {
     ts__hashDestroy(&m->type_cache);
     ts__hashDestroy(&m->const_cache);
-    arrFree(&m->stream);
+    arrFree(m->compiler, &m->stream);
 }
 
 uint32_t *ts__irModuleCodegen(Module *mod, size_t *word_count)

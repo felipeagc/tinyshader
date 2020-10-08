@@ -5,7 +5,7 @@ void ts__addErr(TsCompiler *compiler, Location *loc, const char *msg)
     Error err = {0};
     err.loc = *loc;
     err.message = msg;
-    arrPush(&compiler->errors, err);
+    arrPush(compiler, &compiler->errors, err);
 }
 
 TsCompiler *tsCompilerCreate()
@@ -16,7 +16,7 @@ TsCompiler *tsCompilerCreate()
     ts__bumpInit(&compiler->alloc, 1 << 16);
     ts__sbInit(&compiler->sb);
 
-    ts__hashInit(&compiler->keyword_table, 32);
+    ts__hashInit(compiler, &compiler->keyword_table, 32);
 
     ts__hashSet(&compiler->keyword_table, "const", (void *)TOKEN_CONST);
     ts__hashSet(&compiler->keyword_table, "return", (void *)TOKEN_RETURN);
@@ -191,7 +191,7 @@ moduleInit(Module *m, TsCompiler *compiler, const char *entry_point, TsShaderSta
     m->entry_point = entry_point;
     m->stage = stage;
 
-    ts__hashInit(&m->type_cache, 0);
+    ts__hashInit(compiler, &m->type_cache, 0);
 }
 
 static void moduleDestroy(Module *m)

@@ -16,7 +16,11 @@
 #include "GLSL.std.450.h"
 #include "tinyshader.h"
 
-void *ts__arrayGrow(void *ptr, size_t *cap, size_t wanted_cap, size_t item_size);
+#define TS__MAX(a, b) ((a) > (b) ? (a) : (b))
+#define TS__MIN(a, b) ((a) < (b) ? (a) : (b))
+
+void *ts__arrayGrow(
+    TsCompiler *compiler, void *ptr, size_t *cap, size_t wanted_cap, size_t item_size);
 
 #define ARRAY_OF(type)                                                                   \
     struct                                                                               \
@@ -32,23 +36,20 @@ void *ts__arrayGrow(void *ptr, size_t *cap, size_t wanted_cap, size_t item_size)
 
 #define arrLength(a) ((a).len)
 
-#define arrPush(a, item)                                                                 \
-    (arrFull(a) ? (a)->ptr = ts__arrayGrow((a)->ptr, &(a)->cap, 0, sizeof(*((a)->ptr)))  \
+#define arrPush(compiler, a, item)                                                       \
+    (arrFull(a) ? (a)->ptr = ts__arrayGrow(                                              \
+                      (compiler), (a)->ptr, &(a)->cap, 0, sizeof(*((a)->ptr)))           \
                 : 0,                                                                     \
      (a)->ptr[(a)->len++] = (item))
 
 #define arrPop(a) ((a)->len > 0 ? ((a)->len--, &(a)->ptr[(a)->len]) : NULL)
 
-#define arrReserve(a, capacity)                                                          \
-    (arrFull(a)                                                                          \
-         ? (a)->ptr = ts__arrayGrow((a)->ptr, &(a)->cap, capacity, sizeof(*((a)->ptr)))  \
-         : 0)
-
-#define arrFree(a)                                                                       \
+#define arrFree(compiler, a)                                                             \
     do                                                                                   \
     {                                                                                    \
-        if ((a)->ptr) free((a)->ptr);                                                    \
         (a)->ptr = NULL;                                                                 \
+        (a)->len = 0;                                                                    \
+        (a)->cap = 0;                                                                    \
     } while (0)
 
 // Rounds to the next multiple of four
@@ -68,6 +69,7 @@ void *ts__arrayGrow(void *ptr, size_t *cap, size_t wanted_cap, size_t item_size)
 
 typedef struct HashMap
 {
+    TsCompiler *compiler;
     char **keys;
     uint64_t *hashes;
     uint64_t *indices;
@@ -1270,7 +1272,7 @@ char *ts__getCurrentDir(TsCompiler *compiler);
 char *ts__pathConcat(TsCompiler *compiler, const char *a, const char *b);
 bool ts__fileExists(TsCompiler *compiler, const char *path);
 
-void ts__hashInit(HashMap *map, uint64_t size);
+void ts__hashInit(TsCompiler *compiler, HashMap *map, uint64_t size);
 void *ts__hashSet(HashMap *map, const char *key, void *value);
 bool ts__hashGet(HashMap *map, const char *key, void **result);
 void ts__hashRemove(HashMap *map, const char *key);

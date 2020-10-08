@@ -31,18 +31,35 @@ extern char **environ;
 
 #define ARRAY_INITIAL_CAPACITY 16
 
-void *ts__arrayGrow(void *ptr, size_t *cap, size_t wanted_cap, size_t item_size)
+void *ts__arrayGrow(
+    TsCompiler *compiler, void *ptr, size_t *cap, size_t wanted_cap, size_t item_size)
 {
-    if (!ptr)
+    size_t desired_cap = TS__MAX(wanted_cap, ARRAY_INITIAL_CAPACITY);
+    desired_cap = TS__MAX(desired_cap, (*cap) * 2);
+    assert(desired_cap > 0);
+    assert(desired_cap > (*cap));
+    assert(desired_cap >= wanted_cap);
+
+    void* new_arr = ts__bumpAlloc(&compiler->alloc, item_size * desired_cap);
+
+    if (ptr)
     {
-        size_t desired_cap = ((wanted_cap == 0) ? ARRAY_INITIAL_CAPACITY : wanted_cap);
-        *cap = desired_cap;
-        return malloc(item_size * desired_cap);
+        memcpy(new_arr, ptr, (*cap) * item_size);
     }
 
-    size_t desired_cap = ((wanted_cap == 0) ? ((*cap) * 2) : wanted_cap);
     *cap = desired_cap;
-    return realloc(ptr, (desired_cap * item_size));
+    return new_arr;
+
+    /* if (!ptr) */
+    /* { */
+    /*     size_t desired_cap = ((wanted_cap == 0) ? ARRAY_INITIAL_CAPACITY : wanted_cap); */
+    /*     *cap = desired_cap; */
+    /*     return malloc(item_size * desired_cap); */
+    /* } */
+
+    /* size_t desired_cap = ((wanted_cap == 0) ? ((*cap) * 2) : wanted_cap); */
+    /* *cap = desired_cap; */
+    /* return realloc(ptr, (desired_cap * item_size)); */
 }
 
 ////////////////////////////////
@@ -54,8 +71,7 @@ void *ts__arrayGrow(void *ptr, size_t *cap, size_t wanted_cap, size_t item_size)
 #if defined(_WIN32)
 static char *utf16ToUtf8(TsCompiler *compiler, const wchar_t *source)
 {
-    int required_size =
-        WideCharToMultiByte(CP_UTF8, 0, source, -1, NULL, 0, NULL, NULL);
+    int required_size = WideCharToMultiByte(CP_UTF8, 0, source, -1, NULL, 0, NULL, NULL);
     char *buf = NEW_ARRAY(compiler, char, required_size + 1);
     WideCharToMultiByte(CP_UTF8, 0, source, -1, buf, required_size, NULL, NULL);
     buf[required_size] = 0;
@@ -243,9 +259,10 @@ static inline uint64_t hashStr(const char *string)
 
 static void hashGrow(HashMap *map);
 
-void ts__hashInit(HashMap *map, uint64_t size)
+void ts__hashInit(TsCompiler *compiler, HashMap *map, uint64_t size)
 {
     memset(map, 0, sizeof(*map));
+    map->compiler = compiler;
 
     map->size = size;
     if (map->size == 0)
@@ -264,9 +281,9 @@ void ts__hashInit(HashMap *map, uint64_t size)
     map->size += 1;
 
     // Init memory
-    map->keys = malloc(sizeof(*map->keys) * map->size);
-    map->hashes = malloc(sizeof(*map->hashes) * map->size);
-    map->indices = malloc(sizeof(*map->indices) * map->size);
+    map->keys = ts__bumpAlloc(&compiler->alloc, sizeof(*map->keys) * map->size);
+    map->hashes = ts__bumpAlloc(&compiler->alloc, sizeof(*map->hashes) * map->size);
+    map->indices = ts__bumpAlloc(&compiler->alloc, sizeof(*map->indices) * map->size);
 
     memset(map->keys, 0, sizeof(*map->keys) * map->size);
     memset(map->hashes, 0, sizeof(*map->hashes) * map->size);
@@ -290,7 +307,7 @@ static uint64_t hashSetInternal(HashMap *map, const char *key, uint64_t index)
         return hashSetInternal(map, key, index);
     }
 
-    map->keys[i] = (char*)key;
+    map->keys[i] = (char *)key;
     map->hashes[i] = hash;
     map->indices[i] = index;
 
@@ -300,7 +317,7 @@ static uint64_t hashSetInternal(HashMap *map, const char *key, uint64_t index)
 void *ts__hashSet(HashMap *map, const char *key, void *value)
 {
     size_t index = arrLength(map->values);
-    arrPush(&map->values, value);
+    arrPush(map->compiler, &map->values, value);
     hashSetInternal(map, key, index);
     return map->values.ptr[index];
 }
@@ -358,9 +375,9 @@ static void hashGrow(HashMap *map)
     uint64_t *old_indices = map->indices;
 
     map->size = old_size * 2;
-    map->hashes = malloc(sizeof(*map->hashes) * map->size);
-    map->indices = malloc(sizeof(*map->indices) * map->size);
-    map->keys = malloc(sizeof(*map->keys) * map->size);
+    map->hashes = ts__bumpAlloc(&map->compiler->alloc, sizeof(*map->hashes) * map->size);
+    map->indices = ts__bumpAlloc(&map->compiler->alloc, sizeof(*map->indices) * map->size);
+    map->keys = ts__bumpAlloc(&map->compiler->alloc, sizeof(*map->keys) * map->size);
     memset(map->hashes, 0, sizeof(*map->hashes) * map->size);
     memset(map->keys, 0, sizeof(*map->keys) * map->size);
 
@@ -372,17 +389,17 @@ static void hashGrow(HashMap *map)
         }
     }
 
-    free(old_hashes);
-    free(old_indices);
-    free(old_keys);
+    /* free(old_hashes); */
+    /* free(old_indices); */
+    /* free(old_keys); */
 }
 
 void ts__hashDestroy(HashMap *map)
 {
-    free(map->hashes);
-    free(map->indices);
-    free(map->keys);
-    arrFree(&map->values);
+    /* free(map->hashes); */
+    /* free(map->indices); */
+    /* free(map->keys); */
+    arrFree(map->compiler, &map->values);
 }
 
 ////////////////////////////////
@@ -416,7 +433,7 @@ static void *blockAlloc(BumpBlock *block, size_t size)
     size_t padding = (block->pos % 8);
     if (padding > 0) padding = 8 - padding;
 
-    assert((block->size - block->pos) >= (size+padding));
+    assert((block->size - block->pos) >= (size + padding));
 
     void *data = block->data + block->pos + padding;
     assert((uintptr_t)data % 8 == 0);
@@ -443,7 +460,7 @@ void *ts__bumpAlloc(BumpAlloc *alloc, size_t size)
     if (padding > 0) padding = 8 - padding;
 
     size_t space = alloc->last_block->size - alloc->last_block->pos;
-    if (space < (size+padding))
+    if (space < (size + padding))
     {
         // Append new block
         alloc->last_block->next = malloc(sizeof(BumpBlock));

@@ -269,7 +269,7 @@ static void preprocessFile(Preprocessor *p, File *file)
                     ident[ident_length] = '\0';
 
                     void *result;
-                    arrPush(&f->if_stack, ts__hashGet(&p->defines, ident, &result));
+                    arrPush(p->compiler, &f->if_stack, ts__hashGet(&p->defines, ident, &result));
                 }
             }
             else if (strncmp(curr, "#ifndef", strlen("#ifndef")) == 0)
@@ -301,7 +301,7 @@ static void preprocessFile(Preprocessor *p, File *file)
                     ident[ident_length] = '\0';
 
                     void *result;
-                    arrPush(&f->if_stack, !ts__hashGet(&p->defines, ident, &result));
+                    arrPush(p->compiler,&f->if_stack, !ts__hashGet(&p->defines, ident, &result));
                 }
             }
             else if (strncmp(curr, "#else", strlen("#else")) == 0)
@@ -564,7 +564,7 @@ static void preprocessFile(Preprocessor *p, File *file)
         ts__addErr(p->compiler, &err_loc, "expected #endif");
     }
 
-    arrFree(&f->if_stack);
+    arrFree(p->compiler, &f->if_stack);
 }
 
 char *ts__preprocessRootFile(
@@ -572,7 +572,7 @@ char *ts__preprocessRootFile(
 {
     p->compiler = compiler;
 
-    ts__hashInit(&p->defines, 0);
+    ts__hashInit(compiler, &p->defines, 0);
 
     ts__sbInit(&p->sb);
 
@@ -1172,7 +1172,7 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
 
         if (l->token.loc.length > 0)
         {
-            arrPush(&l->tokens, l->token);
+            arrPush(l->compiler, &l->tokens, l->token);
         }
     }
 
@@ -1616,7 +1616,7 @@ static AstExpr *parseAccessFuncCall(Parser *p)
         {
             AstExpr *param = parseExpr(p);
             if (!param) return NULL;
-            arrPush(&expr->builtin_call.params, param);
+            arrPush(p->compiler, &expr->builtin_call.params, param);
 
             if (parserPeek(p, 0)->kind != TOKEN_RPAREN)
             {
@@ -1676,7 +1676,7 @@ static AstExpr *parseAccessFuncCall(Parser *p)
             {
                 AstExpr *param = parseExpr(p);
                 if (!param) return NULL;
-                arrPush(&func_call->func_call.params, param);
+                arrPush(p->compiler, &func_call->func_call.params, param);
 
                 if (parserPeek(p, 0)->kind != TOKEN_RPAREN)
                 {
@@ -1707,7 +1707,7 @@ static AstExpr *parseAccessFuncCall(Parser *p)
                 AstExpr *ident = parseIdentExpr(p);
                 if (!ident) return NULL;
 
-                arrPush(&expr->access.chain, ident);
+                arrPush(p->compiler, &expr->access.chain, ident);
             }
 
             parserEndLoc(p, &loc);
@@ -2097,7 +2097,7 @@ static AstStmt *parseStmt(Parser *p)
             AstStmt *sub_stmt = parseStmt(p);
             if (sub_stmt)
             {
-                arrPush(&stmt->block.stmts, sub_stmt);
+                arrPush(p->compiler, &stmt->block.stmts, sub_stmt);
             }
         }
 
@@ -2243,7 +2243,7 @@ static AstDecl *parseTopLevel(Parser *p)
                 AstExpr *value = parseExpr(p);
                 if (!value) return NULL;
 
-                arrPush(&attr.values, value);
+                arrPush(p->compiler, &attr.values, value);
 
                 if (parserPeek(p, 0)->kind != TOKEN_RPAREN)
                 {
@@ -2254,7 +2254,7 @@ static AstDecl *parseTopLevel(Parser *p)
             if (!parserConsume(p, TOKEN_RPAREN)) return NULL;
         }
 
-        arrPush(&attributes, attr);
+        arrPush(p->compiler, &attributes, attr);
 
         for (int i = 0; i < attr_start; ++i)
         {
@@ -2351,7 +2351,7 @@ static AstDecl *parseTopLevel(Parser *p)
 
             if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
 
-            arrPush(&decl->struct_.fields, field_decl);
+            arrPush(p->compiler, &decl->struct_.fields, field_decl);
         }
 
         if (!parserConsume(p, TOKEN_RCURLY)) return NULL;
@@ -2570,7 +2570,7 @@ static AstDecl *parseTopLevel(Parser *p)
                     param_decl->var.semantic = semantic_tok->str;
                 }
 
-                arrPush(&decl->func.all_params, param_decl);
+                arrPush(p->compiler, &decl->func.all_params, param_decl);
 
                 if (parserPeek(p, 0)->kind != TOKEN_RPAREN)
                 {
@@ -2587,7 +2587,7 @@ static AstDecl *parseTopLevel(Parser *p)
                 AstStmt *stmt = parseStmt(p);
                 if (stmt)
                 {
-                    arrPush(&decl->func.stmts, stmt);
+                    arrPush(p->compiler, &decl->func.stmts, stmt);
                 }
             }
 
@@ -2624,7 +2624,7 @@ void ts__parserParse(Parser *p, TsCompiler *compiler, Token *tokens, size_t toke
         AstDecl *decl = parseTopLevel(p);
         if (decl)
         {
-            arrPush(&p->decls, decl);
+            arrPush(p->compiler, &p->decls, decl);
         }
     }
 }

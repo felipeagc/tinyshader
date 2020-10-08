@@ -40,7 +40,6 @@ Low priority:
     tbuffer
 
 Internals:
-	make sure all allocations are freed at the end
 	some dead code elimination
 
 TODAY:
