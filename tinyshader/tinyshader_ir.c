@@ -2916,8 +2916,8 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
             {
                 irModuleBuildExpr(m, params.ptr[0]);
                 assert(params.ptr[0]->value);
-                expr->value =
-                    irBuildCast(m, ir_constructed_type, irLoadVal(m, params.ptr[0]->value));
+                expr->value = irBuildCast(
+                    m, ir_constructed_type, irLoadVal(m, params.ptr[0]->value));
             }
             else
             {
@@ -3293,6 +3293,47 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
         assert(elem_type);
         SpvOp op = {0};
 
+        IRType *ir_type = convertTypeToIR(m->mod, m, expr->type);
+
+        switch (expr->binary.op)
+        {
+        case BINOP_ADD:
+        case BINOP_SUB:
+        case BINOP_MUL:
+        case BINOP_DIV:
+        case BINOP_MOD: {
+            if (left_val->type->kind == IR_TYPE_VECTOR &&
+                right_val->type->kind != IR_TYPE_VECTOR)
+            {
+                uint32_t field_count = left_val->type->vector.size;
+
+                IRInst **fields = NEW_ARRAY(compiler, IRInst *, field_count);
+                for (uint32_t i = 0; i < field_count; ++i)
+                {
+                    fields[i] = right_val;
+                }
+                right_val = irBuildCompositeConstruct(m, ir_type, fields, field_count);
+            }
+            else if (
+                right_val->type->kind == IR_TYPE_VECTOR &&
+                left_val->type->kind != IR_TYPE_VECTOR)
+            {
+                uint32_t field_count = right_val->type->vector.size;
+
+                IRInst **fields = NEW_ARRAY(compiler, IRInst *, field_count);
+                for (uint32_t i = 0; i < field_count; ++i)
+                {
+                    fields[i] = left_val;
+                }
+                left_val = irBuildCompositeConstruct(m, ir_type, fields, field_count);
+            }
+
+            break;
+        }
+
+        default: break;
+        }
+
         switch (expr->binary.op)
         {
         case BINOP_ADD: {
@@ -3452,7 +3493,6 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
         }
         }
 
-        IRType *ir_type = convertTypeToIR(m->mod, m, expr->type);
         expr->value = irBuildBinary(m, op, ir_type, left_val, right_val);
 
         break;

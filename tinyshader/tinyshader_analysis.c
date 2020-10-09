@@ -2707,17 +2707,80 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             AstType *left_type = expr->binary.left->type;
             AstType *right_type = expr->binary.right->type;
 
-            AstType *left_scalar = ts__getScalarType(left_type);
-            AstType *right_scalar = ts__getScalarType(right_type);
-            if ((!left_scalar) || (!right_scalar) || (left_type != right_type))
+            if (!left_type || !right_type)
             {
                 ts__addErr(
                     compiler,
                     &expr->loc,
                     "invalid types for binary arithmentic operation");
+                break;
             }
 
-            expr->type = left_type;
+            AstType *left_scalar = ts__getScalarTypeNoVec(left_type);
+            AstType *right_scalar = ts__getScalarTypeNoVec(right_type);
+
+            if (left_type->kind == TYPE_VECTOR && right_type->kind == TYPE_VECTOR)
+            {
+                // Vector and vector
+                left_scalar = left_type->vector.elem_type;
+                right_scalar = right_type->vector.elem_type;
+                if (left_scalar != right_scalar || left_type->vector.size != right_type->vector.size)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "invalid types for binary arithmentic operation");
+                    break;
+                }
+
+                expr->type = left_type;
+            }
+            else if (left_scalar && right_scalar)
+            {
+                // Scalar and scalar
+                if (left_scalar != right_scalar)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "invalid types for binary arithmentic operation");
+                    break;
+                }
+
+                expr->type = left_scalar;
+            }
+            else
+            {
+                // Vector and scalar
+                AstType *vector_type = NULL;
+                AstType *scalar_type = NULL;
+                if (left_type->kind == TYPE_VECTOR)
+                {
+                    assert(!vector_type);
+                    vector_type = left_type;
+                    scalar_type = right_type;
+                }
+                if (right_type->kind == TYPE_VECTOR)
+                {
+                    assert(!vector_type);
+                    vector_type = right_type;
+                    scalar_type = left_type;
+                }
+                assert(vector_type);
+
+                if (ts__getScalarType(vector_type) != scalar_type)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "invalid types for binary arithmentic operation");
+                    break;
+                }
+
+                expr->type = vector_type;
+            }
+
+            assert(expr->type);
 
             break;
         }
