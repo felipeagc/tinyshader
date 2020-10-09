@@ -912,6 +912,8 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
         case '>': {
             if (lexerPeek(l, 1) == '=')
                 lexerAddSimpleToken(l, TOKEN_GREATEREQ, 2);
+            else if (lexerPeek(l, 1) == '>')
+                lexerAddSimpleToken(l, TOKEN_RSHIFT, 2);
             else
                 lexerAddSimpleToken(l, TOKEN_GREATER, 1);
             break;
@@ -919,6 +921,8 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
         case '<': {
             if (lexerPeek(l, 1) == '=')
                 lexerAddSimpleToken(l, TOKEN_LESSEQ, 2);
+            else if (lexerPeek(l, 1) == '<')
+                lexerAddSimpleToken(l, TOKEN_LSHIFT, 2);
             else
                 lexerAddSimpleToken(l, TOKEN_LESS, 1);
             break;
@@ -1869,9 +1873,42 @@ static AstExpr *parseAddition(Parser *p)
     return expr;
 }
 
-static AstExpr *parseComparison(Parser *p)
+static AstExpr *parseBitShift(Parser *p)
 {
     AstExpr *expr = parseAddition(p);
+    if (!expr) return NULL;
+
+    while (!parserIsAtEnd(p) &&
+           (parserPeek(p, 0)->kind == TOKEN_LSHIFT || parserPeek(p, 0)->kind == TOKEN_RSHIFT))
+    {
+        Token *op_tok = parserNext(p, 1);
+
+        AstBinaryOp op = {0};
+
+        switch (op_tok->kind)
+        {
+        case TOKEN_LSHIFT: op = BINOP_LSHIFT; break;
+        case TOKEN_RSHIFT: op = BINOP_RSHIFT; break;
+        default: assert(0); break;
+        }
+
+        AstExpr *left = expr;
+        AstExpr *right = parseAddition(p);
+        if (!right) return NULL;
+
+        expr = NEW(p->compiler, AstExpr);
+        expr->kind = EXPR_BINARY;
+        expr->binary.left = left;
+        expr->binary.right = right;
+        expr->binary.op = op;
+    }
+
+    return expr;
+}
+
+static AstExpr *parseComparison(Parser *p)
+{
+    AstExpr *expr = parseBitShift(p);
     if (!expr) return NULL;
 
     while (!parserIsAtEnd(p) && (parserPeek(p, 0)->kind == TOKEN_EQUAL ||

@@ -2720,6 +2720,26 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
             break;
         }
+
+        case BINOP_RSHIFT:
+        case BINOP_LSHIFT: {
+            if (!expr->binary.left->type || !expr->binary.right->type) break;
+
+            tryCoerceExprToScalarType(a, expr->binary.left, expr->binary.right->type);
+            tryCoerceExprToScalarType(a, expr->binary.right, expr->binary.left->type);
+
+            AstType *left_type = expr->binary.left->type;
+            AstType *right_type = expr->binary.right->type;
+
+            if (left_type->kind != TYPE_INT || right_type->kind != TYPE_INT)
+            {
+                ts__addErr(compiler, &expr->loc, "bitwise shift required both operands to be integers");
+            }
+
+            expr->type = left_type;
+
+            break;
+        }
         }
 
         break;

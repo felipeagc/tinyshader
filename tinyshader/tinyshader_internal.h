@@ -157,13 +157,13 @@ typedef enum TokenKind {
     TOKEN_ADDADD, // ++
     TOKEN_SUBSUB, // --
 
-    TOKEN_BITOR,
-    TOKEN_BITXOR,
-    TOKEN_BITAND,
-    TOKEN_BITNOT,
+    TOKEN_BITOR, // |
+    TOKEN_BITXOR, // ^
+    TOKEN_BITAND, // &
+    TOKEN_BITNOT, // ~
 
-    TOKEN_LSHIFT,
-    TOKEN_RSHIFT,
+    TOKEN_LSHIFT, // <<
+    TOKEN_RSHIFT, // >>
 
     TOKEN_PERIOD,
     TOKEN_COMMA,
@@ -879,6 +879,9 @@ typedef enum AstBinaryOp {
     BINOP_LESSEQ,
     BINOP_GREATER,
     BINOP_GREATEREQ,
+
+    BINOP_LSHIFT,
+    BINOP_RSHIFT,
 } AstBinaryOp;
 
 typedef enum AstVarKind {

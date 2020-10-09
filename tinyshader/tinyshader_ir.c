@@ -3419,6 +3419,14 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
             }
             break;
         }
+        case BINOP_LSHIFT: {
+            op = SpvOpShiftLeftLogical;
+            break;
+        }
+        case BINOP_RSHIFT: {
+            op = SpvOpShiftRightLogical;
+            break;
+        }
         }
 
         IRType *ir_type = convertTypeToIR(m->mod, m, expr->type);
