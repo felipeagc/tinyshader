@@ -1751,6 +1751,8 @@ static AstExpr *parsePostfixedUnaryExpr(Parser *p)
 {
     AstExpr *expr = parseAccessFuncCall(p);
 
+    Location loc = parserBeginLoc(p);
+
     while (parserPeek(p, 0)->kind == TOKEN_ADDADD ||
            parserPeek(p, 0)->kind == TOKEN_SUBSUB)
     {
@@ -1770,6 +1772,9 @@ static AstExpr *parsePostfixedUnaryExpr(Parser *p)
         new_expr->unary.right = expr;
         new_expr->unary.op = op;
 
+        parserEndLoc(p, &loc);
+        expr->loc = loc;
+
         expr = new_expr;
     }
 
@@ -1778,6 +1783,8 @@ static AstExpr *parsePostfixedUnaryExpr(Parser *p)
 
 static AstExpr *parsePrefixedUnaryExpr(Parser *p)
 {
+    Location loc = parserBeginLoc(p);
+
     if (parserPeek(p, 0)->kind == TOKEN_SUB || parserPeek(p, 0)->kind == TOKEN_NOT ||
         parserPeek(p, 0)->kind == TOKEN_ADDADD || parserPeek(p, 0)->kind == TOKEN_SUBSUB|| parserPeek(p, 0)->kind == TOKEN_BITNOT)
     {
@@ -1802,6 +1809,9 @@ static AstExpr *parsePrefixedUnaryExpr(Parser *p)
         expr->unary.right = right;
         expr->unary.op = op;
 
+        parserEndLoc(p, &loc);
+        expr->loc = loc;
+
         return expr;
     }
 
@@ -1810,6 +1820,8 @@ static AstExpr *parsePrefixedUnaryExpr(Parser *p)
 
 static AstExpr *parseMuliplication(Parser *p)
 {
+    Location loc = parserBeginLoc(p);
+
     AstExpr *expr = parsePrefixedUnaryExpr(p);
     if (!expr) return NULL;
 
@@ -1836,6 +1848,9 @@ static AstExpr *parseMuliplication(Parser *p)
         expr->binary.left = left;
         expr->binary.right = right;
         expr->binary.op = op;
+
+        parserEndLoc(p, &loc);
+        expr->loc = loc;
     }
 
     return expr;
@@ -1843,6 +1858,8 @@ static AstExpr *parseMuliplication(Parser *p)
 
 static AstExpr *parseAddition(Parser *p)
 {
+    Location loc = parserBeginLoc(p);
+
     AstExpr *expr = parseMuliplication(p);
     if (!expr) return NULL;
 
@@ -1869,6 +1886,9 @@ static AstExpr *parseAddition(Parser *p)
         expr->binary.left = left;
         expr->binary.right = right;
         expr->binary.op = op;
+
+        parserEndLoc(p, &loc);
+        expr->loc = loc;
     }
 
     return expr;
@@ -1876,6 +1896,8 @@ static AstExpr *parseAddition(Parser *p)
 
 static AstExpr *parseBitShift(Parser *p)
 {
+    Location loc = parserBeginLoc(p);
+
     AstExpr *expr = parseAddition(p);
     if (!expr) return NULL;
 
@@ -1902,6 +1924,9 @@ static AstExpr *parseBitShift(Parser *p)
         expr->binary.left = left;
         expr->binary.right = right;
         expr->binary.op = op;
+
+        parserEndLoc(p, &loc);
+        expr->loc = loc;
     }
 
     return expr;
@@ -1909,6 +1934,8 @@ static AstExpr *parseBitShift(Parser *p)
 
 static AstExpr *parseComparison(Parser *p)
 {
+    Location loc = parserBeginLoc(p);
+
     AstExpr *expr = parseBitShift(p);
     if (!expr) return NULL;
 
@@ -1943,6 +1970,9 @@ static AstExpr *parseComparison(Parser *p)
         expr->binary.left = left;
         expr->binary.right = right;
         expr->binary.op = op;
+
+        parserEndLoc(p, &loc);
+        expr->loc = loc;
     }
 
     return expr;
@@ -1950,6 +1980,8 @@ static AstExpr *parseComparison(Parser *p)
 
 static AstExpr *parseBitAnd(Parser *p)
 {
+    Location loc = parserBeginLoc(p);
+
     AstExpr *expr = parseComparison(p);
     if (!expr) return NULL;
 
@@ -1974,6 +2006,9 @@ static AstExpr *parseBitAnd(Parser *p)
         expr->binary.left = left;
         expr->binary.right = right;
         expr->binary.op = op;
+
+        parserEndLoc(p, &loc);
+        expr->loc = loc;
     }
 
     return expr;
@@ -1981,6 +2016,8 @@ static AstExpr *parseBitAnd(Parser *p)
 
 static AstExpr *parseBitXor(Parser *p)
 {
+    Location loc = parserBeginLoc(p);
+
     AstExpr *expr = parseBitAnd(p);
     if (!expr) return NULL;
 
@@ -2005,6 +2042,9 @@ static AstExpr *parseBitXor(Parser *p)
         expr->binary.left = left;
         expr->binary.right = right;
         expr->binary.op = op;
+
+        parserEndLoc(p, &loc);
+        expr->loc = loc;
     }
 
     return expr;
@@ -2012,6 +2052,8 @@ static AstExpr *parseBitXor(Parser *p)
 
 static AstExpr *parseBitOr(Parser *p)
 {
+    Location loc = parserBeginLoc(p);
+
     AstExpr *expr = parseBitXor(p);
     if (!expr) return NULL;
 
@@ -2036,6 +2078,9 @@ static AstExpr *parseBitOr(Parser *p)
         expr->binary.left = left;
         expr->binary.right = right;
         expr->binary.op = op;
+
+        parserEndLoc(p, &loc);
+        expr->loc = loc;
     }
 
     return expr;
@@ -2663,6 +2708,8 @@ static AstDecl *parseTopLevel(Parser *p)
 
             while (parserPeek(p, 0)->kind != TOKEN_RPAREN)
             {
+                Location param_decl_loc = parserBeginLoc(p);
+
                 AstVarKind var_kind = VAR_PLAIN;
 
                 if (parserPeek(p, 0)->kind == TOKEN_IN)
@@ -2700,6 +2747,9 @@ static AstDecl *parseTopLevel(Parser *p)
                     if (!semantic_tok) return NULL;
                     param_decl->var.semantic = semantic_tok->str;
                 }
+
+                parserEndLoc(p, &param_decl_loc);
+                param_decl->loc = param_decl_loc;
 
                 arrPush(p->compiler, &decl->func.all_params, param_decl);
 
