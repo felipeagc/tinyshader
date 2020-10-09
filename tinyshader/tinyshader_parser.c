@@ -1779,7 +1779,7 @@ static AstExpr *parsePostfixedUnaryExpr(Parser *p)
 static AstExpr *parsePrefixedUnaryExpr(Parser *p)
 {
     if (parserPeek(p, 0)->kind == TOKEN_SUB || parserPeek(p, 0)->kind == TOKEN_NOT ||
-        parserPeek(p, 0)->kind == TOKEN_ADDADD || parserPeek(p, 0)->kind == TOKEN_SUBSUB)
+        parserPeek(p, 0)->kind == TOKEN_ADDADD || parserPeek(p, 0)->kind == TOKEN_SUBSUB|| parserPeek(p, 0)->kind == TOKEN_BITNOT)
     {
         Token *op_tok = parserNext(p, 1);
 
@@ -1791,6 +1791,7 @@ static AstExpr *parsePrefixedUnaryExpr(Parser *p)
         case TOKEN_NOT: op = UNOP_NOT; break;
         case TOKEN_ADDADD: op = UNOP_PRE_INC; break;
         case TOKEN_SUBSUB: op = UNOP_PRE_DEC; break;
+        case TOKEN_BITNOT: op = UNOP_BITNOT; break;
         default: assert(0); break;
         }
 

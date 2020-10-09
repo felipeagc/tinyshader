@@ -2649,6 +2649,25 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
             break;
         }
+
+        case UNOP_BITNOT: {
+            analyzerAnalyzeExpr(a, expr->unary.right, NULL);
+            if (!expr->unary.right->type) break;
+            AstType *right_type = expr->unary.right->type;
+
+            if (right_type->kind != TYPE_INT)
+            {
+                ts__addErr(
+                    compiler,
+                    &expr->unary.right->loc,
+                    "\'bitwise not\' expression only works on integer types");
+                break;
+            }
+
+            expr->type = right_type;
+
+            break;
+        }
         }
 
         break;

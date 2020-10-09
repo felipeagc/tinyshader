@@ -3127,6 +3127,8 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
         }
 
         case UNOP_NOT: {
+            assert(0); // TODO: broken: use SpvINotEqual + SpvOpLogicalNot
+
             irModuleBuildExpr(m, expr->unary.right);
             IRInst *right_val = irLoadVal(m, expr->unary.right->value);
 
@@ -3266,6 +3268,15 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
             }
 
             expr->value = right_val;
+            break;
+        }
+
+        case UNOP_BITNOT: {
+            irModuleBuildExpr(m, expr->unary.right);
+            IRInst *right_val = irLoadVal(m, expr->unary.right->value);
+
+            IRType *ir_type = convertTypeToIR(m->mod, m, expr->type);
+            expr->value = irBuildUnary(m, SpvOpNot, ir_type, right_val);
             break;
         }
         }
