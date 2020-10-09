@@ -1954,6 +1954,36 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             break;
         }
 
+        case IR_BUILTIN_FRAC: {
+            if (param_count != 1)
+            {
+                ts__addErr(compiler, &expr->loc, "frac takes 1 parameter");
+                break;
+            }
+
+            if (expected_type &&
+                canCoerceExprToScalarType(a, params.ptr[0], expected_type))
+            {
+                tryCoerceExprToScalarType(a, params.ptr[0], expected_type);
+            }
+
+            if (!params.ptr[0]->type) break;
+
+            AstType *scalar_type = ts__getScalarType(params.ptr[0]->type);
+            if (!scalar_type || scalar_type->kind != TYPE_FLOAT)
+            {
+                ts__addErr(
+                    compiler,
+                    &expr->loc,
+                    "frac operates on vectors or scalars of floating point types");
+                break;
+            }
+
+            expr->type = params.ptr[0]->type;
+
+            break;
+        }
+
         case IR_BUILTIN_LERP: {
             if (param_count != 3)
             {
@@ -2724,7 +2754,8 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 // Vector and vector
                 left_scalar = left_type->vector.elem_type;
                 right_scalar = right_type->vector.elem_type;
-                if (left_scalar != right_scalar || left_type->vector.size != right_type->vector.size)
+                if (left_scalar != right_scalar ||
+                    left_type->vector.size != right_type->vector.size)
                 {
                     ts__addErr(
                         compiler,
@@ -2855,7 +2886,8 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 ts__addErr(
                     compiler,
                     &expr->loc,
-                    "bitwise logical operator requires both operands to be integers of equal type");
+                    "bitwise logical operator requires both operands to be integers of "
+                    "equal type");
             }
 
             expr->type = left_type;
