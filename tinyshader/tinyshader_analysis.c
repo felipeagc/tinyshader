@@ -2004,10 +2004,13 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             break;
         }
 
+        case IR_BUILTIN_TRUNC:
+        case IR_BUILTIN_CEIL:
+        case IR_BUILTIN_FLOOR:
         case IR_BUILTIN_FRAC: {
             if (param_count != 1)
             {
-                ts__addErr(compiler, &expr->loc, "frac takes 1 parameter");
+                ts__addErr(compiler, &expr->loc, "frac/ceil/trunc/floor take 1 parameter");
                 break;
             }
 
@@ -2025,7 +2028,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 ts__addErr(
                     compiler,
                     &expr->loc,
-                    "frac operates on vectors or scalars of floating point types");
+                    "frac/ceil/trunc/floor operates on vectors or scalars of floating point types");
                 break;
             }
 

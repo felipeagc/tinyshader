@@ -84,6 +84,9 @@ TsCompiler *tsCompilerCreate()
     ts__hashSet(&compiler->keyword_table, "min", (void *)TOKEN_BUILTIN_MIN);
     ts__hashSet(&compiler->keyword_table, "max", (void *)TOKEN_BUILTIN_MAX);
     ts__hashSet(&compiler->keyword_table, "frac", (void *)TOKEN_BUILTIN_FRAC);
+    ts__hashSet(&compiler->keyword_table, "trunc", (void *)TOKEN_BUILTIN_TRUNC);
+    ts__hashSet(&compiler->keyword_table, "ceil", (void *)TOKEN_BUILTIN_CEIL);
+    ts__hashSet(&compiler->keyword_table, "floor", (void *)TOKEN_BUILTIN_FLOOR);
     ts__hashSet(&compiler->keyword_table, "lerp", (void *)TOKEN_BUILTIN_LERP);
     ts__hashSet(&compiler->keyword_table, "clamp", (void *)TOKEN_BUILTIN_CLAMP);
     ts__hashSet(&compiler->keyword_table, "step", (void *)TOKEN_BUILTIN_STEP);
