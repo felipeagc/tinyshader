@@ -883,6 +883,10 @@ typedef enum AstBinaryOp {
 
     BINOP_LSHIFT,
     BINOP_RSHIFT,
+
+    BINOP_BITOR,
+    BINOP_BITAND,
+    BINOP_BITXOR,
 } AstBinaryOp;
 
 typedef enum AstVarKind {

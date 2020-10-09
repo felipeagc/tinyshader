@@ -24,8 +24,6 @@ Language features:
     && ||
     static variables
 
-    bitwise operators
-
 	struct literals
 	arrays
 	typedefs

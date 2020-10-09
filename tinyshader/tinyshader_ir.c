@@ -3438,6 +3438,18 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
             op = SpvOpShiftRightLogical;
             break;
         }
+        case BINOP_BITXOR: {
+            op = SpvOpBitwiseXor;
+            break;
+        }
+        case BINOP_BITOR: {
+            op = SpvOpBitwiseOr;
+            break;
+        }
+        case BINOP_BITAND: {
+            op = SpvOpBitwiseAnd;
+            break;
+        }
         }
 
         IRType *ir_type = convertTypeToIR(m->mod, m, expr->type);

@@ -816,7 +816,8 @@ static void analyzerPopScope(Analyzer *a, Scope *scope)
     a->scope_func = NULL;
     for (uint32_t i = 0; i < arrLength(a->scope_stack); ++i)
     {
-        if (a->scope_stack.ptr[i]->owner && a->scope_stack.ptr[i]->owner->kind == DECL_FUNC)
+        if (a->scope_stack.ptr[i]->owner &&
+            a->scope_stack.ptr[i]->owner->kind == DECL_FUNC)
         {
             a->scope_func = a->scope_stack.ptr[i]->owner;
         }
@@ -1191,7 +1192,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             char *method_name = method_name_expr->ident.name;
 
             // Remove last element from access (the method name)
-            arrPop(&func_expr->access.chain); 
+            arrPop(&func_expr->access.chain);
 
             if (arrLength(func_expr->access.chain) == 0)
             {
@@ -1291,7 +1292,8 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 }
                 else if (param_count == 1)
                 {
-                    analyzerAnalyzeExpr(a, params.ptr[0], constructed_type->vector.elem_type);
+                    analyzerAnalyzeExpr(
+                        a, params.ptr[0], constructed_type->vector.elem_type);
                 }
                 else
                 {
@@ -1308,7 +1310,9 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 if (!isTypeCastable(params.ptr[0]->type, constructed_type))
                 {
                     ts__addErr(
-                        compiler, &params.ptr[0]->loc, "value is not castable to this type");
+                        compiler,
+                        &params.ptr[0]->loc,
+                        "value is not castable to this type");
                     break;
                 }
             }
@@ -1917,7 +1921,8 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            if (expected_type && canCoerceExprToScalarType(a, params.ptr[0], expected_type) &&
+            if (expected_type &&
+                canCoerceExprToScalarType(a, params.ptr[0], expected_type) &&
                 canCoerceExprToScalarType(a, params.ptr[1], expected_type))
             {
                 tryCoerceExprToScalarType(a, params.ptr[0], expected_type);
@@ -1956,7 +1961,8 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            if (expected_type && canCoerceExprToScalarType(a, params.ptr[0], expected_type) &&
+            if (expected_type &&
+                canCoerceExprToScalarType(a, params.ptr[0], expected_type) &&
                 canCoerceExprToScalarType(a, params.ptr[1], expected_type) &&
                 canCoerceExprToScalarType(a, params.ptr[2], expected_type))
             {
@@ -1999,7 +2005,8 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            if (expected_type && canCoerceExprToScalarType(a, params.ptr[0], expected_type) &&
+            if (expected_type &&
+                canCoerceExprToScalarType(a, params.ptr[0], expected_type) &&
                 canCoerceExprToScalarType(a, params.ptr[1], expected_type) &&
                 canCoerceExprToScalarType(a, params.ptr[2], expected_type))
             {
@@ -2314,11 +2321,13 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            if (!params.ptr[0]->type || !params.ptr[1]->type || !params.ptr[2]->type) break;
+            if (!params.ptr[0]->type || !params.ptr[1]->type || !params.ptr[2]->type)
+                break;
 
             tryCoerceExprToScalarType(a, params.ptr[1], params.ptr[0]->type);
 
-            if (params.ptr[0]->type != params.ptr[1]->type || params.ptr[0]->type != params.ptr[2]->type)
+            if (params.ptr[0]->type != params.ptr[1]->type ||
+                params.ptr[0]->type != params.ptr[2]->type)
             {
                 ts__addErr(
                     compiler,
@@ -2378,7 +2387,8 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             tryCoerceExprToScalarType(a, params.ptr[2], params.ptr[0]->type);
 
             if (params.ptr[0]->type != params.ptr[1]->type ||
-                params.ptr[0]->type != params.ptr[2]->type || params.ptr[0]->type != params.ptr[3]->type)
+                params.ptr[0]->type != params.ptr[2]->type ||
+                params.ptr[0]->type != params.ptr[3]->type)
             {
                 ts__addErr(
                     compiler,
@@ -2430,12 +2440,14 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            if (!params.ptr[0]->type || !params.ptr[1]->type || !params.ptr[2]->type) break;
+            if (!params.ptr[0]->type || !params.ptr[1]->type || !params.ptr[2]->type)
+                break;
 
             tryCoerceExprToScalarType(a, params.ptr[1], params.ptr[0]->type);
             tryCoerceExprToScalarType(a, params.ptr[2], params.ptr[0]->type);
 
-            if (params.ptr[0]->type != params.ptr[1]->type || params.ptr[0]->type != params.ptr[2]->type)
+            if (params.ptr[0]->type != params.ptr[1]->type ||
+                params.ptr[0]->type != params.ptr[2]->type)
             {
                 ts__addErr(
                     compiler,
@@ -2752,7 +2764,35 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
             if (left_type->kind != TYPE_INT || right_type->kind != TYPE_INT)
             {
-                ts__addErr(compiler, &expr->loc, "bitwise shift required both operands to be integers");
+                ts__addErr(
+                    compiler,
+                    &expr->loc,
+                    "bitwise shift requires both operands to be integers");
+            }
+
+            expr->type = left_type;
+
+            break;
+        }
+
+        case BINOP_BITXOR:
+        case BINOP_BITOR:
+        case BINOP_BITAND: {
+            if (!expr->binary.left->type || !expr->binary.right->type) break;
+
+            tryCoerceExprToScalarType(a, expr->binary.left, expr->binary.right->type);
+            tryCoerceExprToScalarType(a, expr->binary.right, expr->binary.left->type);
+
+            AstType *left_type = expr->binary.left->type;
+            AstType *right_type = expr->binary.right->type;
+
+            if (left_type->kind != TYPE_INT || right_type->kind != TYPE_INT ||
+                left_type != right_type)
+            {
+                ts__addErr(
+                    compiler,
+                    &expr->loc,
+                    "bitwise logical operator requires both operands to be integers of equal type");
             }
 
             expr->type = left_type;
@@ -3426,8 +3466,8 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
         analyzerPopScope(a, decl->scope);
 
         decl->type = newBasicType(m, TYPE_TYPE);
-        decl->as_type =
-            newStructType(m, decl->name, field_types, decl->struct_.fields.ptr, field_count);
+        decl->as_type = newStructType(
+            m, decl->name, field_types, decl->struct_.fields.ptr, field_count);
 
         for (uint32_t i = 0; i < arrLength(decl->struct_.fields); ++i)
         {

@@ -1935,7 +1935,100 @@ static AstExpr *parseComparison(Parser *p)
         }
 
         AstExpr *left = expr;
-        AstExpr *right = parseAddition(p);
+        AstExpr *right = parseBitShift(p);
+        if (!right) return NULL;
+
+        expr = NEW(p->compiler, AstExpr);
+        expr->kind = EXPR_BINARY;
+        expr->binary.left = left;
+        expr->binary.right = right;
+        expr->binary.op = op;
+    }
+
+    return expr;
+}
+
+static AstExpr *parseBitAnd(Parser *p)
+{
+    AstExpr *expr = parseComparison(p);
+    if (!expr) return NULL;
+
+    while (!parserIsAtEnd(p) && (parserPeek(p, 0)->kind == TOKEN_BITAND))
+    {
+        Token *op_tok = parserNext(p, 1);
+
+        AstBinaryOp op = {0};
+
+        switch (op_tok->kind)
+        {
+        case TOKEN_BITAND: op = BINOP_BITAND; break;
+        default: assert(0); break;
+        }
+
+        AstExpr *left = expr;
+        AstExpr *right = parseComparison(p);
+        if (!right) return NULL;
+
+        expr = NEW(p->compiler, AstExpr);
+        expr->kind = EXPR_BINARY;
+        expr->binary.left = left;
+        expr->binary.right = right;
+        expr->binary.op = op;
+    }
+
+    return expr;
+}
+
+static AstExpr *parseBitXor(Parser *p)
+{
+    AstExpr *expr = parseBitAnd(p);
+    if (!expr) return NULL;
+
+    while (!parserIsAtEnd(p) && (parserPeek(p, 0)->kind == TOKEN_BITXOR))
+    {
+        Token *op_tok = parserNext(p, 1);
+
+        AstBinaryOp op = {0};
+
+        switch (op_tok->kind)
+        {
+        case TOKEN_BITXOR: op = BINOP_BITXOR; break;
+        default: assert(0); break;
+        }
+
+        AstExpr *left = expr;
+        AstExpr *right = parseBitAnd(p);
+        if (!right) return NULL;
+
+        expr = NEW(p->compiler, AstExpr);
+        expr->kind = EXPR_BINARY;
+        expr->binary.left = left;
+        expr->binary.right = right;
+        expr->binary.op = op;
+    }
+
+    return expr;
+}
+
+static AstExpr *parseBitOr(Parser *p)
+{
+    AstExpr *expr = parseBitXor(p);
+    if (!expr) return NULL;
+
+    while (!parserIsAtEnd(p) && (parserPeek(p, 0)->kind == TOKEN_BITOR))
+    {
+        Token *op_tok = parserNext(p, 1);
+
+        AstBinaryOp op = {0};
+
+        switch (op_tok->kind)
+        {
+        case TOKEN_BITOR: op = BINOP_BITOR; break;
+        default: assert(0); break;
+        }
+
+        AstExpr *left = expr;
+        AstExpr *right = parseBitXor(p);
         if (!right) return NULL;
 
         expr = NEW(p->compiler, AstExpr);
@@ -1950,7 +2043,7 @@ static AstExpr *parseComparison(Parser *p)
 
 static AstExpr *parseExpr(Parser *p)
 {
-    return parseComparison(p);
+    return parseBitOr(p);
 }
 
 static AstStmt *parseStmt(Parser *p)
