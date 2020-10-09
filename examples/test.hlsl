@@ -42,8 +42,31 @@ void otherFunc(inout float3 pos)
 	pos.x = pos.x * SOME_CONST;
 }
 
-void vertex(in float3 pos : Heyy, out float3 out_pos : AAA)
+float rand(float2 uv)
 {
+	return frac(sin(dot(uv.xy, float2(12.9898,78.233))) * 43758.5453);
+}
+
+void vertex(
+	in uint vertexIndex : SV_VertexID,
+	in float3 pos : Heyy,
+	out float4 out_pos : SV_Position,
+	out float2 out_uv : AAA)
+{
+	/* uint a = (vertexIndex << 1) & 2; */
+
+	float3x3 my_matrix = float3x3(1, 2, 3, 4, 5, 6, 7, 8, 9);
+
+	out_uv = float2(float((vertexIndex << 1) & 2), float(vertexIndex & 2));
+	float2 temp = out_uv * 2.0 - 1.0;
+    out_pos = float4(temp.x, temp.y, 0.0, 1.0);
+
+	float noise = rand(out_uv);
+	float2 a = sin(float2(1, 1));
+
+	/* out_uv = float2((vertexIndex << 1) & 2, vertexIndex & 2); */
+    /* out_pos = float4(out_uv * 2.0f - 1.0f, 0.0f, 1.0f); */
+
 	// float aaaaaaa = HELLO;
 	// int other = 12;
 	// int hello = 777777;
@@ -107,7 +130,7 @@ void vertex(in float3 pos : Heyy, out float3 out_pos : AAA)
 	// }
 }
 
-void pixel(in float3 pos : POSITION, in float2 uv : TEXCOORD0, out float4 color : SV_Target)
+void pixel(in float4 pos : POSITION, in float2 uv : TEXCOORD0, out float4 color : SV_Target)
 {
     for (; pos.x > 0;) {
         if (pos.x <= 123)

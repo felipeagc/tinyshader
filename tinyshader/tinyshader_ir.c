@@ -2879,55 +2879,70 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
             uint32_t param_count = arrLength(expr->func_call.params);
             ArrayOfAstExprPtr params = expr->func_call.params;
 
-            if (constructed_type->kind == TYPE_VECTOR)
+            switch (constructed_type->kind)
             {
-                if (param_count == constructed_type->vector.size)
+            case TYPE_VECTOR: {
+                assert(constructed_type->vector.size == param_count);
+                IRInst **fields =
+                    NEW_ARRAY(compiler, IRInst *, constructed_type->vector.size);
+
+                for (uint32_t i = 0; i < param_count; ++i)
                 {
-                    IRInst **fields =
-                        NEW_ARRAY(compiler, IRInst *, constructed_type->vector.size);
-
-                    for (uint32_t i = 0; i < constructed_type->vector.size; ++i)
-                    {
-                        irModuleBuildExpr(m, params.ptr[i]);
-                        assert(params.ptr[i]->value);
-                        fields[i] = irLoadVal(m, params.ptr[i]->value);
-                    }
-
-                    expr->value = irBuildCompositeConstruct(
-                        m, ir_constructed_type, fields, constructed_type->vector.size);
+                    irModuleBuildExpr(m, params.ptr[i]);
+                    assert(params.ptr[i]->value);
+                    fields[i] = irLoadVal(m, params.ptr[i]->value);
                 }
-                else if (param_count == 1)
-                {
-                    IRInst **fields =
-                        NEW_ARRAY(compiler, IRInst *, constructed_type->vector.size);
 
-                    irModuleBuildExpr(m, params.ptr[0]);
-                    assert(params.ptr[0]->value);
-                    IRInst *field_val = irLoadVal(m, params.ptr[0]->value);
-
-                    for (uint32_t i = 0; i < constructed_type->vector.size; ++i)
-                    {
-                        fields[i] = field_val;
-                    }
-
-                    expr->value = irBuildCompositeConstruct(
-                        m, ir_constructed_type, fields, constructed_type->vector.size);
-                }
-                else
-                {
-                    assert(0);
-                }
+                expr->value = irBuildCompositeConstruct(
+                    m, ir_constructed_type, fields, constructed_type->vector.size);
+                break;
             }
-            else if (param_count == 1)
-            {
+            case TYPE_MATRIX: {
+                AstType *col_type = constructed_type->matrix.col_type;
+                assert(col_type->kind == TYPE_VECTOR);
+
+                uint32_t col_count = constructed_type->matrix.col_count;
+                uint32_t col_size = col_type->vector.size;
+
+                uint32_t matrix_elem_count = col_size * col_count;
+                assert(matrix_elem_count == param_count);
+
+                IRInst **columns = NEW_ARRAY(compiler, IRInst *, col_count);
+
+                for (uint32_t i = 0; i < col_count; ++i)
+                {
+                    IRInst **col_fields = NEW_ARRAY(compiler, IRInst *, col_size);
+                    for (uint32_t j = 0; j < col_size; ++j)
+                    {
+                        AstExpr* elem = params.ptr[i * col_size + j];
+
+                        irModuleBuildExpr(m, elem);
+                        assert(elem->value);
+                        col_fields[j] = irLoadVal(m, elem->value);
+                    }
+
+                    columns[i] = irBuildCompositeConstruct(
+                        m, ir_constructed_type->matrix.col_type, col_fields, col_size);
+                }
+
+                expr->value =
+                    irBuildCompositeConstruct(m, ir_constructed_type, columns, col_count);
+                break;
+            }
+            case TYPE_INT:
+            case TYPE_FLOAT: {
+                assert(param_count == 1);
+
                 irModuleBuildExpr(m, params.ptr[0]);
                 assert(params.ptr[0]->value);
                 expr->value = irBuildCast(
                     m, ir_constructed_type, irLoadVal(m, params.ptr[0]->value));
+                break;
             }
-            else
-            {
+            default: {
                 assert(0);
+                break;
+            }
             }
         }
         else

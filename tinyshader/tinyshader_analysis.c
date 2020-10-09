@@ -1280,34 +1280,87 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             uint32_t param_count = arrLength(expr->func_call.params);
             ArrayOfAstExprPtr params = expr->func_call.params;
 
-            if (constructed_type->kind == TYPE_VECTOR)
+            AstType *wanted_elem_type = NULL;
+            uint32_t wanted_param_count = 0;
+
+            switch (constructed_type->kind)
             {
-                if (param_count == constructed_type->vector.size)
-                {
-                    for (uint32_t i = 0; i < param_count; ++i)
-                    {
-                        analyzerAnalyzeExpr(
-                            a, params.ptr[i], constructed_type->vector.elem_type);
-                    }
-                }
-                else if (param_count == 1)
-                {
-                    analyzerAnalyzeExpr(
-                        a, params.ptr[0], constructed_type->vector.elem_type);
-                }
-                else
+            case TYPE_VECTOR: {
+                wanted_param_count = constructed_type->vector.size;
+                wanted_elem_type = constructed_type->vector.elem_type;
+
+                if (!a->scope_func)
                 {
                     ts__addErr(
-                        compiler, &expr->loc, "invalid parameter count for constructor");
+                        compiler,
+                        &expr->loc,
+                        "composite constructor needs to be inside a function");
                     break;
                 }
-            }
-            else if (param_count == 1)
-            {
-                analyzerAnalyzeExpr(a, params.ptr[0], NULL);
-                if (!params.ptr[0]->type) break;
 
-                if (!isTypeCastable(params.ptr[0]->type, constructed_type))
+                if (param_count != wanted_param_count)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "invalid composite constructor parameter count");
+                    break;
+                }
+
+                for (uint32_t i = 0; i < param_count; ++i)
+                {
+                    analyzerAnalyzeExpr(a, params.ptr[i], wanted_elem_type);
+                }
+                break;
+            }
+            case TYPE_MATRIX: {
+                AstType *col_type = constructed_type->matrix.col_type;
+                assert(col_type->kind == TYPE_VECTOR);
+                wanted_param_count =
+                    constructed_type->matrix.col_count * col_type->vector.size;
+                wanted_elem_type = col_type->vector.elem_type;
+
+                if (!a->scope_func)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "composite constructor needs to be inside a function");
+                    break;
+                }
+
+                if (param_count != wanted_param_count)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "invalid composite constructor parameter count");
+                    break;
+                }
+
+                for (uint32_t i = 0; i < param_count; ++i)
+                {
+                    analyzerAnalyzeExpr(a, params.ptr[i], wanted_elem_type);
+                }
+                break;
+            }
+            case TYPE_INT:
+            case TYPE_FLOAT: {
+                wanted_elem_type = constructed_type;
+                wanted_param_count = 1;
+
+                if (param_count != wanted_param_count)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "invalid composite constructor parameter count");
+                    break;
+                }
+
+                analyzerAnalyzeExpr(a, params.ptr[0], NULL);
+
+                if (!isTypeCastable(params.ptr[0]->type, wanted_elem_type))
                 {
                     ts__addErr(
                         compiler,
@@ -1315,11 +1368,13 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                         "value is not castable to this type");
                     break;
                 }
+
+                break;
             }
-            else
-            {
+            default: {
                 ts__addErr(compiler, &expr->loc, "invalid constructor");
                 break;
+            }
             }
         }
         else if (func_type->kind == TYPE_FUNC)
