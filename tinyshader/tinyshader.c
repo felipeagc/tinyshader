@@ -273,6 +273,11 @@ void tsCompile(TsCompiler *compiler, TsCompilerInput *input, TsCompilerOutput *o
 
     size_t word_count;
     uint32_t *words = ts__irModuleCodegen(module, &word_count);
+    if (handleErrors(compiler, output))
+    {
+        if (words) free(words);
+        return;
+    }
 
     output->spirv_byte_size = word_count * 4;
     output->spirv = (uint8_t *)words;

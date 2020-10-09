@@ -1055,6 +1055,8 @@ irBuildFuncCall(IRModule *m, IRInst *function, IRInst **params, uint32_t param_c
     inst->type = function->type->func.return_type;
     assert(inst->type);
 
+    assert(param_count == function->type->func.param_count);
+
     inst->func_call.func = function;
     inst->func_call.params = params;
     inst->func_call.param_count = param_count;
@@ -2914,7 +2916,7 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
                     IRInst **col_fields = NEW_ARRAY(compiler, IRInst *, col_size);
                     for (uint32_t j = 0; j < col_size; ++j)
                     {
-                        AstExpr* elem = params.ptr[i * col_size + j];
+                        AstExpr *elem = params.ptr[i * col_size + j];
 
                         irModuleBuildExpr(m, elem);
                         assert(elem->value);
@@ -2963,7 +2965,17 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
                 irModuleBuildExpr(m, param);
                 assert(param->value);
                 param_values[i] = param->value;
-                if (func_type->func.params[i]->kind != TYPE_POINTER)
+                if (func_type->func.params[i]->kind == TYPE_POINTER)
+                {
+                    if (!isLvalue(param_values[i]))
+                    {
+                        ts__addErr(
+                            compiler,
+                            &param->loc,
+                            "function parameter needs to be an lvalue");
+                    }
+                }
+                else
                 {
                     param_values[i] = irLoadVal(m, param_values[i]);
                 }
