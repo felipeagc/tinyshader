@@ -2900,6 +2900,8 @@ static void analyzerAnalyzeStmt(Analyzer *a, AstStmt *stmt)
 
     case STMT_RETURN: {
         assert(a->scope_func);
+        if (!a->scope_func->type) break;
+
         AstType *return_type = a->scope_func->type->func.return_type;
 
         if (return_type->kind == TYPE_VOID && stmt->return_.value)
