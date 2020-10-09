@@ -1631,21 +1631,16 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
             tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
 
-            AstExpr *a = params.ptr[0];
+            AstType *scalar_type = ts__getScalarType(params.ptr[0]->type);
 
-            if (a->kind == EXPR_PRIMARY && a->type->kind == TYPE_INT)
-            {
-                a->type = newFloatType(m, 32);
-            }
-
-            if (a->type->kind != TYPE_FLOAT)
+            if (scalar_type->kind != TYPE_FLOAT)
             {
                 ts__addErr(
                     compiler, &expr->loc, "trigonometric functions operate on floats");
                 break;
             }
 
-            expr->type = a->type;
+            expr->type = params.ptr[0]->type;
             break;
         }
 
