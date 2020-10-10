@@ -901,6 +901,7 @@ typedef enum AstVarKind {
     VAR_PLAIN = 0,
     VAR_UNIFORM,
     VAR_GROUPSHARED,
+    VAR_PARAM,
     VAR_IN_PARAM,
     VAR_OUT_PARAM,
     VAR_INOUT_PARAM,

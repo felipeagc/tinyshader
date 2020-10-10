@@ -2726,7 +2726,7 @@ static AstDecl *parseTopLevel(Parser *p)
             {
                 Location param_decl_loc = parserBeginLoc(p);
 
-                AstVarKind var_kind = VAR_PLAIN;
+                AstVarKind var_kind = VAR_PARAM;
 
                 if (parserPeek(p, 0)->kind == TOKEN_IN)
                 {

@@ -3932,10 +3932,22 @@ static void irModuleBuildDecl(IRModule *m, AstDecl *decl)
         IRInst **old_inputs =
             NEW_ARRAY(m->compiler, IRInst *, arrLength(decl->func.inputs));
 
+        IRInst **old_func_params =
+            NEW_ARRAY(m->compiler, IRInst *, arrLength(decl->func.func_params));
+
         for (uint32_t i = 0; i < arrLength(decl->func.inputs); ++i)
         {
             AstDecl *var = decl->func.inputs.ptr[i];
             old_inputs[i] = var->value;
+
+            IRType *ir_type = convertTypeToIR(m->mod, m, var->type);
+            var->value = irBuildAlloca(m, ir_type);
+        }
+
+        for (uint32_t i = 0; i < arrLength(decl->func.func_params); ++i)
+        {
+            AstDecl *var = decl->func.func_params.ptr[i];
+            old_func_params[i] = var->value;
 
             IRType *ir_type = convertTypeToIR(m->mod, m, var->type);
             var->value = irBuildAlloca(m, ir_type);
@@ -3953,6 +3965,13 @@ static void irModuleBuildDecl(IRModule *m, AstDecl *decl)
             AstDecl *var = decl->func.inputs.ptr[i];
             IRInst *loaded = irBuildLoad(m, old_inputs[i]);
             irBuildStore(m, var->value, loaded);
+        }
+
+        for (uint32_t i = 0; i < arrLength(decl->func.func_params); ++i)
+        {
+            AstDecl *var = decl->func.func_params.ptr[i];
+            assert(!isLvalue(old_func_params[i]));
+            irBuildStore(m, var->value, old_func_params[i]);
         }
 
         for (uint32_t i = 0; i < arrLength(decl->func.stmts); ++i)
