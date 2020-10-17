@@ -39,4 +39,9 @@ void main(
     float3 e = asfloat(c);
     int3 f = asint(e);
     int3 g = asint(f);
+
+    float2x4 view;
+    view[0][3] = 0.0;
+    view[1][3] = 0.0;
+    view[1][3] = 0.0;
 }

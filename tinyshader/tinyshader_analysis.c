@@ -596,6 +596,8 @@ static bool isTypeCastable(AstType *src_type, AstType *dst_type)
 
 AstType *ts__getScalarType(AstType *type)
 {
+    if (!type) return NULL;
+
     switch (type->kind)
     {
     case TYPE_FLOAT:
@@ -615,6 +617,8 @@ AstType *ts__getScalarType(AstType *type)
 
 AstType *ts__getScalarTypeNoVec(AstType *type)
 {
+    if (!type) return NULL;
+
     switch (type->kind)
     {
     case TYPE_FLOAT:
@@ -631,6 +635,8 @@ AstType *ts__getScalarTypeNoVec(AstType *type)
 // Returns a type that can be used in a comparison operation
 AstType *ts__getComparableType(AstType *type)
 {
+    if (!type) return NULL;
+
     switch (type->kind)
     {
     case TYPE_FLOAT:
@@ -648,6 +654,8 @@ AstType *ts__getComparableType(AstType *type)
 // Returns a type that can be used in a logical operation
 AstType *ts__getLogicalType(AstType *type)
 {
+    if (!type) return NULL;
+
     switch (type->kind)
     {
     case TYPE_BOOL:
@@ -663,6 +671,8 @@ AstType *ts__getLogicalType(AstType *type)
 
 AstType *ts__getElemType(AstType *type)
 {
+    if (!type) return NULL;
+
     switch (type->kind)
     {
     case TYPE_VECTOR: {
@@ -677,6 +687,8 @@ AstType *ts__getElemType(AstType *type)
 
 AstType *ts__getStructType(AstType *type)
 {
+    if (!type) return NULL;
+
     switch (type->kind)
     {
     case TYPE_STRUCT: return type;
@@ -1043,6 +1055,32 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
         case TYPE_RW_STRUCTURED_BUFFER: {
             expr->assignable = true;
             expr->type = left->type->buffer.sub;
+            break;
+        }
+        case TYPE_VECTOR: {
+            expr->assignable = left->assignable;
+            expr->type = left->type->vector.elem_type;
+            if (!right->resolved_int)
+            {
+                ts__addErr(compiler, &right->loc, "index is not an integer constant");
+            }
+            else if ((*right->resolved_int) >= left->type->vector.size)
+            {
+                ts__addErr(compiler, &right->loc, "index is out of bounds");
+            }
+            break;
+        }
+        case TYPE_MATRIX: {
+            expr->assignable = left->assignable;
+            expr->type = left->type->matrix.col_type;
+            if (!right->resolved_int)
+            {
+                ts__addErr(compiler, &right->loc, "index is not an integer constant");
+            }
+            else if ((*right->resolved_int) >= left->type->matrix.col_count)
+            {
+                ts__addErr(compiler, &right->loc, "index is out of bounds");
+            }
             break;
         }
         default: {

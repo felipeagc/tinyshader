@@ -2738,6 +2738,20 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
             break;
         }
 
+        case TYPE_VECTOR: {
+            index_count = 1;
+            indices = NEW_ARRAY(compiler, IRInst *, index_count);
+            indices[0] = expr->subscript.right->value;
+            break;
+        }
+
+        case TYPE_MATRIX: {
+            index_count = 1;
+            indices = NEW_ARRAY(compiler, IRInst *, index_count);
+            indices[0] = expr->subscript.right->value;
+            break;
+        }
+
         default: assert(0); break;
         }
 

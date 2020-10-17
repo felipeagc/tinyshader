@@ -1082,8 +1082,8 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
                                 type_str[prefix_len + 1] == 'x')
                             {
                                 // Matrix type
-                                uint8_t dim1 = (uint8_t)(type_str[prefix_len] - '0');
-                                uint8_t dim2 = (uint8_t)(type_str[prefix_len + 2] - '0');
+                                uint8_t dim1 = (uint8_t)(type_str[prefix_len + 2] - '0');
+                                uint8_t dim2 = (uint8_t)(type_str[prefix_len] - '0');
                                 if (dim1 > 1 && dim1 <= 4 && dim2 > 1 && dim2 <= 4)
                                 {
                                     l->token.kind = TOKEN_MATRIX_TYPE;
