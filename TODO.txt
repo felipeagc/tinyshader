@@ -17,7 +17,6 @@ Language features:
 
 	SampleLevel
 
-    treat assignment as an expression
     && ||
     static variables
 

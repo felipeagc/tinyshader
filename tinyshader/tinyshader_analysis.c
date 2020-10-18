@@ -1009,6 +1009,32 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
         break;
     }
 
+    case EXPR_VAR_ASSIGN: {
+        analyzerAnalyzeExpr(a, expr->var_assign.assigned_expr, NULL);
+        if (!expr->var_assign.assigned_expr->type)
+        {
+            ts__addErr(compiler, &expr->var_assign.assigned_expr->loc,
+                       "could not resolve type for expression");
+            break;
+        }
+
+        expr->type = expr->var_assign.assigned_expr->type;
+
+        if (!expr->var_assign.assigned_expr->assignable)
+        {
+            ts__addErr(
+                compiler,
+                &expr->var_assign.assigned_expr->loc,
+                "expression is not assignable");
+        }
+
+        analyzerAnalyzeExpr(
+            a, expr->var_assign.value_expr, expr->var_assign.assigned_expr->type);
+
+        break;
+    }
+
+
     case EXPR_IDENT: {
         AstDecl *decl = scopeGetGlobal(scope, expr->ident.name);
         if (!decl)
@@ -3066,22 +3092,6 @@ static void analyzerAnalyzeStmt(Analyzer *a, AstStmt *stmt)
             ts__addErr(
                 compiler, &stmt->loc, "break must be inside a control flow structure");
         }
-        break;
-    }
-
-    case STMT_VAR_ASSIGN: {
-        analyzerAnalyzeExpr(a, stmt->var_assign.assigned_expr, NULL);
-        if (!stmt->var_assign.assigned_expr->assignable)
-        {
-            ts__addErr(
-                compiler,
-                &stmt->var_assign.assigned_expr->loc,
-                "expression is not assignable");
-        }
-
-        analyzerAnalyzeExpr(
-            a, stmt->var_assign.value_expr, stmt->var_assign.assigned_expr->type);
-
         break;
     }
 

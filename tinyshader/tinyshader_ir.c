@@ -2706,6 +2706,20 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
         break;
     }
 
+    case EXPR_VAR_ASSIGN: {
+        irModuleBuildExpr(m, expr->var_assign.value_expr);
+        IRInst *to_store = expr->var_assign.value_expr->value;
+        assert(to_store);
+        to_store = irLoadVal(m, to_store);
+
+        irModuleBuildExpr(m, expr->var_assign.assigned_expr);
+        IRInst *assigned_value = expr->var_assign.assigned_expr->value;
+
+        irBuildStore(m, assigned_value, to_store);
+
+        break;
+    }
+
     case EXPR_IDENT: {
         AstDecl *decl = expr->ident.decl;
         assert(decl);
@@ -3617,20 +3631,6 @@ static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
         assert(arrLength(m->break_stack) > 0);
         IRInst *block = m->break_stack.ptr[arrLength(m->break_stack) - 1];
         irBuildBr(m, block, NULL, NULL);
-        break;
-    }
-
-    case STMT_VAR_ASSIGN: {
-        irModuleBuildExpr(m, stmt->var_assign.value_expr);
-        IRInst *to_store = stmt->var_assign.value_expr->value;
-        assert(to_store);
-        to_store = irLoadVal(m, to_store);
-
-        irModuleBuildExpr(m, stmt->var_assign.assigned_expr);
-        IRInst *assigned_value = stmt->var_assign.assigned_expr->value;
-
-        irBuildStore(m, assigned_value, to_store);
-
         break;
     }
 

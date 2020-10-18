@@ -2102,9 +2102,36 @@ static AstExpr *parseBitOr(Parser *p)
     return expr;
 }
 
+static AstExpr *parseAssignExpr(Parser *p)
+{
+    Location loc = parserBeginLoc(p);
+
+    AstExpr *expr = parseBitOr(p);
+    if (!expr) return NULL;
+
+    while (!parserIsAtEnd(p) && (parserPeek(p, 0)->kind == TOKEN_ASSIGN))
+    {
+        parserNext(p, 1);
+
+        AstExpr *left = expr;
+        AstExpr *right = parseBitOr(p);
+        if (!right) return NULL;
+
+        expr = NEW(p->compiler, AstExpr);
+        expr->kind = EXPR_VAR_ASSIGN;
+        expr->var_assign.assigned_expr = left;
+        expr->var_assign.value_expr = right;
+
+        parserEndLoc(p, &loc);
+        expr->loc = loc;
+    }
+
+    return expr;
+}
+
 static AstExpr *parseExpr(Parser *p)
 {
-    return parseBitOr(p);
+    return parseAssignExpr(p);
 }
 
 static AstStmt *parseStmt(Parser *p)
@@ -2309,23 +2336,6 @@ static AstStmt *parseStmt(Parser *p)
             AstStmt *stmt = NEW(compiler, AstStmt);
             stmt->kind = STMT_EXPR;
             stmt->expr = expr;
-
-            return stmt;
-        }
-        else if (parserPeek(p, 0)->kind == TOKEN_ASSIGN)
-        {
-            // Variable assignment
-            parserNext(p, 1);
-
-            AstExpr *value_expr = parseExpr(p);
-            if (!value_expr) return NULL;
-
-            AstStmt *stmt = NEW(compiler, AstStmt);
-            stmt->kind = STMT_VAR_ASSIGN;
-            stmt->var_assign.assigned_expr = expr;
-            stmt->var_assign.value_expr = value_expr;
-
-            if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
 
             return stmt;
         }

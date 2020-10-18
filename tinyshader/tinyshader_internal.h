@@ -910,7 +910,6 @@ typedef enum AstVarKind {
 typedef enum AstStmtKind {
     STMT_DECL,
     STMT_EXPR,
-    STMT_VAR_ASSIGN,
     STMT_RETURN,
     STMT_DISCARD,
     STMT_CONTINUE,
@@ -944,6 +943,7 @@ typedef enum AstExprKind {
     EXPR_FUNC_CALL,
     EXPR_BUILTIN_CALL,
     EXPR_BARRIER_CALL,
+    EXPR_VAR_ASSIGN,
     EXPR_UNARY,
     EXPR_BINARY,
 } AstExprKind;
@@ -957,11 +957,6 @@ struct AstStmt
     {
         AstDecl *decl;
         AstExpr *expr;
-        struct
-        {
-            AstExpr *assigned_expr;
-            AstExpr *value_expr;
-        } var_assign;
         struct
         {
             AstExpr *value;
@@ -1134,6 +1129,12 @@ struct AstExpr
         {
             AstExpr *sub_expr;
         } buffer;
+
+        struct
+        {
+            AstExpr *assigned_expr;
+            AstExpr *value_expr;
+        } var_assign;
 
         struct
         {
