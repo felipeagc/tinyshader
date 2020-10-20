@@ -165,8 +165,9 @@ typedef enum TokenKind {
     TOKEN_LSHIFT, // <<
     TOKEN_RSHIFT, // >>
 
-    TOKEN_PERIOD,
-    TOKEN_COMMA,
+    TOKEN_PERIOD, // .
+    TOKEN_COMMA, // ,
+    TOKEN_QUESTION, // ?
 
     TOKEN_NOT,    // !
     TOKEN_ASSIGN, // =
@@ -494,6 +495,7 @@ typedef enum IRInstKind {
 
     IR_INST_UNARY,
     IR_INST_BINARY,
+    IR_INST_SELECT,
 } IRInstKind;
 
 typedef enum IRBuiltinInstKind {
@@ -731,6 +733,13 @@ struct IRInst
             IRInst *execution_scope;
             IRInst *semantics;
         } barrier;
+
+        struct
+        {
+            IRInst *cond;
+            IRInst *true_value;
+            IRInst *false_value;
+        } select;
     };
 };
 
@@ -946,6 +955,7 @@ typedef enum AstExprKind {
     EXPR_VAR_ASSIGN,
     EXPR_UNARY,
     EXPR_BINARY,
+    EXPR_TERNARY,
 } AstExprKind;
 
 struct AstStmt
@@ -1148,6 +1158,13 @@ struct AstExpr
             AstExpr *left;
             AstExpr *right;
         } binary;
+
+        struct
+        {
+            AstExpr *cond;
+            AstExpr *true_expr;
+            AstExpr *false_expr;
+        } ternary;
 
         struct
         {

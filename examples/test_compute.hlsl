@@ -43,5 +43,5 @@ void main(
     float2x4 view;
     view[0][3] = 0.0;
     view[1][3] = 0.0;
-    view[1][3] = 0.0;
+    view[1][3] = true ? 0.0 : 1.0;
 }

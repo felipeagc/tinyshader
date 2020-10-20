@@ -1193,6 +1193,29 @@ irBuildBinary(IRModule *m, SpvOp op, IRType *type, IRInst *left, IRInst *right)
     return inst;
 }
 
+static IRInst *
+irBuildSelect(
+    IRModule *m,
+    IRType *type,
+    IRInst *cond,
+    IRInst *true_value,
+    IRInst *false_value)
+{
+    IRInst *inst = NEW(m->compiler, IRInst);
+    inst->kind = IR_INST_SELECT;
+    inst->type = type;
+    assert(inst->type);
+
+    inst->select.cond = cond;
+    inst->select.true_value = true_value;
+    inst->select.false_value = false_value;
+
+    IRInst *block = irGetCurrentBlock(m);
+    arrPush(m->compiler, &block->block.insts, inst);
+
+    return inst;
+}
+
 static void irBuildReturn(IRModule *m, IRInst *value)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
@@ -1667,6 +1690,20 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             }
 
             irModuleEncodeInst(m, SpvOpAccessChain, params, param_count);
+            break;
+        }
+
+        case IR_INST_SELECT: {
+            inst->id = irModuleReserveId(m);
+
+            uint32_t params[5] = {
+                inst->type->id,
+                inst->id,
+                inst->select.cond->id,
+                inst->select.true_value->id,
+                inst->select.false_value->id,
+            };
+            irModuleEncodeInst(m, SpvOpSelect, params, 5);
             break;
         }
 
@@ -3574,6 +3611,28 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
 
         expr->value = irBuildBinary(m, op, ir_type, left_val, right_val);
 
+        break;
+    }
+
+    case EXPR_TERNARY:
+    {
+        IRType *ir_type = convertTypeToIR(m->mod, m, expr->type);
+
+        irModuleBuildExpr(m, expr->ternary.cond);
+        IRInst *cond = irLoadVal(m, expr->ternary.cond->value);
+
+        irModuleBuildExpr(m, expr->ternary.true_expr);
+        IRInst *true_value = irLoadVal(m, expr->ternary.true_expr->value);
+
+        irModuleBuildExpr(m, expr->ternary.false_expr);
+        IRInst *false_value = irLoadVal(m, expr->ternary.false_expr->value);
+
+        expr->value = irBuildSelect(
+            m,
+            ir_type,
+            cond,
+            true_value,
+            false_value);
         break;
     }
 

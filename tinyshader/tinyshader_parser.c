@@ -766,6 +766,10 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
             lexerAddSimpleToken(l, TOKEN_COMMA, 1);
             break;
         }
+        case '?': {
+            lexerAddSimpleToken(l, TOKEN_QUESTION, 1);
+            break;
+        }
 
         case '+': {
             if (lexerPeek(l, 1) == '=')
@@ -1116,7 +1120,6 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
                            (lexerPeek(l, 0) >= 'A' && lexerPeek(l, 0) <= 'F'))
                     {
                         l->token.loc.length++;
-                        l->col++;
                         lexerNext(l, 1);
                     }
 
@@ -1139,7 +1142,6 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
                         }
 
                         l->token.loc.length++;
-                        l->col++;
                         lexerNext(l, 1);
                     }
 
@@ -2102,11 +2104,45 @@ static AstExpr *parseBitOr(Parser *p)
     return expr;
 }
 
-static AstExpr *parseAssignExpr(Parser *p)
+static AstExpr *parseTernaryExpr(Parser *p)
 {
     Location loc = parserBeginLoc(p);
 
     AstExpr *expr = parseBitOr(p);
+    if (!expr) return NULL;
+
+    while (!parserIsAtEnd(p) && (parserPeek(p, 0)->kind == TOKEN_QUESTION))
+    {
+        parserNext(p, 1);
+
+        AstExpr *cond = expr;
+
+        AstExpr *true_expr  = parseTernaryExpr(p);
+        if (!true_expr) return NULL;
+
+        if (!parserConsume(p, TOKEN_COLON)) return NULL;
+
+        AstExpr *false_expr = parseTernaryExpr(p);
+        if (!false_expr) return NULL;
+
+        expr = NEW(p->compiler, AstExpr);
+        expr->kind = EXPR_TERNARY;
+        expr->ternary.cond = cond;
+        expr->ternary.true_expr = true_expr;
+        expr->ternary.false_expr = false_expr;
+
+        parserEndLoc(p, &loc);
+        expr->loc = loc;
+    }
+
+    return expr;
+}
+
+static AstExpr *parseAssignExpr(Parser *p)
+{
+    Location loc = parserBeginLoc(p);
+
+    AstExpr *expr = parseTernaryExpr(p);
     if (!expr) return NULL;
 
     while (!parserIsAtEnd(p) && (parserPeek(p, 0)->kind == TOKEN_ASSIGN))
@@ -2114,7 +2150,7 @@ static AstExpr *parseAssignExpr(Parser *p)
         parserNext(p, 1);
 
         AstExpr *left = expr;
-        AstExpr *right = parseBitOr(p);
+        AstExpr *right = parseTernaryExpr(p);
         if (!right) return NULL;
 
         expr = NEW(p->compiler, AstExpr);

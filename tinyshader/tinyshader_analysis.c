@@ -1034,7 +1034,6 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
         break;
     }
 
-
     case EXPR_IDENT: {
         AstDecl *decl = scopeGetGlobal(scope, expr->ident.name);
         if (!decl)
@@ -3013,6 +3012,15 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
         }
         }
 
+        break;
+    }
+
+    case EXPR_TERNARY: {
+        analyzerAnalyzeExpr(a, expr->ternary.cond, newBasicType(m, TYPE_BOOL));
+        analyzerAnalyzeExpr(a, expr->ternary.true_expr, expected_type);
+        analyzerAnalyzeExpr(a, expr->ternary.false_expr, expr->ternary.true_expr->type);
+
+        expr->type = expr->ternary.true_expr->type;
         break;
     }
     }
