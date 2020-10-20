@@ -43,6 +43,6 @@ void main(
     float2x4 view;
     view[0][3] = 0.0;
     view[1][3] = 0.0;
-    view[1][3] = true ? 0.0 : 1.0;
+    view[1][3] = false ? 0.0 : 2.0e-1;
     view[1][3] = 2.3 % 1.2;
 }

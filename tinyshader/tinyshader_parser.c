@@ -1104,8 +1104,6 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
             }
             else if (isNumeric(lexerPeek(l, 0)))
             {
-                char *dot_ptr = NULL;
-
                 if (lexerPeek(l, 0) == '0' && lexerPeek(l, 1) == 'x')
                 {
                     // Hexadecimal
@@ -1131,24 +1129,65 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
                 else
                 {
                     char *number_start = &l->text[l->pos];
+                    bool is_float = false;
 
-                    while (isNumeric(lexerPeek(l, 0)) || lexerPeek(l, 0) == '.')
+                    while (isNumeric(lexerPeek(l, 0)))
+                    {
+                        l->token.loc.length++;
+                        lexerNext(l, 1);
+                    }
+
+                    if (lexerPeek(l, 0) == 'u' || lexerPeek(l, 0) == 'U')
+                    {
+                        l->token.loc.length++;
+                        lexerNext(l, 1);
+                    }
+                    else
                     {
                         if (lexerPeek(l, 0) == '.')
                         {
-                            if (!isNumeric(lexerPeek(l, 1))) break;
-                            assert(!dot_ptr);
-                            dot_ptr = &l->text[l->pos];
+                            is_float = true;
+                            l->token.loc.length++;
+                            lexerNext(l, 1);
                         }
 
-                        l->token.loc.length++;
-                        lexerNext(l, 1);
+                        while (isNumeric(lexerPeek(l, 0)))
+                        {
+                            l->token.loc.length++;
+                            lexerNext(l, 1);
+                        }
+
+                        if (lexerPeek(l, 0) == 'e' || lexerPeek(l, 0) == 'E')
+                        {
+                            is_float = true;
+                            l->token.loc.length++;
+                            lexerNext(l, 1);
+
+                            if (lexerPeek(l, 0) == '-')
+                            {
+                                l->token.loc.length++;
+                                lexerNext(l, 1);
+                            }
+
+                            while (isNumeric(lexerPeek(l, 0)))
+                            {
+                                l->token.loc.length++;
+                                lexerNext(l, 1);
+                            }
+                        }
+
+                        if (lexerPeek(l, 0) == 'f')
+                        {
+                            is_float = true;
+                            l->token.loc.length++;
+                            lexerNext(l, 1);
+                        }
                     }
 
                     char *str = NEW_ARRAY(compiler, char, l->token.loc.length + 1);
                     memcpy(str, number_start, l->token.loc.length);
 
-                    if (dot_ptr)
+                    if (is_float)
                     {
                         l->token.kind = TOKEN_FLOAT_LIT;
                         l->token.double_ = strtod(str, NULL);
