@@ -3496,7 +3496,7 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
         case BINOP_MOD: {
             switch (elem_type->kind)
             {
-            case TYPE_FLOAT: op = SpvOpFMod; break;
+            case TYPE_FLOAT: op = SpvOpFRem; break;
             case TYPE_INT:
                 if (elem_type->int_.is_signed)
                     op = SpvOpSMod;

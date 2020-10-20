@@ -1844,7 +1844,9 @@ static AstExpr *parseMuliplication(Parser *p)
     if (!expr) return NULL;
 
     while (!parserIsAtEnd(p) &&
-           (parserPeek(p, 0)->kind == TOKEN_MUL || parserPeek(p, 0)->kind == TOKEN_DIV))
+           (parserPeek(p, 0)->kind == TOKEN_MUL ||
+            parserPeek(p, 0)->kind == TOKEN_DIV ||
+            parserPeek(p, 0)->kind == TOKEN_MOD))
     {
         Token *op_tok = parserNext(p, 1);
 
@@ -1854,6 +1856,7 @@ static AstExpr *parseMuliplication(Parser *p)
         {
         case TOKEN_MUL: op = BINOP_MUL; break;
         case TOKEN_DIV: op = BINOP_DIV; break;
+        case TOKEN_MOD: op = BINOP_MOD; break;
         default: assert(0); break;
         }
 
