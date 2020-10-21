@@ -1,10 +1,10 @@
 Builtin functions:
-	fmod
+    fmod
 
 Preprocessor:
-	#error
-	#if
-	#elif
+    #error
+    #if
+    #elif
     function-like #define
 
 Vulkan-specifics:
@@ -15,25 +15,25 @@ Vulkan-specifics:
 Language features:
     vector casting: float2(uint2(1, 2))
 
-	SampleLevel
+    SampleLevel
 
     && ||
     static variables
 
-	struct literals
-	arrays
-	typedefs
+    struct literals
+    arrays
+    typedefs
     TextureBuffer
-	texture arrays
-	arrays of textures
+    texture arrays
+    arrays of textures
 
 Low priority:
-	1-dimentional vector types
-	column_major/row_major matrices
+    1-dimentional vector types
+    column_major/row_major matrices
     cbuffer
     tbuffer
 
 Internals:
-	some dead code elimination
+    some dead code elimination
 
 TODAY:
