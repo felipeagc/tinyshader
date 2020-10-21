@@ -1538,6 +1538,10 @@ static AstExpr *parseAccessFuncCall(Parser *p)
         builtin_kind = IR_BUILTIN_SMOOTHSTEP;
         expr_kind = EXPR_BUILTIN_CALL;
         break;
+    case TOKEN_BUILTIN_FMOD:
+        builtin_kind = IR_BUILTIN_FMOD;
+        expr_kind = EXPR_BUILTIN_CALL;
+        break;
 
     case TOKEN_BUILTIN_TRANSPOSE:
         builtin_kind = IR_BUILTIN_TRANSPOSE;

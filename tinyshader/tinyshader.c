@@ -91,6 +91,7 @@ TsCompiler *tsCompilerCreate()
     ts__hashSet(&compiler->keyword_table, "clamp", (void *)TOKEN_BUILTIN_CLAMP);
     ts__hashSet(&compiler->keyword_table, "step", (void *)TOKEN_BUILTIN_STEP);
     ts__hashSet(&compiler->keyword_table, "smoothstep", (void *)TOKEN_BUILTIN_SMOOTHSTEP);
+    ts__hashSet(&compiler->keyword_table, "fmod", (void *)TOKEN_BUILTIN_FMOD);
 
     ts__hashSet(&compiler->keyword_table, "ddx", (void *)TOKEN_BUILTIN_DDX);
     ts__hashSet(&compiler->keyword_table, "ddy", (void *)TOKEN_BUILTIN_DDY);

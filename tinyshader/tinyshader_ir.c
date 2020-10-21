@@ -2154,6 +2154,19 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
                 break;
             }
 
+            case IR_BUILTIN_FMOD: {
+                uint32_t param_count = 4;
+                uint32_t params[4] = {
+                    inst->type->id,
+                    inst->id,
+                    param_values[0]->id,
+                    param_values[1]->id,
+                };
+
+                irModuleEncodeInst(m, SpvOpFRem, params, param_count);
+                break;
+            }
+
             case IR_BUILTIN_TRANSPOSE: {
                 uint32_t params[3] = {inst->type->id, inst->id, param_values[0]->id};
                 irModuleEncodeInst(m, SpvOpTranspose, params, 3);

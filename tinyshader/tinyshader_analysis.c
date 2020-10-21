@@ -2272,6 +2272,39 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             break;
         }
 
+        case IR_BUILTIN_FMOD: {
+            if (param_count != 2)
+            {
+                ts__addErr(compiler, &expr->loc, "fmod needs 2 parameters");
+                break;
+            }
+
+            tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
+            tryCoerceExprToScalarType(a, params.ptr[1], newFloatType(m, 32));
+
+            if (!params.ptr[0]->type || !params.ptr[1]->type) break;
+
+            if (params.ptr[0]->type != params.ptr[1]->type)
+            {
+                ts__addErr(compiler, &expr->loc,
+                           "fmod operates parameters of equal types");
+                break;
+            }
+
+            AstType *scalar_type = ts__getScalarType(params.ptr[0]->type);
+            if (!scalar_type || scalar_type->kind != TYPE_FLOAT)
+            {
+                ts__addErr(
+                    compiler,
+                    &expr->loc,
+                    "fmod operates on vectors or scalars of float type");
+                break;
+            }
+
+            expr->type = params.ptr[0]->type;
+            break;
+        }
+
         case IR_BUILTIN_TRANSPOSE: {
             if (param_count != 1)
             {
