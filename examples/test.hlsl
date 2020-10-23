@@ -143,5 +143,13 @@ void pixel(in float4 pos : POSITION, in float2 uv : TEXCOORD0, out float4 color 
         float4(gInput.hey, gInput.hey, gInput.hey, gInput.hey);
 
 	my_color = gInput2.SampleLevel(gInput3, uv, 1);
+    float width;
+    float height;
+    float mip_levels;
+    gInput2.GetDimensions(0, width, height, mip_levels);
+
+    float3 up = abs(pos.x) < 0.999 ? float3(0.0, 0.0, 1.0) : float3(1.0, 0.0, 0.0);
+
 	color = my_color;
+    color.r = up.z;
 }

@@ -15,8 +15,6 @@ Vulkan-specifics:
 Language features:
     vector casting: float2(uint2(1, 2))
 
-    SampleLevel
-
     && ||
     static variables
 

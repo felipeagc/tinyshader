@@ -1362,6 +1362,75 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
                 expr->type = texture_component_type;
             }
+            else if (self_type->kind == TYPE_IMAGE && strcmp(method_name, "GetDimensions") == 0)
+            {
+                uint32_t func_param_count = 0;
+                AstType **func_param_types = NULL;
+
+                AstType *uint_type = newIntType(m, 32, false);
+                AstType *float_type = newFloatType(m, 32);
+
+                switch (self_type->image.dim)
+                {
+                case SpvDim1D:
+                    func_param_count = 3;
+                    func_param_types = NEW_ARRAY(compiler, AstType *, func_param_count);
+
+                    func_param_types[0] = uint_type; // mip level
+                    func_param_types[1] = float_type; // width
+                    func_param_types[2] = float_type; // mip count
+                    break;
+                case SpvDim2D:
+                    func_param_count = 4;
+                    func_param_types = NEW_ARRAY(compiler, AstType *, func_param_count);
+
+                    func_param_types[0] = uint_type; // mip level
+                    func_param_types[1] = float_type; // width
+                    func_param_types[2] = float_type; // height
+                    func_param_types[3] = float_type; // mip count
+                    break;
+                case SpvDim3D:
+                    func_param_count = 5;
+                    func_param_types = NEW_ARRAY(compiler, AstType *, func_param_count);
+
+                    func_param_types[0] = uint_type; // mip level
+                    func_param_types[1] = float_type; // width
+                    func_param_types[2] = float_type; // height
+                    func_param_types[3] = float_type; // depth
+                    func_param_types[4] = float_type; // mip count
+                    break;
+                case SpvDimCube:
+                    func_param_count = 4;
+                    func_param_types = NEW_ARRAY(compiler, AstType *, func_param_count);
+
+                    func_param_types[0] = uint_type; // mip level
+                    func_param_types[1] = float_type; // width
+                    func_param_types[2] = float_type; // height
+                    func_param_types[3] = float_type; // mip count
+                    break;
+
+                default: assert(0); break;
+                }
+
+                assert(func_param_count > 0);
+
+                if (func_param_count != arrLength(expr->func_call.params))
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "wrong amount of parameters for function call");
+                    break;
+                }
+
+                for (uint32_t i = 0; i < arrLength(expr->func_call.params); ++i)
+                {
+                    AstExpr *param = expr->func_call.params.ptr[i];
+                    analyzerAnalyzeExpr(a, param, func_param_types[i]);
+                }
+
+                expr->type = newBasicType(m, TYPE_VOID);
+            }
             else
             {
                 ts__addErr(compiler, &expr->loc, "invalid method call");

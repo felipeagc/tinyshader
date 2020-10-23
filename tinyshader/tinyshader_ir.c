@@ -1151,6 +1151,58 @@ irBuildSampleExplicitLod(IRModule *m, IRType *type, IRInst *image_sampler, IRIns
     return inst;
 }
 
+static IRInst *
+irBuildQuerySizeLod(IRModule *m, IRInst *image, IRInst *lod)
+{
+    IRInst *inst = NEW(m->compiler, IRInst);
+    inst->kind = IR_INST_QUERY_SIZE_LOD;
+
+    m->uses_image_query = true;
+
+    uint32_t dim = 0;
+    switch (image->type->image.dim)
+    {
+    case SpvDim1D: dim = 1; break;
+    case SpvDim2D: dim = 2; break;
+    case SpvDim3D: dim = 3; break;
+    case SpvDimCube: dim = 2; break;
+
+    default: assert(0); break;
+    }
+
+    assert(dim > 0);
+
+    inst->type = irNewVectorType(m, irNewIntType(m, 32, false), dim);
+    assert(inst->type);
+
+    inst->query_size_lod.image = image;
+    inst->query_size_lod.lod = lod;
+
+    IRInst *block = irGetCurrentBlock(m);
+    arrPush(m->compiler, &block->block.insts, inst);
+
+    return inst;
+}
+
+static IRInst *
+irBuildQueryLevels(IRModule *m, IRInst *image)
+{
+    IRInst *inst = NEW(m->compiler, IRInst);
+    inst->kind = IR_INST_QUERY_LEVELS;
+
+    m->uses_image_query = true;
+
+    inst->type = irNewIntType(m, 32, false);
+    assert(inst->type);
+
+    inst->query_levels.image = image;
+
+    IRInst *block = irGetCurrentBlock(m);
+    arrPush(m->compiler, &block->block.insts, inst);
+
+    return inst;
+}
+
 static IRInst *irBuildCast(IRModule *m, IRType *dst_type, IRInst *value)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
@@ -2442,6 +2494,27 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             break;
         }
 
+        case IR_INST_QUERY_SIZE_LOD: {
+            inst->id = irModuleReserveId(m);
+
+            IRInst *image = inst->query_size_lod.image;
+            IRInst *lod = inst->query_size_lod.lod;
+
+            uint32_t params[4] = {inst->type->id, inst->id, image->id, lod->id};
+            irModuleEncodeInst(m, SpvOpImageQuerySizeLod, params, 4);
+            break;
+        }
+
+        case IR_INST_QUERY_LEVELS: {
+            inst->id = irModuleReserveId(m);
+
+            IRInst *image = inst->query_size_lod.image;
+
+            uint32_t params[3] = {inst->type->id, inst->id, image->id};
+            irModuleEncodeInst(m, SpvOpImageQueryLevels, params, 3);
+            break;
+        }
+
         case IR_INST_CAST: {
             if (inst->cast.redundant)
             {
@@ -2643,6 +2716,12 @@ static void irModuleEncodeModule(IRModule *m)
 
     {
         uint32_t params[1] = {SpvCapabilityShader};
+        irModuleEncodeInst(m, SpvOpCapability, params, 1);
+    }
+
+    if (m->uses_image_query)
+    {
+        uint32_t params[1] = {SpvCapabilityImageQuery};
         irModuleEncodeInst(m, SpvOpCapability, params, 1);
     }
 
@@ -2965,21 +3044,21 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
             irModuleBuildExpr(m, expr->func_call.self_param);
             assert(expr->func_call.self_param->value);
 
-            uint32_t param_count = arrLength(expr->func_call.params);
-            IRInst **param_values = NEW_ARRAY(compiler, IRInst *, param_count);
-
-            IRInst *self_value = irLoadVal(m, expr->func_call.self_param->value);
-
-            for (uint32_t i = 0; i < arrLength(expr->func_call.params); ++i)
-            {
-                AstExpr *param = expr->func_call.params.ptr[i];
-                irModuleBuildExpr(m, param);
-                assert(param->value);
-                param_values[i] = irLoadVal(m, param->value);
-            }
-
             if (self_type->kind == TYPE_IMAGE && strcmp(method_name, "Sample") == 0)
             {
+                uint32_t param_count = arrLength(expr->func_call.params);
+                IRInst **param_values = NEW_ARRAY(compiler, IRInst *, param_count);
+
+                IRInst *self_value = irLoadVal(m, expr->func_call.self_param->value);
+
+                for (uint32_t i = 0; i < arrLength(expr->func_call.params); ++i)
+                {
+                    AstExpr *param = expr->func_call.params.ptr[i];
+                    irModuleBuildExpr(m, param);
+                    assert(param->value);
+                    param_values[i] = irLoadVal(m, param->value);
+                }
+
                 IRInst **sampled_image_params = NEW_ARRAY(compiler, IRInst *, 2);
                 sampled_image_params[0] = self_value;
                 sampled_image_params[1] = param_values[0];
@@ -2998,6 +3077,19 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
             }
             else if (self_type->kind == TYPE_IMAGE && strcmp(method_name, "SampleLevel") == 0)
             {
+                uint32_t param_count = arrLength(expr->func_call.params);
+                IRInst **param_values = NEW_ARRAY(compiler, IRInst *, param_count);
+
+                IRInst *self_value = irLoadVal(m, expr->func_call.self_param->value);
+
+                for (uint32_t i = 0; i < arrLength(expr->func_call.params); ++i)
+                {
+                    AstExpr *param = expr->func_call.params.ptr[i];
+                    irModuleBuildExpr(m, param);
+                    assert(param->value);
+                    param_values[i] = irLoadVal(m, param->value);
+                }
+
                 IRInst **sampled_image_params = NEW_ARRAY(compiler, IRInst *, 2);
                 sampled_image_params[0] = self_value;
                 sampled_image_params[1] = param_values[0];
@@ -3014,6 +3106,111 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
                 IRInst *lod = param_values[2];
                 expr->value =
                     irBuildSampleExplicitLod(m, result_type, sampled_image, coords, lod);
+            }
+            else if (self_type->kind == TYPE_IMAGE && strcmp(method_name, "GetDimensions") == 0)
+            {
+                uint32_t param_count = expr->func_call.params.len;
+                IRInst **param_values = NEW_ARRAY(compiler, IRInst *, param_count);
+
+                IRInst *image = irLoadVal(m, expr->func_call.self_param->value);
+
+                for (uint32_t i = 0; i < expr->func_call.params.len; ++i)
+                {
+                    AstExpr *param = expr->func_call.params.ptr[i];
+                    irModuleBuildExpr(m, param);
+                    assert(param->value);
+                    param_values[i] = param->value;
+                }
+
+                IRInst *lod = irLoadVal(m, param_values[0]);
+                IRInst *size = irBuildQuerySizeLod(m, image, lod);
+                IRInst *mip_levels = irBuildQueryLevels(m, image);
+
+                IRType *float_type = irNewFloatType(m, 32);
+
+                assert(image->type->kind == IR_TYPE_IMAGE);
+                switch (image->type->image.dim)
+                {
+                case SpvDim1D:
+                {
+                    uint32_t index;
+
+                    index = 0;
+                    IRInst *width = irBuildCompositeExtract(m, size, &index, 1);
+                    width = irBuildCast(m, float_type, width);
+
+                    IRInst *mip_levels_float = irBuildCast(m, float_type, mip_levels);
+
+                    irBuildStore(m, param_values[1], width);
+                    irBuildStore(m, param_values[2], mip_levels_float);
+                    
+                    break;
+                }
+                case SpvDim2D:
+                {
+                    uint32_t index;
+
+                    index = 0;
+                    IRInst *width = irBuildCompositeExtract(m, size, &index, 1);
+                    width = irBuildCast(m, float_type, width);
+
+                    index = 1;
+                    IRInst *height = irBuildCompositeExtract(m, size, &index, 1);
+                    height = irBuildCast(m, float_type, height);
+
+                    IRInst *mip_levels_float = irBuildCast(m, float_type, mip_levels);
+
+                    irBuildStore(m, param_values[1], width);
+                    irBuildStore(m, param_values[2], height);
+                    irBuildStore(m, param_values[3], mip_levels_float);
+                    break;
+                }
+                case SpvDim3D:
+                {
+                    uint32_t index;
+
+                    index = 0;
+                    IRInst *width = irBuildCompositeExtract(m, size, &index, 1);
+                    width = irBuildCast(m, float_type, width);
+
+                    index = 1;
+                    IRInst *height = irBuildCompositeExtract(m, size, &index, 1);
+                    height = irBuildCast(m, float_type, height);
+                    
+                    index = 2;
+                    IRInst *depth = irBuildCompositeExtract(m, size, &index, 1);
+                    depth = irBuildCast(m, float_type, depth);
+
+                    IRInst *mip_levels_float = irBuildCast(m, float_type, mip_levels);
+
+                    irBuildStore(m, param_values[1], width);
+                    irBuildStore(m, param_values[2], height);
+                    irBuildStore(m, param_values[3], depth);
+                    irBuildStore(m, param_values[4], mip_levels_float);
+                    break;
+                }
+                case SpvDimCube:
+                {
+                    uint32_t index;
+
+                    index = 0;
+                    IRInst *width = irBuildCompositeExtract(m, size, &index, 1);
+                    width = irBuildCast(m, float_type, width);
+
+                    index = 1;
+                    IRInst *height = irBuildCompositeExtract(m, size, &index, 1);
+                    height = irBuildCast(m, float_type, height);
+
+                    IRInst *mip_levels_float = irBuildCast(m, float_type, mip_levels);
+
+                    irBuildStore(m, param_values[1], width);
+                    irBuildStore(m, param_values[2], height);
+                    irBuildStore(m, param_values[3], mip_levels_float);
+                    break;
+                }
+
+                default: assert(0); break;
+                }
             }
             else
             {
@@ -3697,6 +3894,19 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
 
         irModuleBuildExpr(m, expr->ternary.false_expr);
         IRInst *false_value = irLoadVal(m, expr->ternary.false_expr->value);
+
+        if (ir_type->kind == IR_TYPE_VECTOR)
+        {
+            IRInst **fields = NEW_ARRAY(m->compiler, IRInst*, ir_type->vector.size);
+            for (uint32_t i = 0; i < ir_type->vector.size; ++i)
+            {
+                fields[i] = cond;
+            }
+
+            IRType *cond_vec_type = irNewVectorType(m, cond->type, ir_type->vector.size);
+            cond = irBuildCompositeConstruct(
+                m, cond_vec_type, fields, ir_type->vector.size);
+        }
 
         expr->value = irBuildSelect(
             m,

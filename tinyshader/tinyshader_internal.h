@@ -494,6 +494,8 @@ typedef enum IRInstKind {
 
     IR_INST_SAMPLE_IMPLICIT_LOD,
     IR_INST_SAMPLE_EXPLICIT_LOD,
+    IR_INST_QUERY_SIZE_LOD,
+    IR_INST_QUERY_LEVELS,
 
     IR_INST_UNARY,
     IR_INST_BINARY,
@@ -703,6 +705,17 @@ struct IRInst
 
         struct
         {
+            IRInst *image;
+            IRInst *lod;
+        } query_size_lod;
+
+        struct
+        {
+            IRInst *image;
+        } query_levels;
+
+        struct
+        {
             IRInst *right;
             SpvOp op;
         } unary;
@@ -766,6 +779,7 @@ struct IRModule
                                        inputs/outputs of every stage */
 
     uint32_t glsl_ext_inst; // ID of the imported GLSL instruction set
+    bool uses_image_query;
 
     IRInst *current_block;
 
