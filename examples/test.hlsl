@@ -141,5 +141,7 @@ void pixel(in float4 pos : POSITION, in float2 uv : TEXCOORD0, out float4 color 
 
     float4 my_color = gInput2.Sample(gInput3, uv) * float4(ddx(1.0), 1, 1, 1) *
         float4(gInput.hey, gInput.hey, gInput.hey, gInput.hey);
+
+	my_color = gInput2.SampleLevel(gInput3, uv, 1);
 	color = my_color;
 }

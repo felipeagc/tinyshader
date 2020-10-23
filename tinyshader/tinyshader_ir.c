@@ -1133,6 +1133,24 @@ irBuildSampleImplicitLod(IRModule *m, IRType *type, IRInst *image_sampler, IRIns
     return inst;
 }
 
+static IRInst *
+irBuildSampleExplicitLod(IRModule *m, IRType *type, IRInst *image_sampler, IRInst *coords, IRInst *lod)
+{
+    IRInst *inst = NEW(m->compiler, IRInst);
+    inst->kind = IR_INST_SAMPLE_EXPLICIT_LOD;
+    inst->type = type;
+    assert(inst->type);
+
+    inst->sample.image_sampler = image_sampler;
+    inst->sample.coords = coords;
+    inst->sample.lod = lod;
+
+    IRInst *block = irGetCurrentBlock(m);
+    arrPush(m->compiler, &block->block.insts, inst);
+
+    return inst;
+}
+
 static IRInst *irBuildCast(IRModule *m, IRType *dst_type, IRInst *value)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
@@ -2403,6 +2421,27 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             break;
         }
 
+        case IR_INST_SAMPLE_EXPLICIT_LOD: {
+            inst->id = irModuleReserveId(m);
+
+            IRInst *sampled_image = inst->sample.image_sampler;
+            IRInst *coordinate = inst->sample.coords;
+            IRInst *lod = inst->sample.lod;
+
+            uint32_t operand_mask = SpvImageOperandsLodMask;
+
+            uint32_t params[6] = {
+                inst->type->id,
+                inst->id,
+                sampled_image->id,
+                coordinate->id,
+                operand_mask,
+                lod->id,
+            };
+            irModuleEncodeInst(m, SpvOpImageSampleExplicitLod, params, 6);
+            break;
+        }
+
         case IR_INST_CAST: {
             if (inst->cast.redundant)
             {
@@ -2956,6 +2995,25 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
                 IRInst *coords = param_values[1];
                 expr->value =
                     irBuildSampleImplicitLod(m, result_type, sampled_image, coords);
+            }
+            else if (self_type->kind == TYPE_IMAGE && strcmp(method_name, "SampleLevel") == 0)
+            {
+                IRInst **sampled_image_params = NEW_ARRAY(compiler, IRInst *, 2);
+                sampled_image_params[0] = self_value;
+                sampled_image_params[1] = param_values[0];
+
+                IRInst *sampled_image = irBuildBuiltinCall(
+                    m,
+                    IR_BUILTIN_CREATE_SAMPLED_IMAGE,
+                    irNewSampledImageType(m, self_value->type),
+                    sampled_image_params,
+                    2);
+
+                IRType *result_type = convertTypeToIR(m->mod, m, expr->type);
+                IRInst *coords = param_values[1];
+                IRInst *lod = param_values[2];
+                expr->value =
+                    irBuildSampleExplicitLod(m, result_type, sampled_image, coords, lod);
             }
             else
             {

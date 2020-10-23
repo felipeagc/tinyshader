@@ -493,6 +493,7 @@ typedef enum IRInstKind {
     IR_INST_VECTOR_SHUFFLE,
 
     IR_INST_SAMPLE_IMPLICIT_LOD,
+    IR_INST_SAMPLE_EXPLICIT_LOD,
 
     IR_INST_UNARY,
     IR_INST_BINARY,
@@ -697,6 +698,7 @@ struct IRInst
         {
             IRInst *image_sampler;
             IRInst *coords;
+            IRInst *lod;
         } sample;
 
         struct

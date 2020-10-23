@@ -1316,6 +1316,52 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
                 expr->type = texture_component_type;
             }
+            else if (self_type->kind == TYPE_IMAGE && strcmp(method_name, "SampleLevel") == 0)
+            {
+                AstType *texture_component_type = self_type->image.sampled_type;
+
+                uint32_t func_param_count = 3;
+                AstType **func_param_types =
+                    NEW_ARRAY(compiler, AstType *, func_param_count);
+
+                func_param_types[0] = newBasicType(m, TYPE_SAMPLER);
+
+                AstType *float_type = newFloatType(m, 32);
+                func_param_types[2] = float_type;
+
+                switch (self_type->image.dim)
+                {
+                case SpvDim1D:
+                    func_param_types[1] = newVectorType(m, float_type, 1);
+                    break;
+                case SpvDim2D:
+                    func_param_types[1] = newVectorType(m, float_type, 2);
+                    break;
+                case SpvDim3D:
+                case SpvDimCube:
+                    func_param_types[1] = newVectorType(m, float_type, 3);
+                    break;
+
+                default: assert(0); break;
+                }
+
+                if (func_param_count != arrLength(expr->func_call.params))
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "wrong amount of parameters for function call");
+                    break;
+                }
+
+                for (uint32_t i = 0; i < arrLength(expr->func_call.params); ++i)
+                {
+                    AstExpr *param = expr->func_call.params.ptr[i];
+                    analyzerAnalyzeExpr(a, param, func_param_types[i]);
+                }
+
+                expr->type = texture_component_type;
+            }
             else
             {
                 ts__addErr(compiler, &expr->loc, "invalid method call");
