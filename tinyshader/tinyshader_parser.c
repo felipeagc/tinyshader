@@ -1124,6 +1124,12 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
                     char *str = NEW_ARRAY(compiler, char, l->token.loc.length - 2 + 1);
                     memcpy(str, hex_start, l->token.loc.length - 2);
 
+                    if (lexerPeek(l, 0) == 'u' || lexerPeek(l, 0) == 'U')
+                    {
+                        l->token.loc.length++;
+                        lexerNext(l, 1);
+                    }
+
                     l->token.int_ = strtol(str, NULL, 16);
                 }
                 else
