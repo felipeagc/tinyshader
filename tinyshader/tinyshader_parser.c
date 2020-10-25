@@ -1699,7 +1699,7 @@ static AstExpr *parseAccessFuncCall(Parser *p)
 
         parserEndLoc(p, &loc);
         expr->loc = loc;
-        return expr;
+        break;
     }
 
     case EXPR_BARRIER_CALL: {
@@ -1718,7 +1718,7 @@ static AstExpr *parseAccessFuncCall(Parser *p)
 
         parserEndLoc(p, &loc);
         expr->loc = loc;
-        return expr;
+        break;
     }
 
     default: {
