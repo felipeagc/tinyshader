@@ -1013,8 +1013,10 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
         analyzerAnalyzeExpr(a, expr->var_assign.assigned_expr, NULL);
         if (!expr->var_assign.assigned_expr->type)
         {
-            ts__addErr(compiler, &expr->var_assign.assigned_expr->loc,
-                       "could not resolve type for expression");
+            ts__addErr(
+                compiler,
+                &expr->var_assign.assigned_expr->loc,
+                "could not resolve type for expression");
             break;
         }
 
@@ -1246,6 +1248,1255 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
     case EXPR_FUNC_CALL: {
         AstExpr *func_expr = expr->func_call.func_expr;
 
+        bool is_builtin_func = false;
+        AstBuiltinFunction builtin_func_kind;
+
+        // Builtin function
+        if (func_expr->kind == EXPR_IDENT)
+        {
+            void *result;
+            is_builtin_func = ts__hashGet(
+                &compiler->builtin_function_table,
+                func_expr->ident.name,
+                &result);
+            if (is_builtin_func)
+            {
+                builtin_func_kind = (AstBuiltinFunction)result;
+            }
+        }
+
+        if (is_builtin_func)
+        {
+            uint32_t param_count = arrLength(expr->func_call.params);
+            ArrayOfAstExprPtr params = expr->func_call.params;
+
+            bool got_param_types = true;
+
+            for (uint32_t i = 0; i < param_count; ++i)
+            {
+                AstExpr *param = params.ptr[i];
+                analyzerAnalyzeExpr(a, param, NULL);
+                if (!param->type)
+                {
+                    got_param_types = false;
+                    continue;
+                }
+            }
+
+            if (!got_param_types) break;
+
+            switch (builtin_func_kind)
+            {
+            case AST_BUILTIN_FUNC_DOT: {
+                if (param_count != 2)
+                {
+                    ts__addErr(compiler, &expr->loc, "dot needs 2 parameters");
+                    break;
+                }
+
+                AstExpr *a = params.ptr[0];
+                AstExpr *b = params.ptr[1];
+
+                if ((a->type->kind != TYPE_VECTOR) || (b->type->kind != TYPE_VECTOR))
+                {
+                    ts__addErr(compiler, &expr->loc, "dot operates on vectors");
+                    break;
+                }
+
+                if (a->type != b->type)
+                {
+                    ts__addErr(
+                        compiler, &expr->loc, "dot cannot operate on different types");
+                    break;
+                }
+
+                expr->type = a->type->vector.elem_type;
+                break;
+            }
+
+            case AST_BUILTIN_FUNC_CROSS: {
+                if (param_count != 2)
+                {
+                    ts__addErr(compiler, &expr->loc, "cross needs 2 parameters");
+                    break;
+                }
+
+                AstExpr *a = params.ptr[0];
+                AstExpr *b = params.ptr[1];
+
+                if ((a->type->kind != TYPE_VECTOR) || (b->type->kind != TYPE_VECTOR))
+                {
+                    ts__addErr(compiler, &expr->loc, "cross operates on vectors");
+                    break;
+                }
+
+                if (a->type != b->type)
+                {
+                    ts__addErr(
+                        compiler, &expr->loc, "cross cannot operate on different types");
+                    break;
+                }
+
+                if (a->type->vector.size != 3)
+                {
+                    ts__addErr(compiler, &expr->loc, "cross operates on 3D vectors");
+                    break;
+                }
+
+                expr->type = a->type;
+                break;
+            }
+
+            case AST_BUILTIN_FUNC_LENGTH: {
+                if (param_count != 1)
+                {
+                    ts__addErr(compiler, &expr->loc, "length needs 1 parameter");
+                    break;
+                }
+
+                AstExpr *a = params.ptr[0];
+
+                if (a->type->kind != TYPE_VECTOR)
+                {
+                    ts__addErr(compiler, &expr->loc, "length operates on a vector");
+                    break;
+                }
+
+                expr->type = a->type->vector.elem_type;
+                break;
+            }
+
+            case AST_BUILTIN_FUNC_NORMALIZE: {
+                if (param_count != 1)
+                {
+                    ts__addErr(compiler, &expr->loc, "normalize needs 1 parameter");
+                    break;
+                }
+
+                AstExpr *a = params.ptr[0];
+
+                if (a->type->kind != TYPE_VECTOR)
+                {
+                    ts__addErr(compiler, &expr->loc, "normalize operates on a vector");
+                    break;
+                }
+
+                expr->type = a->type;
+                break;
+            }
+
+            case AST_BUILTIN_FUNC_MUL: {
+                if (param_count != 2)
+                {
+                    ts__addErr(compiler, &expr->loc, "dot needs 2 parameters");
+                    break;
+                }
+
+                AstExpr *a = params.ptr[0];
+                AstExpr *b = params.ptr[1];
+
+                if (!((a->type->kind == TYPE_VECTOR && b->type->kind == TYPE_MATRIX) ||
+                      (a->type->kind == TYPE_MATRIX && b->type->kind == TYPE_VECTOR) ||
+                      (a->type->kind == TYPE_VECTOR && b->type->kind == TYPE_VECTOR) ||
+                      (a->type->kind == TYPE_MATRIX && b->type->kind == TYPE_MATRIX)))
+                {
+                    ts__addErr(compiler, &expr->loc, "invalid parameters for mul");
+                    break;
+                }
+
+                if (a->type->kind == TYPE_VECTOR && b->type->kind == TYPE_MATRIX)
+                {
+                    // Matrix times vector, yes, it's backwards
+                    if (a->type != b->type->matrix.col_type)
+                    {
+                        ts__addErr(
+                            compiler,
+                            &expr->loc,
+                            "mismatched matrix columns with vector type");
+                        break;
+                    }
+
+                    expr->type = a->type;
+                }
+                else if (a->type->kind == TYPE_MATRIX && b->type->kind == TYPE_VECTOR)
+                {
+                    // Vector times matrix, yes, it's backwards
+                    if (b->type != a->type->matrix.col_type)
+                    {
+                        ts__addErr(
+                            compiler,
+                            &expr->loc,
+                            "mismatched matrix columns with vector type");
+                        break;
+                    }
+
+                    expr->type = b->type;
+                }
+                else if (a->type->kind == TYPE_VECTOR && b->type->kind == TYPE_VECTOR)
+                {
+                    // Vector dot product
+                    if (b->type != a->type)
+                    {
+                        ts__addErr(compiler, &expr->loc, "mismatched vector types");
+                        break;
+                    }
+
+                    expr->type = a->type->vector.elem_type;
+                }
+                else if (a->type->kind == TYPE_MATRIX && b->type->kind == TYPE_MATRIX)
+                {
+                    // Matrix times matrix
+                    if (b->type != a->type)
+                    {
+                        ts__addErr(compiler, &expr->loc, "mismatched matrix types");
+                        break;
+                    }
+
+                    expr->type = a->type;
+                }
+                else
+                {
+                    assert(0);
+                }
+
+                break;
+            }
+
+            case AST_BUILTIN_FUNC_DISTANCE: {
+                if (param_count != 2)
+                {
+                    ts__addErr(compiler, &expr->loc, "distance needs 2 parameters");
+                    break;
+                }
+
+                tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
+                tryCoerceExprToScalarType(a, params.ptr[1], newFloatType(m, 32));
+
+                AstExpr *a = params.ptr[0];
+                AstExpr *b = params.ptr[1];
+
+                if ((a->type->kind != TYPE_VECTOR) || (b->type->kind != TYPE_VECTOR))
+                {
+                    ts__addErr(compiler, &expr->loc, "distance operates on vectors");
+                    break;
+                }
+
+                if (a->type != b->type)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "distance cannot operate on different types");
+                    break;
+                }
+
+                expr->type = ts__getElemType(a->type);
+                break;
+            }
+
+            case AST_BUILTIN_FUNC_RADIANS:
+            case AST_BUILTIN_FUNC_DEGREES: {
+                if (param_count != 1)
+                {
+                    ts__addErr(
+                        compiler, &expr->loc, "degrees/radians call needs 1 parameter");
+                    break;
+                }
+
+                tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
+
+                AstExpr *a = params.ptr[0];
+                if (!a->type) break;
+
+                if (a->type->kind != TYPE_FLOAT)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "degrees/radians call needs a float parameter");
+                    break;
+                }
+
+                expr->type = a->type;
+
+                break;
+            }
+
+            case AST_BUILTIN_FUNC_SIN:
+            case AST_BUILTIN_FUNC_COS:
+            case AST_BUILTIN_FUNC_TAN:
+            case AST_BUILTIN_FUNC_ASIN:
+            case AST_BUILTIN_FUNC_ACOS:
+            case AST_BUILTIN_FUNC_ATAN:
+            case AST_BUILTIN_FUNC_SINH:
+            case AST_BUILTIN_FUNC_COSH:
+            case AST_BUILTIN_FUNC_TANH: {
+                if (param_count != 1)
+                {
+                    ts__addErr(
+                        compiler, &expr->loc, "trigonometric functions take 1 parameter");
+                    break;
+                }
+
+                tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
+
+                AstType *scalar_type = ts__getScalarType(params.ptr[0]->type);
+
+                if (scalar_type->kind != TYPE_FLOAT)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "trigonometric functions operate on floats");
+                    break;
+                }
+
+                expr->type = params.ptr[0]->type;
+                break;
+            }
+
+            case AST_BUILTIN_FUNC_ATAN2: {
+                if (param_count != 2)
+                {
+                    ts__addErr(compiler, &expr->loc, "atan2 takes 2 parameters");
+                    break;
+                }
+
+                tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
+                tryCoerceExprToScalarType(a, params.ptr[1], newFloatType(m, 32));
+
+                AstExpr *a = params.ptr[0];
+                AstExpr *b = params.ptr[1];
+
+                if (a->kind == EXPR_PRIMARY && a->type->kind == TYPE_INT)
+                {
+                    a->type = newFloatType(m, 32);
+                }
+
+                if (b->kind == EXPR_PRIMARY && b->type->kind == TYPE_INT)
+                {
+                    b->type = newFloatType(m, 32);
+                }
+
+                if (a->type != b->type)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "atan2 requires 2 parameters of identical types");
+                    break;
+                }
+
+                if (a->type->kind != TYPE_FLOAT)
+                {
+                    ts__addErr(compiler, &expr->loc, "atan2 operates on floats");
+                    break;
+                }
+
+                expr->type = a->type;
+                break;
+            }
+
+            case AST_BUILTIN_FUNC_SQRT:
+            case AST_BUILTIN_FUNC_RSQRT: {
+                if (param_count != 1)
+                {
+                    ts__addErr(compiler, &expr->loc, "sqrt/rsqrt takes 1 parameter");
+                    break;
+                }
+
+                tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
+
+                AstExpr *a = params.ptr[0];
+                if (!a->type) break;
+
+                AstType *scalar_type = ts__getScalarType(a->type);
+                if (!scalar_type || scalar_type->kind != TYPE_FLOAT)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "sqrt/rsqrt operates on vectors or scalars of float type");
+                    break;
+                }
+
+                expr->type = a->type;
+
+                break;
+            }
+
+            case AST_BUILTIN_FUNC_REFLECT: {
+                if (param_count != 2)
+                {
+                    ts__addErr(compiler, &expr->loc, "reflect needs 2 parameters");
+                    break;
+                }
+
+                AstExpr *a = params.ptr[0];
+                AstExpr *b = params.ptr[1];
+
+                if ((a->type->kind != TYPE_VECTOR) || (b->type->kind != TYPE_VECTOR))
+                {
+                    ts__addErr(compiler, &expr->loc, "reflect operates on vectors");
+                    break;
+                }
+
+                if (a->type != b->type)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "reflect cannot operate on different vector types");
+                    break;
+                }
+
+                expr->type = a->type;
+
+                break;
+            }
+
+            case AST_BUILTIN_FUNC_REFRACT: {
+                if (param_count != 3)
+                {
+                    ts__addErr(compiler, &expr->loc, "refract needs 2 parameters");
+                    break;
+                }
+
+                tryCoerceExprToScalarType(a, params.ptr[2], newFloatType(m, 32));
+
+                AstExpr *a = params.ptr[0];
+                AstExpr *b = params.ptr[1];
+                AstExpr *c = params.ptr[2];
+
+                if (!a->type || !b->type || !c->type) break;
+
+                if ((a->type->kind != TYPE_VECTOR) || (b->type->kind != TYPE_VECTOR))
+                {
+                    ts__addErr(compiler, &expr->loc, "refract operates on vectors");
+                    break;
+                }
+
+                if (a->type != b->type)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "refract cannot operate on different vector types");
+                    break;
+                }
+
+                if (c->type->kind != TYPE_FLOAT)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "refract takes a scalar as the third parameter");
+                    break;
+                }
+
+                expr->type = a->type;
+
+                break;
+            }
+
+            case AST_BUILTIN_FUNC_POW: {
+                if (param_count != 2)
+                {
+                    ts__addErr(compiler, &expr->loc, "pow takes 2 parameters");
+                    break;
+                }
+
+                tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
+                tryCoerceExprToScalarType(a, params.ptr[1], newFloatType(m, 32));
+
+                AstExpr *a = params.ptr[0];
+                AstExpr *b = params.ptr[1];
+                if (!a->type || !b->type) break;
+
+                if (a->type != b->type)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "pow operates on parameters of the same type");
+                    break;
+                }
+
+                AstType *scalar_type = ts__getScalarType(a->type);
+                if (!scalar_type || scalar_type->kind != TYPE_FLOAT)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "pow operates on vectors or scalars of float type");
+                    break;
+                }
+
+                expr->type = a->type;
+
+                break;
+            }
+
+            case AST_BUILTIN_FUNC_EXP:
+            case AST_BUILTIN_FUNC_EXP2: {
+                if (param_count != 1)
+                {
+                    ts__addErr(compiler, &expr->loc, "exp/exp2 takes 1 parameter");
+                    break;
+                }
+
+                tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
+
+                AstExpr *a = params.ptr[0];
+                if (!a->type) break;
+
+                AstType *scalar_type = ts__getScalarType(a->type);
+                if (!scalar_type || scalar_type->kind != TYPE_FLOAT)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "exp/exp2 operates on vectors or scalars of float type");
+                    break;
+                }
+
+                expr->type = a->type;
+
+                break;
+            }
+
+            case AST_BUILTIN_FUNC_LOG:
+            case AST_BUILTIN_FUNC_LOG2: {
+                if (param_count != 1)
+                {
+                    ts__addErr(compiler, &expr->loc, "log/log2 takes 1 parameter");
+                    break;
+                }
+
+                tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
+
+                AstExpr *a = params.ptr[0];
+                if (!a->type) break;
+
+                AstType *scalar_type = ts__getScalarType(a->type);
+                if (!scalar_type || scalar_type->kind != TYPE_FLOAT)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "log/log2 operates on vectors or scalars of float type");
+                    break;
+                }
+
+                expr->type = a->type;
+
+                break;
+            }
+
+            case AST_BUILTIN_FUNC_ABS: {
+                if (param_count != 1)
+                {
+                    ts__addErr(compiler, &expr->loc, "abs takes 1 parameter");
+                    break;
+                }
+
+                if (expected_type)
+                {
+                    tryCoerceExprToScalarType(a, params.ptr[0], expected_type);
+                }
+
+                AstExpr *a = params.ptr[0];
+                if (!a->type) break;
+
+                AstType *scalar_type = ts__getScalarType(a->type);
+                if (!scalar_type ||
+                    !(scalar_type->kind == TYPE_INT || scalar_type->kind == TYPE_FLOAT))
+                {
+                    ts__addErr(
+                        compiler, &expr->loc, "abs operates on vectors or scalars");
+                    break;
+                }
+
+                expr->type = a->type;
+
+                break;
+            }
+
+            case AST_BUILTIN_FUNC_MIN:
+            case AST_BUILTIN_FUNC_MAX: {
+                if (param_count != 2)
+                {
+                    ts__addErr(compiler, &expr->loc, "min/max takes 2 parameters");
+                    break;
+                }
+
+                if (expected_type &&
+                    canCoerceExprToScalarType(a, params.ptr[0], expected_type) &&
+                    canCoerceExprToScalarType(a, params.ptr[1], expected_type))
+                {
+                    tryCoerceExprToScalarType(a, params.ptr[0], expected_type);
+                    tryCoerceExprToScalarType(a, params.ptr[1], expected_type);
+                }
+
+                AstExpr *a = params.ptr[0];
+                AstExpr *b = params.ptr[1];
+                if (!a->type || !b->type) break;
+
+                if (a->type != b->type)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "min/max operates parameters of equal types");
+                    break;
+                }
+
+                AstType *scalar_type = ts__getScalarType(a->type);
+                if (!scalar_type ||
+                    !(scalar_type->kind == TYPE_INT || scalar_type->kind == TYPE_FLOAT))
+                {
+                    ts__addErr(
+                        compiler, &expr->loc, "min/max operates on vectors or scalars");
+                    break;
+                }
+
+                expr->type = a->type;
+
+                break;
+            }
+
+            case AST_BUILTIN_FUNC_TRUNC:
+            case AST_BUILTIN_FUNC_CEIL:
+            case AST_BUILTIN_FUNC_FLOOR:
+            case AST_BUILTIN_FUNC_FRAC: {
+                if (param_count != 1)
+                {
+                    ts__addErr(
+                        compiler, &expr->loc, "frac/ceil/trunc/floor take 1 parameter");
+                    break;
+                }
+
+                if (expected_type &&
+                    canCoerceExprToScalarType(a, params.ptr[0], expected_type))
+                {
+                    tryCoerceExprToScalarType(a, params.ptr[0], expected_type);
+                }
+
+                if (!params.ptr[0]->type) break;
+
+                AstType *scalar_type = ts__getScalarType(params.ptr[0]->type);
+                if (!scalar_type || scalar_type->kind != TYPE_FLOAT)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "frac/ceil/trunc/floor operates on vectors or scalars of "
+                        "floating point types");
+                    break;
+                }
+
+                expr->type = params.ptr[0]->type;
+
+                break;
+            }
+
+            case AST_BUILTIN_FUNC_LERP: {
+                if (param_count != 3)
+                {
+                    ts__addErr(compiler, &expr->loc, "lerp takes 3 parameters");
+                    break;
+                }
+
+                if (expected_type &&
+                    canCoerceExprToScalarType(a, params.ptr[0], expected_type) &&
+                    canCoerceExprToScalarType(a, params.ptr[1], expected_type) &&
+                    canCoerceExprToScalarType(a, params.ptr[2], expected_type))
+                {
+                    tryCoerceExprToScalarType(a, params.ptr[0], expected_type);
+                    tryCoerceExprToScalarType(a, params.ptr[1], expected_type);
+                    tryCoerceExprToScalarType(a, params.ptr[2], expected_type);
+                }
+
+                AstExpr *a = params.ptr[0];
+                AstExpr *b = params.ptr[1];
+                AstExpr *c = params.ptr[2];
+                if (!a->type || !b->type || !c->type) break;
+
+                if (a->type != b->type || a->type != c->type)
+                {
+                    ts__addErr(
+                        compiler, &expr->loc, "lerp operates parameters of equal types");
+                    break;
+                }
+
+                AstType *scalar_type = ts__getScalarType(a->type);
+                if (!scalar_type || scalar_type->kind != TYPE_FLOAT)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "lerp operates on vectors or scalars of float type");
+                    break;
+                }
+
+                expr->type = a->type;
+
+                break;
+            }
+
+            case AST_BUILTIN_FUNC_CLAMP: {
+                if (param_count != 3)
+                {
+                    ts__addErr(compiler, &expr->loc, "clamp takes 3 parameters");
+                    break;
+                }
+
+                if (expected_type &&
+                    canCoerceExprToScalarType(a, params.ptr[0], expected_type) &&
+                    canCoerceExprToScalarType(a, params.ptr[1], expected_type) &&
+                    canCoerceExprToScalarType(a, params.ptr[2], expected_type))
+                {
+                    tryCoerceExprToScalarType(a, params.ptr[0], expected_type);
+                    tryCoerceExprToScalarType(a, params.ptr[1], expected_type);
+                    tryCoerceExprToScalarType(a, params.ptr[2], expected_type);
+                }
+                else if (
+                    canCoerceExprToScalarType(a, params.ptr[1], params.ptr[0]->type) &&
+                    canCoerceExprToScalarType(a, params.ptr[2], params.ptr[0]->type))
+                {
+                    tryCoerceExprToScalarType(a, params.ptr[1], params.ptr[0]->type);
+                    tryCoerceExprToScalarType(a, params.ptr[2], params.ptr[0]->type);
+                }
+
+                AstExpr *a = params.ptr[0];
+                AstExpr *b = params.ptr[1];
+                AstExpr *c = params.ptr[2];
+                if (!a->type || !b->type || !c->type) break;
+
+                if (a->type != b->type || a->type != c->type)
+                {
+                    ts__addErr(
+                        compiler, &expr->loc, "clamp operates parameters of equal types");
+                    break;
+                }
+
+                AstType *scalar_type = ts__getScalarType(a->type);
+                if (!scalar_type ||
+                    !(scalar_type->kind == TYPE_FLOAT || scalar_type->kind == TYPE_INT))
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "clamp operates on vectors or scalars of float type");
+                    break;
+                }
+
+                expr->type = a->type;
+
+                break;
+            }
+
+            case AST_BUILTIN_FUNC_STEP: {
+                if (param_count != 2)
+                {
+                    ts__addErr(compiler, &expr->loc, "step takes 2 parameters");
+                    break;
+                }
+
+                tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
+                tryCoerceExprToScalarType(a, params.ptr[1], newFloatType(m, 32));
+
+                AstExpr *a = params.ptr[0];
+                AstExpr *b = params.ptr[1];
+                if (!a->type || !b->type) break;
+
+                if (a->type != b->type)
+                {
+                    ts__addErr(
+                        compiler, &expr->loc, "step operates parameters of equal types");
+                    break;
+                }
+
+                AstType *scalar_type = ts__getScalarType(a->type);
+                if (!scalar_type || scalar_type->kind != TYPE_FLOAT)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "step operates on vectors or scalars of float type");
+                    break;
+                }
+
+                expr->type = a->type;
+
+                break;
+            }
+
+            case AST_BUILTIN_FUNC_SMOOTHSTEP: {
+                if (param_count != 3)
+                {
+                    ts__addErr(compiler, &expr->loc, "smoothstep takes 3 parameters");
+                    break;
+                }
+
+                tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
+                tryCoerceExprToScalarType(a, params.ptr[1], newFloatType(m, 32));
+                tryCoerceExprToScalarType(a, params.ptr[2], newFloatType(m, 32));
+
+                AstExpr *a = params.ptr[0];
+                AstExpr *b = params.ptr[1];
+                AstExpr *c = params.ptr[2];
+                if (!a->type || !b->type || !c->type) break;
+
+                if ((a->type != b->type) || (a->type != c->type))
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "smoothstep operates parameters of equal types");
+                    break;
+                }
+
+                AstType *scalar_type = ts__getScalarType(a->type);
+                if (!scalar_type || scalar_type->kind != TYPE_FLOAT)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "smoothstep operates on vectors or scalars of float type");
+                    break;
+                }
+
+                expr->type = a->type;
+
+                break;
+            }
+
+            case AST_BUILTIN_FUNC_FMOD: {
+                if (param_count != 2)
+                {
+                    ts__addErr(compiler, &expr->loc, "fmod needs 2 parameters");
+                    break;
+                }
+
+                tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
+                tryCoerceExprToScalarType(a, params.ptr[1], newFloatType(m, 32));
+
+                if (!params.ptr[0]->type || !params.ptr[1]->type) break;
+
+                if (params.ptr[0]->type != params.ptr[1]->type)
+                {
+                    ts__addErr(
+                        compiler, &expr->loc, "fmod operates parameters of equal types");
+                    break;
+                }
+
+                AstType *scalar_type = ts__getScalarType(params.ptr[0]->type);
+                if (!scalar_type || scalar_type->kind != TYPE_FLOAT)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "fmod operates on vectors or scalars of float type");
+                    break;
+                }
+
+                expr->type = params.ptr[0]->type;
+                break;
+            }
+
+            case AST_BUILTIN_FUNC_TRANSPOSE: {
+                if (param_count != 1)
+                {
+                    ts__addErr(compiler, &expr->loc, "transpose takes 1 parameter");
+                    break;
+                }
+
+                AstExpr *a = params.ptr[0];
+                if (!a->type) break;
+
+                if (a->type->kind != TYPE_MATRIX)
+                {
+                    ts__addErr(compiler, &expr->loc, "transpose operates on matrices");
+                    break;
+                }
+
+                AstType *elem_type = a->type->matrix.col_type->vector.elem_type;
+                uint32_t col_count = a->type->matrix.col_count;
+                uint32_t row_count = a->type->matrix.col_type->vector.size;
+
+                AstType *col_type = newVectorType(m, elem_type, col_count);
+                expr->type = newMatrixType(m, col_type, row_count);
+
+                break;
+            }
+
+            case AST_BUILTIN_FUNC_DETERMINANT: {
+                if (param_count != 1)
+                {
+                    ts__addErr(compiler, &expr->loc, "determinant takes 1 parameter");
+                    break;
+                }
+
+                AstExpr *a = params.ptr[0];
+                if (!a->type) break;
+
+                if (a->type->kind != TYPE_MATRIX)
+                {
+                    ts__addErr(compiler, &expr->loc, "determinant operates on matrices");
+                    break;
+                }
+
+                AstType *elem_type = a->type->matrix.col_type->vector.elem_type;
+                uint32_t col_count = a->type->matrix.col_count;
+                uint32_t row_count = a->type->matrix.col_type->vector.size;
+
+                expr->type = elem_type;
+
+                if (col_count != row_count)
+                {
+                    ts__addErr(
+                        compiler, &expr->loc, "determinant operates on square matrices");
+                    break;
+                }
+
+                break;
+            }
+
+            case AST_BUILTIN_FUNC_DDX:
+            case AST_BUILTIN_FUNC_DDY: {
+                if (param_count != 1)
+                {
+                    ts__addErr(compiler, &expr->loc, "ddx/ddy call needs 1 parameter");
+                    break;
+                }
+
+                tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
+
+                AstExpr *a = params.ptr[0];
+                if (!a->type) break;
+
+                if (a->type->kind != TYPE_FLOAT)
+                {
+                    ts__addErr(
+                        compiler, &expr->loc, "ddx/ddy call needs a float parameter");
+                    break;
+                }
+
+                expr->type = a->type;
+
+                break;
+            }
+
+            case AST_BUILTIN_FUNC_ASFLOAT:
+            case AST_BUILTIN_FUNC_ASINT:
+            case AST_BUILTIN_FUNC_ASUINT: {
+                if (param_count != 1)
+                {
+                    ts__addErr(compiler, &expr->loc, "bitcast needs 1 parameter");
+                    break;
+                }
+
+                AstExpr *a = params.ptr[0];
+                if (!a->type) break;
+
+                uint32_t dim = 0;
+                if (a->type->kind == TYPE_VECTOR)
+                {
+                    dim = a->type->vector.size;
+                }
+
+                AstType *scalar_type = ts__getScalarType(a->type);
+                if (!scalar_type)
+                {
+                    ts__addErr(
+                        compiler, &expr->loc, "bitcast needs a scalar/vector parameter");
+                    break;
+                }
+
+                switch (builtin_func_kind)
+                {
+                case AST_BUILTIN_FUNC_ASFLOAT: {
+                    expr->type = newFloatType(m, 32);
+                    break;
+                }
+                case AST_BUILTIN_FUNC_ASINT: {
+                    expr->type = newIntType(m, 32, true);
+                    break;
+                }
+                case AST_BUILTIN_FUNC_ASUINT: {
+                    expr->type = newIntType(m, 32, false);
+                    break;
+                }
+                default: assert(0); break;
+                }
+
+                if (dim > 0)
+                {
+                    expr->type = newVectorType(m, expr->type, dim);
+                }
+
+                break;
+            }
+
+            case AST_BUILTIN_FUNC_INTERLOCKED_OR:
+            case AST_BUILTIN_FUNC_INTERLOCKED_XOR:
+            case AST_BUILTIN_FUNC_INTERLOCKED_MIN:
+            case AST_BUILTIN_FUNC_INTERLOCKED_MAX:
+            case AST_BUILTIN_FUNC_INTERLOCKED_AND:
+            case AST_BUILTIN_FUNC_INTERLOCKED_ADD: {
+                expr->type = newBasicType(m, TYPE_VOID);
+
+                if (param_count != 2)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "Interlocked function requires 2 parameters");
+                    break;
+                }
+
+                if (!params.ptr[0]->type || !params.ptr[1]->type) break;
+
+                tryCoerceExprToScalarType(a, params.ptr[1], params.ptr[0]->type);
+
+                if (params.ptr[0]->type != params.ptr[1]->type)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "mismatched types for Interlocked function parameters");
+                    break;
+                }
+
+                if (params.ptr[0]->type->kind != TYPE_INT)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "Interlocked function requires scalar integer parameters");
+                    break;
+                }
+
+                if ((params.ptr[0]->kind != EXPR_IDENT) || (!params.ptr[0]->ident.decl) ||
+                    (params.ptr[0]->ident.decl->kind != DECL_VAR) ||
+                    (params.ptr[0]->ident.decl->var.kind != VAR_GROUPSHARED))
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "Interlocked functions require first parameter to be a "
+                        "groupshared "
+                        "variable");
+                    break;
+                }
+
+                break;
+            }
+
+            case AST_BUILTIN_FUNC_INTERLOCKED_EXCHANGE: {
+                expr->type = newBasicType(m, TYPE_VOID);
+
+                if (param_count != 3)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "Interlocked function requires 3 parameters");
+                    break;
+                }
+
+                if (!params.ptr[0]->type || !params.ptr[1]->type || !params.ptr[2]->type)
+                    break;
+
+                tryCoerceExprToScalarType(a, params.ptr[1], params.ptr[0]->type);
+
+                if (params.ptr[0]->type != params.ptr[1]->type ||
+                    params.ptr[0]->type != params.ptr[2]->type)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "mismatched types for Interlocked function parameters");
+                    break;
+                }
+
+                if (params.ptr[0]->type->kind != TYPE_INT)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "Interlocked function requires scalar integer parameters");
+                    break;
+                }
+
+                if ((params.ptr[0]->kind != EXPR_IDENT) || (!params.ptr[0]->ident.decl) ||
+                    (params.ptr[0]->ident.decl->kind != DECL_VAR) ||
+                    (params.ptr[0]->ident.decl->var.kind != VAR_GROUPSHARED))
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "Interlocked functions require first parameter to be a "
+                        "groupshared "
+                        "variable");
+                    break;
+                }
+
+                if (!params.ptr[2]->assignable)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "Interlocked function requires third parameter to be assignable");
+                    break;
+                }
+
+                break;
+            }
+
+            case AST_BUILTIN_FUNC_INTERLOCKED_COMPARE_EXCHANGE: {
+                expr->type = newBasicType(m, TYPE_VOID);
+
+                if (param_count != 4)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "Interlocked function requires 4 parameters");
+                    break;
+                }
+
+                if (!params.ptr[0]->type || !params.ptr[1]->type ||
+                    !params.ptr[2]->type || !params.ptr[3]->type)
+                    break;
+
+                tryCoerceExprToScalarType(a, params.ptr[1], params.ptr[0]->type);
+                tryCoerceExprToScalarType(a, params.ptr[2], params.ptr[0]->type);
+
+                if (params.ptr[0]->type != params.ptr[1]->type ||
+                    params.ptr[0]->type != params.ptr[2]->type ||
+                    params.ptr[0]->type != params.ptr[3]->type)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "mismatched types for Interlocked function parameters");
+                    break;
+                }
+
+                if (params.ptr[0]->type->kind != TYPE_INT)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "Interlocked function requires scalar integer parameters");
+                    break;
+                }
+
+                if ((params.ptr[0]->kind != EXPR_IDENT) || (!params.ptr[0]->ident.decl) ||
+                    (params.ptr[0]->ident.decl->kind != DECL_VAR) ||
+                    (params.ptr[0]->ident.decl->var.kind != VAR_GROUPSHARED))
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "Interlocked functions require first parameter to be a "
+                        "groupshared "
+                        "variable");
+                    break;
+                }
+
+                if (!params.ptr[3]->assignable)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "Interlocked function requires fourth parameter to be "
+                        "assignable");
+                    break;
+                }
+
+                break;
+            }
+
+            case AST_BUILTIN_FUNC_INTERLOCKED_COMPARE_STORE: {
+                expr->type = newBasicType(m, TYPE_VOID);
+
+                if (param_count != 3)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "Interlocked function requires 3 parameters");
+                    break;
+                }
+
+                if (!params.ptr[0]->type || !params.ptr[1]->type || !params.ptr[2]->type)
+                    break;
+
+                tryCoerceExprToScalarType(a, params.ptr[1], params.ptr[0]->type);
+                tryCoerceExprToScalarType(a, params.ptr[2], params.ptr[0]->type);
+
+                if (params.ptr[0]->type != params.ptr[1]->type ||
+                    params.ptr[0]->type != params.ptr[2]->type)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "mismatched types for Interlocked function parameters");
+                    break;
+                }
+
+                if (params.ptr[0]->type->kind != TYPE_INT)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "Interlocked function requires scalar integer parameters");
+                    break;
+                }
+
+                if ((params.ptr[0]->kind != EXPR_IDENT) || (!params.ptr[0]->ident.decl) ||
+                    (params.ptr[0]->ident.decl->kind != DECL_VAR) ||
+                    (params.ptr[0]->ident.decl->var.kind != VAR_GROUPSHARED))
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "Interlocked functions require first parameter to be a "
+                        "groupshared "
+                        "variable");
+                    break;
+                }
+
+                break;
+            }
+
+            case AST_BUILTIN_FUNC_ALL_MEMORY_BARRIER:
+            case AST_BUILTIN_FUNC_ALL_MEMORY_BARRIER_WITH_GROUP_SYNC:
+            case AST_BUILTIN_FUNC_DEVICE_MEMORY_BARRIER:
+            case AST_BUILTIN_FUNC_DEVICE_MEMORY_BARRIER_WITH_GROUP_SYNC:
+            case AST_BUILTIN_FUNC_GROUP_MEMORY_BARRIER:
+            case AST_BUILTIN_FUNC_GROUP_MEMORY_BARRIER_WITH_GROUP_SYNC: {
+                expr->type = newBasicType(m, TYPE_VOID);
+
+                if (param_count != 0)
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "barrier functions require 0 parameters");
+                    break;
+                }
+
+                break;
+            }
+            }
+
+            break;
+        }
+
         // Builtin method call
         if (func_expr->kind == EXPR_ACCESS)
         {
@@ -1316,7 +2567,8 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
                 expr->type = texture_component_type;
             }
-            else if (self_type->kind == TYPE_IMAGE && strcmp(method_name, "SampleLevel") == 0)
+            else if (
+                self_type->kind == TYPE_IMAGE && strcmp(method_name, "SampleLevel") == 0)
             {
                 AstType *texture_component_type = self_type->image.sampled_type;
 
@@ -1362,7 +2614,9 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
                 expr->type = texture_component_type;
             }
-            else if (self_type->kind == TYPE_IMAGE && strcmp(method_name, "GetDimensions") == 0)
+            else if (
+                self_type->kind == TYPE_IMAGE &&
+                strcmp(method_name, "GetDimensions") == 0)
             {
                 uint32_t func_param_count = 0;
                 AstType **func_param_types = NULL;
@@ -1376,7 +2630,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                     func_param_count = 3;
                     func_param_types = NEW_ARRAY(compiler, AstType *, func_param_count);
 
-                    func_param_types[0] = uint_type; // mip level
+                    func_param_types[0] = uint_type;  // mip level
                     func_param_types[1] = float_type; // width
                     func_param_types[2] = float_type; // mip count
                     break;
@@ -1384,7 +2638,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                     func_param_count = 4;
                     func_param_types = NEW_ARRAY(compiler, AstType *, func_param_count);
 
-                    func_param_types[0] = uint_type; // mip level
+                    func_param_types[0] = uint_type;  // mip level
                     func_param_types[1] = float_type; // width
                     func_param_types[2] = float_type; // height
                     func_param_types[3] = float_type; // mip count
@@ -1393,7 +2647,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                     func_param_count = 5;
                     func_param_types = NEW_ARRAY(compiler, AstType *, func_param_count);
 
-                    func_param_types[0] = uint_type; // mip level
+                    func_param_types[0] = uint_type;  // mip level
                     func_param_types[1] = float_type; // width
                     func_param_types[2] = float_type; // height
                     func_param_types[3] = float_type; // depth
@@ -1403,7 +2657,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                     func_param_count = 4;
                     func_param_types = NEW_ARRAY(compiler, AstType *, func_param_count);
 
-                    func_param_types[0] = uint_type; // mip level
+                    func_param_types[0] = uint_type;  // mip level
                     func_param_types[1] = float_type; // width
                     func_param_types[2] = float_type; // height
                     func_param_types[3] = float_type; // mip count
@@ -1585,1196 +2839,6 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 compiler,
                 &expr->func_call.func_expr->loc,
                 "expression does not represent a function");
-        }
-
-        break;
-    }
-
-    case EXPR_BARRIER_CALL: {
-        expr->type = newBasicType(m, TYPE_VOID);
-        break;
-    }
-
-    case EXPR_BUILTIN_CALL: {
-        uint32_t param_count = arrLength(expr->builtin_call.params);
-        ArrayOfAstExprPtr params = expr->builtin_call.params;
-
-        bool got_param_types = true;
-
-        for (uint32_t i = 0; i < param_count; ++i)
-        {
-            AstExpr *param = params.ptr[i];
-            analyzerAnalyzeExpr(a, param, NULL);
-            if (!param->type)
-            {
-                got_param_types = false;
-                continue;
-            }
-        }
-
-        if (!got_param_types) break;
-
-        switch (expr->builtin_call.kind)
-        {
-        case IR_BUILTIN_DOT: {
-            if (param_count != 2)
-            {
-                ts__addErr(compiler, &expr->loc, "dot needs 2 parameters");
-                break;
-            }
-
-            AstExpr *a = params.ptr[0];
-            AstExpr *b = params.ptr[1];
-
-            if ((a->type->kind != TYPE_VECTOR) || (b->type->kind != TYPE_VECTOR))
-            {
-                ts__addErr(compiler, &expr->loc, "dot operates on vectors");
-                break;
-            }
-
-            if (a->type != b->type)
-            {
-                ts__addErr(compiler, &expr->loc, "dot cannot operate on different types");
-                break;
-            }
-
-            expr->type = a->type->vector.elem_type;
-            break;
-        }
-
-        case IR_BUILTIN_CROSS: {
-            if (param_count != 2)
-            {
-                ts__addErr(compiler, &expr->loc, "cross needs 2 parameters");
-                break;
-            }
-
-            AstExpr *a = params.ptr[0];
-            AstExpr *b = params.ptr[1];
-
-            if ((a->type->kind != TYPE_VECTOR) || (b->type->kind != TYPE_VECTOR))
-            {
-                ts__addErr(compiler, &expr->loc, "cross operates on vectors");
-                break;
-            }
-
-            if (a->type != b->type)
-            {
-                ts__addErr(
-                    compiler, &expr->loc, "cross cannot operate on different types");
-                break;
-            }
-
-            if (a->type->vector.size != 3)
-            {
-                ts__addErr(compiler, &expr->loc, "cross operates on 3D vectors");
-                break;
-            }
-
-            expr->type = a->type;
-            break;
-        }
-
-        case IR_BUILTIN_LENGTH: {
-            if (param_count != 1)
-            {
-                ts__addErr(compiler, &expr->loc, "length needs 1 parameter");
-                break;
-            }
-
-            AstExpr *a = params.ptr[0];
-
-            if (a->type->kind != TYPE_VECTOR)
-            {
-                ts__addErr(compiler, &expr->loc, "length operates on a vector");
-                break;
-            }
-
-            expr->type = a->type->vector.elem_type;
-            break;
-        }
-
-        case IR_BUILTIN_NORMALIZE: {
-            if (param_count != 1)
-            {
-                ts__addErr(compiler, &expr->loc, "normalize needs 1 parameter");
-                break;
-            }
-
-            AstExpr *a = params.ptr[0];
-
-            if (a->type->kind != TYPE_VECTOR)
-            {
-                ts__addErr(compiler, &expr->loc, "normalize operates on a vector");
-                break;
-            }
-
-            expr->type = a->type;
-            break;
-        }
-
-        case IR_BUILTIN_MUL: {
-            if (param_count != 2)
-            {
-                ts__addErr(compiler, &expr->loc, "dot needs 2 parameters");
-                break;
-            }
-
-            AstExpr *a = params.ptr[0];
-            AstExpr *b = params.ptr[1];
-
-            if (!((a->type->kind == TYPE_VECTOR && b->type->kind == TYPE_MATRIX) ||
-                  (a->type->kind == TYPE_MATRIX && b->type->kind == TYPE_VECTOR) ||
-                  (a->type->kind == TYPE_VECTOR && b->type->kind == TYPE_VECTOR) ||
-                  (a->type->kind == TYPE_MATRIX && b->type->kind == TYPE_MATRIX)))
-            {
-                ts__addErr(compiler, &expr->loc, "invalid parameters for mul");
-                break;
-            }
-
-            if (a->type->kind == TYPE_VECTOR && b->type->kind == TYPE_MATRIX)
-            {
-                // Matrix times vector, yes, it's backwards
-                if (a->type != b->type->matrix.col_type)
-                {
-                    ts__addErr(
-                        compiler,
-                        &expr->loc,
-                        "mismatched matrix columns with vector type");
-                    break;
-                }
-
-                expr->type = a->type;
-            }
-            else if (a->type->kind == TYPE_MATRIX && b->type->kind == TYPE_VECTOR)
-            {
-                // Vector times matrix, yes, it's backwards
-                if (b->type != a->type->matrix.col_type)
-                {
-                    ts__addErr(
-                        compiler,
-                        &expr->loc,
-                        "mismatched matrix columns with vector type");
-                    break;
-                }
-
-                expr->type = b->type;
-            }
-            else if (a->type->kind == TYPE_VECTOR && b->type->kind == TYPE_VECTOR)
-            {
-                // Vector dot product
-                if (b->type != a->type)
-                {
-                    ts__addErr(compiler, &expr->loc, "mismatched vector types");
-                    break;
-                }
-
-                expr->type = a->type->vector.elem_type;
-            }
-            else if (a->type->kind == TYPE_MATRIX && b->type->kind == TYPE_MATRIX)
-            {
-                // Matrix times matrix
-                if (b->type != a->type)
-                {
-                    ts__addErr(compiler, &expr->loc, "mismatched matrix types");
-                    break;
-                }
-
-                expr->type = a->type;
-            }
-            else
-            {
-                assert(0);
-            }
-
-            break;
-        }
-
-        case IR_BUILTIN_DISTANCE: {
-            if (param_count != 2)
-            {
-                ts__addErr(compiler, &expr->loc, "distance needs 2 parameters");
-                break;
-            }
-
-            tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
-            tryCoerceExprToScalarType(a, params.ptr[1], newFloatType(m, 32));
-
-            AstExpr *a = params.ptr[0];
-            AstExpr *b = params.ptr[1];
-
-            if ((a->type->kind != TYPE_VECTOR) || (b->type->kind != TYPE_VECTOR))
-            {
-                ts__addErr(compiler, &expr->loc, "distance operates on vectors");
-                break;
-            }
-
-            if (a->type != b->type)
-            {
-                ts__addErr(
-                    compiler, &expr->loc, "distance cannot operate on different types");
-                break;
-            }
-
-            expr->type = ts__getElemType(a->type);
-            break;
-        }
-
-        case IR_BUILTIN_RADIANS:
-        case IR_BUILTIN_DEGREES: {
-            if (param_count != 1)
-            {
-                ts__addErr(
-                    compiler, &expr->loc, "degrees/radians call needs 1 parameter");
-                break;
-            }
-
-            tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
-
-            AstExpr *a = params.ptr[0];
-            if (!a->type) break;
-
-            if (a->type->kind != TYPE_FLOAT)
-            {
-                ts__addErr(
-                    compiler, &expr->loc, "degrees/radians call needs a float parameter");
-                break;
-            }
-
-            expr->type = a->type;
-
-            break;
-        }
-
-        case IR_BUILTIN_SIN:
-        case IR_BUILTIN_COS:
-        case IR_BUILTIN_TAN:
-        case IR_BUILTIN_ASIN:
-        case IR_BUILTIN_ACOS:
-        case IR_BUILTIN_ATAN:
-        case IR_BUILTIN_SINH:
-        case IR_BUILTIN_COSH:
-        case IR_BUILTIN_TANH: {
-            if (param_count != 1)
-            {
-                ts__addErr(
-                    compiler, &expr->loc, "trigonometric functions take 1 parameter");
-                break;
-            }
-
-            tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
-
-            AstType *scalar_type = ts__getScalarType(params.ptr[0]->type);
-
-            if (scalar_type->kind != TYPE_FLOAT)
-            {
-                ts__addErr(
-                    compiler, &expr->loc, "trigonometric functions operate on floats");
-                break;
-            }
-
-            expr->type = params.ptr[0]->type;
-            break;
-        }
-
-        case IR_BUILTIN_ATAN2: {
-            if (param_count != 2)
-            {
-                ts__addErr(compiler, &expr->loc, "atan2 takes 2 parameters");
-                break;
-            }
-
-            tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
-            tryCoerceExprToScalarType(a, params.ptr[1], newFloatType(m, 32));
-
-            AstExpr *a = params.ptr[0];
-            AstExpr *b = params.ptr[1];
-
-            if (a->kind == EXPR_PRIMARY && a->type->kind == TYPE_INT)
-            {
-                a->type = newFloatType(m, 32);
-            }
-
-            if (b->kind == EXPR_PRIMARY && b->type->kind == TYPE_INT)
-            {
-                b->type = newFloatType(m, 32);
-            }
-
-            if (a->type != b->type)
-            {
-                ts__addErr(
-                    compiler,
-                    &expr->loc,
-                    "atan2 requires 2 parameters of identical types");
-                break;
-            }
-
-            if (a->type->kind != TYPE_FLOAT)
-            {
-                ts__addErr(compiler, &expr->loc, "atan2 operates on floats");
-                break;
-            }
-
-            expr->type = a->type;
-            break;
-        }
-
-        case IR_BUILTIN_SQRT:
-        case IR_BUILTIN_RSQRT: {
-            if (param_count != 1)
-            {
-                ts__addErr(compiler, &expr->loc, "sqrt/rsqrt takes 1 parameter");
-                break;
-            }
-
-            tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
-
-            AstExpr *a = params.ptr[0];
-            if (!a->type) break;
-
-            AstType *scalar_type = ts__getScalarType(a->type);
-            if (!scalar_type || scalar_type->kind != TYPE_FLOAT)
-            {
-                ts__addErr(
-                    compiler,
-                    &expr->loc,
-                    "sqrt/rsqrt operates on vectors or scalars of float type");
-                break;
-            }
-
-            expr->type = a->type;
-
-            break;
-        }
-
-        case IR_BUILTIN_REFLECT: {
-            if (param_count != 2)
-            {
-                ts__addErr(compiler, &expr->loc, "reflect needs 2 parameters");
-                break;
-            }
-
-            AstExpr *a = params.ptr[0];
-            AstExpr *b = params.ptr[1];
-
-            if ((a->type->kind != TYPE_VECTOR) || (b->type->kind != TYPE_VECTOR))
-            {
-                ts__addErr(compiler, &expr->loc, "reflect operates on vectors");
-                break;
-            }
-
-            if (a->type != b->type)
-            {
-                ts__addErr(
-                    compiler,
-                    &expr->loc,
-                    "reflect cannot operate on different vector types");
-                break;
-            }
-
-            expr->type = a->type;
-
-            break;
-        }
-
-        case IR_BUILTIN_REFRACT: {
-            if (param_count != 3)
-            {
-                ts__addErr(compiler, &expr->loc, "refract needs 2 parameters");
-                break;
-            }
-
-            tryCoerceExprToScalarType(a, params.ptr[2], newFloatType(m, 32));
-
-            AstExpr *a = params.ptr[0];
-            AstExpr *b = params.ptr[1];
-            AstExpr *c = params.ptr[2];
-
-            if (!a->type || !b->type || !c->type) break;
-
-            if ((a->type->kind != TYPE_VECTOR) || (b->type->kind != TYPE_VECTOR))
-            {
-                ts__addErr(compiler, &expr->loc, "refract operates on vectors");
-                break;
-            }
-
-            if (a->type != b->type)
-            {
-                ts__addErr(
-                    compiler,
-                    &expr->loc,
-                    "refract cannot operate on different vector types");
-                break;
-            }
-
-            if (c->type->kind != TYPE_FLOAT)
-            {
-                ts__addErr(
-                    compiler,
-                    &expr->loc,
-                    "refract takes a scalar as the third parameter");
-                break;
-            }
-
-            expr->type = a->type;
-
-            break;
-        }
-
-        case IR_BUILTIN_POW: {
-            if (param_count != 2)
-            {
-                ts__addErr(compiler, &expr->loc, "pow takes 2 parameters");
-                break;
-            }
-
-            tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
-            tryCoerceExprToScalarType(a, params.ptr[1], newFloatType(m, 32));
-
-            AstExpr *a = params.ptr[0];
-            AstExpr *b = params.ptr[1];
-            if (!a->type || !b->type) break;
-
-            if (a->type != b->type)
-            {
-                ts__addErr(
-                    compiler, &expr->loc, "pow operates on parameters of the same type");
-                break;
-            }
-
-            AstType *scalar_type = ts__getScalarType(a->type);
-            if (!scalar_type || scalar_type->kind != TYPE_FLOAT)
-            {
-                ts__addErr(
-                    compiler,
-                    &expr->loc,
-                    "pow operates on vectors or scalars of float type");
-                break;
-            }
-
-            expr->type = a->type;
-
-            break;
-        }
-
-        case IR_BUILTIN_EXP:
-        case IR_BUILTIN_EXP2: {
-            if (param_count != 1)
-            {
-                ts__addErr(compiler, &expr->loc, "exp/exp2 takes 1 parameter");
-                break;
-            }
-
-            tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
-
-            AstExpr *a = params.ptr[0];
-            if (!a->type) break;
-
-            AstType *scalar_type = ts__getScalarType(a->type);
-            if (!scalar_type || scalar_type->kind != TYPE_FLOAT)
-            {
-                ts__addErr(
-                    compiler,
-                    &expr->loc,
-                    "exp/exp2 operates on vectors or scalars of float type");
-                break;
-            }
-
-            expr->type = a->type;
-
-            break;
-        }
-
-        case IR_BUILTIN_LOG:
-        case IR_BUILTIN_LOG2: {
-            if (param_count != 1)
-            {
-                ts__addErr(compiler, &expr->loc, "log/log2 takes 1 parameter");
-                break;
-            }
-
-            tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
-
-            AstExpr *a = params.ptr[0];
-            if (!a->type) break;
-
-            AstType *scalar_type = ts__getScalarType(a->type);
-            if (!scalar_type || scalar_type->kind != TYPE_FLOAT)
-            {
-                ts__addErr(
-                    compiler,
-                    &expr->loc,
-                    "log/log2 operates on vectors or scalars of float type");
-                break;
-            }
-
-            expr->type = a->type;
-
-            break;
-        }
-
-        case IR_BUILTIN_ABS: {
-            if (param_count != 1)
-            {
-                ts__addErr(compiler, &expr->loc, "abs takes 1 parameter");
-                break;
-            }
-
-            if (expected_type)
-            {
-                tryCoerceExprToScalarType(a, params.ptr[0], expected_type);
-            }
-
-            AstExpr *a = params.ptr[0];
-            if (!a->type) break;
-
-            AstType *scalar_type = ts__getScalarType(a->type);
-            if (!scalar_type ||
-                !(scalar_type->kind == TYPE_INT || scalar_type->kind == TYPE_FLOAT))
-            {
-                ts__addErr(compiler, &expr->loc, "abs operates on vectors or scalars");
-                break;
-            }
-
-            expr->type = a->type;
-
-            break;
-        }
-
-        case IR_BUILTIN_MIN:
-        case IR_BUILTIN_MAX: {
-            if (param_count != 2)
-            {
-                ts__addErr(compiler, &expr->loc, "min/max takes 2 parameters");
-                break;
-            }
-
-            if (expected_type &&
-                canCoerceExprToScalarType(a, params.ptr[0], expected_type) &&
-                canCoerceExprToScalarType(a, params.ptr[1], expected_type))
-            {
-                tryCoerceExprToScalarType(a, params.ptr[0], expected_type);
-                tryCoerceExprToScalarType(a, params.ptr[1], expected_type);
-            }
-
-            AstExpr *a = params.ptr[0];
-            AstExpr *b = params.ptr[1];
-            if (!a->type || !b->type) break;
-
-            if (a->type != b->type)
-            {
-                ts__addErr(
-                    compiler, &expr->loc, "min/max operates parameters of equal types");
-                break;
-            }
-
-            AstType *scalar_type = ts__getScalarType(a->type);
-            if (!scalar_type ||
-                !(scalar_type->kind == TYPE_INT || scalar_type->kind == TYPE_FLOAT))
-            {
-                ts__addErr(
-                    compiler, &expr->loc, "min/max operates on vectors or scalars");
-                break;
-            }
-
-            expr->type = a->type;
-
-            break;
-        }
-
-        case IR_BUILTIN_TRUNC:
-        case IR_BUILTIN_CEIL:
-        case IR_BUILTIN_FLOOR:
-        case IR_BUILTIN_FRAC: {
-            if (param_count != 1)
-            {
-                ts__addErr(compiler, &expr->loc, "frac/ceil/trunc/floor take 1 parameter");
-                break;
-            }
-
-            if (expected_type &&
-                canCoerceExprToScalarType(a, params.ptr[0], expected_type))
-            {
-                tryCoerceExprToScalarType(a, params.ptr[0], expected_type);
-            }
-
-            if (!params.ptr[0]->type) break;
-
-            AstType *scalar_type = ts__getScalarType(params.ptr[0]->type);
-            if (!scalar_type || scalar_type->kind != TYPE_FLOAT)
-            {
-                ts__addErr(
-                    compiler,
-                    &expr->loc,
-                    "frac/ceil/trunc/floor operates on vectors or scalars of floating point types");
-                break;
-            }
-
-            expr->type = params.ptr[0]->type;
-
-            break;
-        }
-
-        case IR_BUILTIN_LERP: {
-            if (param_count != 3)
-            {
-                ts__addErr(compiler, &expr->loc, "lerp takes 3 parameters");
-                break;
-            }
-
-            if (expected_type &&
-                canCoerceExprToScalarType(a, params.ptr[0], expected_type) &&
-                canCoerceExprToScalarType(a, params.ptr[1], expected_type) &&
-                canCoerceExprToScalarType(a, params.ptr[2], expected_type))
-            {
-                tryCoerceExprToScalarType(a, params.ptr[0], expected_type);
-                tryCoerceExprToScalarType(a, params.ptr[1], expected_type);
-                tryCoerceExprToScalarType(a, params.ptr[2], expected_type);
-            }
-
-            AstExpr *a = params.ptr[0];
-            AstExpr *b = params.ptr[1];
-            AstExpr *c = params.ptr[2];
-            if (!a->type || !b->type || !c->type) break;
-
-            if (a->type != b->type || a->type != c->type)
-            {
-                ts__addErr(
-                    compiler, &expr->loc, "lerp operates parameters of equal types");
-                break;
-            }
-
-            AstType *scalar_type = ts__getScalarType(a->type);
-            if (!scalar_type || scalar_type->kind != TYPE_FLOAT)
-            {
-                ts__addErr(
-                    compiler,
-                    &expr->loc,
-                    "lerp operates on vectors or scalars of float type");
-                break;
-            }
-
-            expr->type = a->type;
-
-            break;
-        }
-
-        case IR_BUILTIN_CLAMP: {
-            if (param_count != 3)
-            {
-                ts__addErr(compiler, &expr->loc, "clamp takes 3 parameters");
-                break;
-            }
-
-            if (expected_type &&
-                canCoerceExprToScalarType(a, params.ptr[0], expected_type) &&
-                canCoerceExprToScalarType(a, params.ptr[1], expected_type) &&
-                canCoerceExprToScalarType(a, params.ptr[2], expected_type))
-            {
-                tryCoerceExprToScalarType(a, params.ptr[0], expected_type);
-                tryCoerceExprToScalarType(a, params.ptr[1], expected_type);
-                tryCoerceExprToScalarType(a, params.ptr[2], expected_type);
-            }
-            else if (
-                canCoerceExprToScalarType(a, params.ptr[1], params.ptr[0]->type) &&
-                canCoerceExprToScalarType(a, params.ptr[2], params.ptr[0]->type))
-            {
-                tryCoerceExprToScalarType(a, params.ptr[1], params.ptr[0]->type);
-                tryCoerceExprToScalarType(a, params.ptr[2], params.ptr[0]->type);
-            }
-
-            AstExpr *a = params.ptr[0];
-            AstExpr *b = params.ptr[1];
-            AstExpr *c = params.ptr[2];
-            if (!a->type || !b->type || !c->type) break;
-
-            if (a->type != b->type || a->type != c->type)
-            {
-                ts__addErr(
-                    compiler, &expr->loc, "clamp operates parameters of equal types");
-                break;
-            }
-
-            AstType *scalar_type = ts__getScalarType(a->type);
-            if (!scalar_type ||
-                !(scalar_type->kind == TYPE_FLOAT || scalar_type->kind == TYPE_INT))
-            {
-                ts__addErr(
-                    compiler,
-                    &expr->loc,
-                    "clamp operates on vectors or scalars of float type");
-                break;
-            }
-
-            expr->type = a->type;
-
-            break;
-        }
-
-        case IR_BUILTIN_STEP: {
-            if (param_count != 2)
-            {
-                ts__addErr(compiler, &expr->loc, "step takes 2 parameters");
-                break;
-            }
-
-            tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
-            tryCoerceExprToScalarType(a, params.ptr[1], newFloatType(m, 32));
-
-            AstExpr *a = params.ptr[0];
-            AstExpr *b = params.ptr[1];
-            if (!a->type || !b->type) break;
-
-            if (a->type != b->type)
-            {
-                ts__addErr(
-                    compiler, &expr->loc, "step operates parameters of equal types");
-                break;
-            }
-
-            AstType *scalar_type = ts__getScalarType(a->type);
-            if (!scalar_type || scalar_type->kind != TYPE_FLOAT)
-            {
-                ts__addErr(
-                    compiler,
-                    &expr->loc,
-                    "step operates on vectors or scalars of float type");
-                break;
-            }
-
-            expr->type = a->type;
-
-            break;
-        }
-
-        case IR_BUILTIN_SMOOTHSTEP: {
-            if (param_count != 3)
-            {
-                ts__addErr(compiler, &expr->loc, "smoothstep takes 3 parameters");
-                break;
-            }
-
-            tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
-            tryCoerceExprToScalarType(a, params.ptr[1], newFloatType(m, 32));
-            tryCoerceExprToScalarType(a, params.ptr[2], newFloatType(m, 32));
-
-            AstExpr *a = params.ptr[0];
-            AstExpr *b = params.ptr[1];
-            AstExpr *c = params.ptr[2];
-            if (!a->type || !b->type || !c->type) break;
-
-            if ((a->type != b->type) || (a->type != c->type))
-            {
-                ts__addErr(
-                    compiler,
-                    &expr->loc,
-                    "smoothstep operates parameters of equal types");
-                break;
-            }
-
-            AstType *scalar_type = ts__getScalarType(a->type);
-            if (!scalar_type || scalar_type->kind != TYPE_FLOAT)
-            {
-                ts__addErr(
-                    compiler,
-                    &expr->loc,
-                    "smoothstep operates on vectors or scalars of float type");
-                break;
-            }
-
-            expr->type = a->type;
-
-            break;
-        }
-
-        case IR_BUILTIN_FMOD: {
-            if (param_count != 2)
-            {
-                ts__addErr(compiler, &expr->loc, "fmod needs 2 parameters");
-                break;
-            }
-
-            tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
-            tryCoerceExprToScalarType(a, params.ptr[1], newFloatType(m, 32));
-
-            if (!params.ptr[0]->type || !params.ptr[1]->type) break;
-
-            if (params.ptr[0]->type != params.ptr[1]->type)
-            {
-                ts__addErr(compiler, &expr->loc,
-                           "fmod operates parameters of equal types");
-                break;
-            }
-
-            AstType *scalar_type = ts__getScalarType(params.ptr[0]->type);
-            if (!scalar_type || scalar_type->kind != TYPE_FLOAT)
-            {
-                ts__addErr(
-                    compiler,
-                    &expr->loc,
-                    "fmod operates on vectors or scalars of float type");
-                break;
-            }
-
-            expr->type = params.ptr[0]->type;
-            break;
-        }
-
-        case IR_BUILTIN_TRANSPOSE: {
-            if (param_count != 1)
-            {
-                ts__addErr(compiler, &expr->loc, "transpose takes 1 parameter");
-                break;
-            }
-
-            AstExpr *a = params.ptr[0];
-            if (!a->type) break;
-
-            if (a->type->kind != TYPE_MATRIX)
-            {
-                ts__addErr(compiler, &expr->loc, "transpose operates on matrices");
-                break;
-            }
-
-            AstType *elem_type = a->type->matrix.col_type->vector.elem_type;
-            uint32_t col_count = a->type->matrix.col_count;
-            uint32_t row_count = a->type->matrix.col_type->vector.size;
-
-            AstType *col_type = newVectorType(m, elem_type, col_count);
-            expr->type = newMatrixType(m, col_type, row_count);
-
-            break;
-        }
-
-        case IR_BUILTIN_DETERMINANT: {
-            if (param_count != 1)
-            {
-                ts__addErr(compiler, &expr->loc, "determinant takes 1 parameter");
-                break;
-            }
-
-            AstExpr *a = params.ptr[0];
-            if (!a->type) break;
-
-            if (a->type->kind != TYPE_MATRIX)
-            {
-                ts__addErr(compiler, &expr->loc, "determinant operates on matrices");
-                break;
-            }
-
-            AstType *elem_type = a->type->matrix.col_type->vector.elem_type;
-            uint32_t col_count = a->type->matrix.col_count;
-            uint32_t row_count = a->type->matrix.col_type->vector.size;
-
-            expr->type = elem_type;
-
-            if (col_count != row_count)
-            {
-                ts__addErr(
-                    compiler, &expr->loc, "determinant operates on square matrices");
-                break;
-            }
-
-            break;
-        }
-
-        case IR_BUILTIN_DDX:
-        case IR_BUILTIN_DDY: {
-            if (param_count != 1)
-            {
-                ts__addErr(compiler, &expr->loc, "ddx/ddy call needs 1 parameter");
-                break;
-            }
-
-            tryCoerceExprToScalarType(a, params.ptr[0], newFloatType(m, 32));
-
-            AstExpr *a = params.ptr[0];
-            if (!a->type) break;
-
-            if (a->type->kind != TYPE_FLOAT)
-            {
-                ts__addErr(compiler, &expr->loc, "ddx/ddy call needs a float parameter");
-                break;
-            }
-
-            expr->type = a->type;
-
-            break;
-        }
-
-        case IR_BUILTIN_ASFLOAT:
-        case IR_BUILTIN_ASINT:
-        case IR_BUILTIN_ASUINT: {
-            if (param_count != 1)
-            {
-                ts__addErr(compiler, &expr->loc, "bitcast needs 1 parameter");
-                break;
-            }
-
-            AstExpr *a = params.ptr[0];
-            if (!a->type) break;
-
-            uint32_t dim = 0;
-            if (a->type->kind == TYPE_VECTOR)
-            {
-                dim = a->type->vector.size;
-            }
-
-            AstType *scalar_type = ts__getScalarType(a->type);
-            if (!scalar_type)
-            {
-                ts__addErr(
-                    compiler, &expr->loc, "bitcast needs a scalar/vector parameter");
-                break;
-            }
-
-            switch (expr->builtin_call.kind)
-            {
-            case IR_BUILTIN_ASFLOAT: {
-                expr->type = newFloatType(m, 32);
-                break;
-            }
-            case IR_BUILTIN_ASINT: {
-                expr->type = newIntType(m, 32, true);
-                break;
-            }
-            case IR_BUILTIN_ASUINT: {
-                expr->type = newIntType(m, 32, false);
-                break;
-            }
-            default: assert(0); break;
-            }
-
-            if (dim > 0)
-            {
-                expr->type = newVectorType(m, expr->type, dim);
-            }
-
-            break;
-        }
-
-        case IR_BUILTIN_INTERLOCKED_OR:
-        case IR_BUILTIN_INTERLOCKED_XOR:
-        case IR_BUILTIN_INTERLOCKED_MIN:
-        case IR_BUILTIN_INTERLOCKED_MAX:
-        case IR_BUILTIN_INTERLOCKED_AND:
-        case IR_BUILTIN_INTERLOCKED_ADD: {
-            expr->type = newBasicType(m, TYPE_VOID);
-
-            if (param_count != 2)
-            {
-                ts__addErr(
-                    compiler, &expr->loc, "Interlocked function requires 2 parameters");
-                break;
-            }
-
-            if (!params.ptr[0]->type || !params.ptr[1]->type) break;
-
-            tryCoerceExprToScalarType(a, params.ptr[1], params.ptr[0]->type);
-
-            if (params.ptr[0]->type != params.ptr[1]->type)
-            {
-                ts__addErr(
-                    compiler,
-                    &expr->loc,
-                    "mismatched types for Interlocked function parameters");
-                break;
-            }
-
-            if (params.ptr[0]->type->kind != TYPE_INT)
-            {
-                ts__addErr(
-                    compiler,
-                    &expr->loc,
-                    "Interlocked function requires scalar integer parameters");
-                break;
-            }
-
-            if ((params.ptr[0]->kind != EXPR_IDENT) || (!params.ptr[0]->ident.decl) ||
-                (params.ptr[0]->ident.decl->kind != DECL_VAR) ||
-                (params.ptr[0]->ident.decl->var.kind != VAR_GROUPSHARED))
-            {
-                ts__addErr(
-                    compiler,
-                    &expr->loc,
-                    "Interlocked functions require first parameter to be a groupshared "
-                    "variable");
-                break;
-            }
-
-            break;
-        }
-
-        case IR_BUILTIN_INTERLOCKED_EXCHANGE: {
-            expr->type = newBasicType(m, TYPE_VOID);
-
-            if (param_count != 3)
-            {
-                ts__addErr(
-                    compiler, &expr->loc, "Interlocked function requires 3 parameters");
-                break;
-            }
-
-            if (!params.ptr[0]->type || !params.ptr[1]->type || !params.ptr[2]->type)
-                break;
-
-            tryCoerceExprToScalarType(a, params.ptr[1], params.ptr[0]->type);
-
-            if (params.ptr[0]->type != params.ptr[1]->type ||
-                params.ptr[0]->type != params.ptr[2]->type)
-            {
-                ts__addErr(
-                    compiler,
-                    &expr->loc,
-                    "mismatched types for Interlocked function parameters");
-                break;
-            }
-
-            if (params.ptr[0]->type->kind != TYPE_INT)
-            {
-                ts__addErr(
-                    compiler,
-                    &expr->loc,
-                    "Interlocked function requires scalar integer parameters");
-                break;
-            }
-
-            if ((params.ptr[0]->kind != EXPR_IDENT) || (!params.ptr[0]->ident.decl) ||
-                (params.ptr[0]->ident.decl->kind != DECL_VAR) ||
-                (params.ptr[0]->ident.decl->var.kind != VAR_GROUPSHARED))
-            {
-                ts__addErr(
-                    compiler,
-                    &expr->loc,
-                    "Interlocked functions require first parameter to be a groupshared "
-                    "variable");
-                break;
-            }
-
-            if (!params.ptr[2]->assignable)
-            {
-                ts__addErr(
-                    compiler,
-                    &expr->loc,
-                    "Interlocked function requires third parameter to be assignable");
-                break;
-            }
-
-            break;
-        }
-
-        case IR_BUILTIN_INTERLOCKED_COMPARE_EXCHANGE: {
-            expr->type = newBasicType(m, TYPE_VOID);
-
-            if (param_count != 4)
-            {
-                ts__addErr(
-                    compiler, &expr->loc, "Interlocked function requires 4 parameters");
-                break;
-            }
-
-            if (!params.ptr[0]->type || !params.ptr[1]->type || !params.ptr[2]->type ||
-                !params.ptr[3]->type)
-                break;
-
-            tryCoerceExprToScalarType(a, params.ptr[1], params.ptr[0]->type);
-            tryCoerceExprToScalarType(a, params.ptr[2], params.ptr[0]->type);
-
-            if (params.ptr[0]->type != params.ptr[1]->type ||
-                params.ptr[0]->type != params.ptr[2]->type ||
-                params.ptr[0]->type != params.ptr[3]->type)
-            {
-                ts__addErr(
-                    compiler,
-                    &expr->loc,
-                    "mismatched types for Interlocked function parameters");
-                break;
-            }
-
-            if (params.ptr[0]->type->kind != TYPE_INT)
-            {
-                ts__addErr(
-                    compiler,
-                    &expr->loc,
-                    "Interlocked function requires scalar integer parameters");
-                break;
-            }
-
-            if ((params.ptr[0]->kind != EXPR_IDENT) || (!params.ptr[0]->ident.decl) ||
-                (params.ptr[0]->ident.decl->kind != DECL_VAR) ||
-                (params.ptr[0]->ident.decl->var.kind != VAR_GROUPSHARED))
-            {
-                ts__addErr(
-                    compiler,
-                    &expr->loc,
-                    "Interlocked functions require first parameter to be a groupshared "
-                    "variable");
-                break;
-            }
-
-            if (!params.ptr[3]->assignable)
-            {
-                ts__addErr(
-                    compiler,
-                    &expr->loc,
-                    "Interlocked function requires fourth parameter to be assignable");
-                break;
-            }
-
-            break;
-        }
-
-        case IR_BUILTIN_INTERLOCKED_COMPARE_STORE: {
-            expr->type = newBasicType(m, TYPE_VOID);
-
-            if (param_count != 3)
-            {
-                ts__addErr(
-                    compiler, &expr->loc, "Interlocked function requires 3 parameters");
-                break;
-            }
-
-            if (!params.ptr[0]->type || !params.ptr[1]->type || !params.ptr[2]->type)
-                break;
-
-            tryCoerceExprToScalarType(a, params.ptr[1], params.ptr[0]->type);
-            tryCoerceExprToScalarType(a, params.ptr[2], params.ptr[0]->type);
-
-            if (params.ptr[0]->type != params.ptr[1]->type ||
-                params.ptr[0]->type != params.ptr[2]->type)
-            {
-                ts__addErr(
-                    compiler,
-                    &expr->loc,
-                    "mismatched types for Interlocked function parameters");
-                break;
-            }
-
-            if (params.ptr[0]->type->kind != TYPE_INT)
-            {
-                ts__addErr(
-                    compiler,
-                    &expr->loc,
-                    "Interlocked function requires scalar integer parameters");
-                break;
-            }
-
-            if ((params.ptr[0]->kind != EXPR_IDENT) || (!params.ptr[0]->ident.decl) ||
-                (params.ptr[0]->ident.decl->kind != DECL_VAR) ||
-                (params.ptr[0]->ident.decl->var.kind != VAR_GROUPSHARED))
-            {
-                ts__addErr(
-                    compiler,
-                    &expr->loc,
-                    "Interlocked functions require first parameter to be a groupshared "
-                    "variable");
-                break;
-            }
-
-            break;
-        }
-
-        case IR_BUILTIN_CREATE_SAMPLED_IMAGE: assert(0); break;
         }
 
         break;

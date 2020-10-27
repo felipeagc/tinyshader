@@ -1133,8 +1133,8 @@ irBuildSampleImplicitLod(IRModule *m, IRType *type, IRInst *image_sampler, IRIns
     return inst;
 }
 
-static IRInst *
-irBuildSampleExplicitLod(IRModule *m, IRType *type, IRInst *image_sampler, IRInst *coords, IRInst *lod)
+static IRInst *irBuildSampleExplicitLod(
+    IRModule *m, IRType *type, IRInst *image_sampler, IRInst *coords, IRInst *lod)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_SAMPLE_EXPLICIT_LOD;
@@ -1151,8 +1151,7 @@ irBuildSampleExplicitLod(IRModule *m, IRType *type, IRInst *image_sampler, IRIns
     return inst;
 }
 
-static IRInst *
-irBuildQuerySizeLod(IRModule *m, IRInst *image, IRInst *lod)
+static IRInst *irBuildQuerySizeLod(IRModule *m, IRInst *image, IRInst *lod)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_QUERY_SIZE_LOD;
@@ -1184,8 +1183,7 @@ irBuildQuerySizeLod(IRModule *m, IRInst *image, IRInst *lod)
     return inst;
 }
 
-static IRInst *
-irBuildQueryLevels(IRModule *m, IRInst *image)
+static IRInst *irBuildQueryLevels(IRModule *m, IRInst *image)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_QUERY_LEVELS;
@@ -1263,13 +1261,8 @@ irBuildBinary(IRModule *m, SpvOp op, IRType *type, IRInst *left, IRInst *right)
     return inst;
 }
 
-static IRInst *
-irBuildSelect(
-    IRModule *m,
-    IRType *type,
-    IRInst *cond,
-    IRInst *true_value,
-    IRInst *false_value)
+static IRInst *irBuildSelect(
+    IRModule *m, IRType *type, IRInst *cond, IRInst *true_value, IRInst *false_value)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_SELECT;
@@ -3032,6 +3025,294 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
     }
 
     case EXPR_FUNC_CALL: {
+        AstExpr *func_expr = expr->func_call.func_expr;
+
+        bool is_builtin_func = false;
+        AstBuiltinFunction builtin_func_kind;
+
+        // Builtin function
+        if (func_expr->kind == EXPR_IDENT)
+        {
+            void *result;
+            is_builtin_func = ts__hashGet(
+                &compiler->builtin_function_table,
+                func_expr->ident.name,
+                &result);
+            if (is_builtin_func)
+            {
+                builtin_func_kind = (AstBuiltinFunction)result;
+            }
+        }
+
+        if (is_builtin_func)
+        {
+            IRType *result_type = convertTypeToIR(m->mod, m, expr->type);
+            uint32_t param_count = expr->func_call.params.len;
+            IRInst **param_values = NEW_ARRAY(compiler, IRInst *, param_count);
+
+            for (uint32_t i = 0; i < param_count; ++i)
+            {
+                AstExpr *param = expr->func_call.params.ptr[i];
+                irModuleBuildExpr(m, param);
+                param_values[i] = param->value;
+                assert(param_values[i]);
+            }
+
+            switch (builtin_func_kind)
+            {
+            case AST_BUILTIN_FUNC_INTERLOCKED_ADD:
+            case AST_BUILTIN_FUNC_INTERLOCKED_AND:
+            case AST_BUILTIN_FUNC_INTERLOCKED_MIN:
+            case AST_BUILTIN_FUNC_INTERLOCKED_MAX:
+            case AST_BUILTIN_FUNC_INTERLOCKED_OR:
+            case AST_BUILTIN_FUNC_INTERLOCKED_XOR: {
+                uint32_t ir_param_count = 4;
+                IRInst **ir_param_values = NEW_ARRAY(compiler, IRInst *, ir_param_count);
+
+                IRType *uint_type = irNewIntType(m, 32, false);
+
+                ir_param_values[0] = param_values[0];
+                ir_param_values[1] = irBuildConstInt(m, uint_type, SpvScopeDevice);
+                ir_param_values[2] =
+                    irBuildConstInt(m, uint_type, SpvMemorySemanticsMaskNone);
+                ir_param_values[3] = param_values[1];
+
+                IRBuiltinInstKind ir_builtin_kind;
+                switch (builtin_func_kind)
+                {
+                case AST_BUILTIN_FUNC_INTERLOCKED_ADD: ir_builtin_kind = IR_BUILTIN_INTERLOCKED_ADD; break;
+                case AST_BUILTIN_FUNC_INTERLOCKED_AND: ir_builtin_kind = IR_BUILTIN_INTERLOCKED_AND; break;
+                case AST_BUILTIN_FUNC_INTERLOCKED_MIN: ir_builtin_kind = IR_BUILTIN_INTERLOCKED_MIN; break;
+                case AST_BUILTIN_FUNC_INTERLOCKED_MAX: ir_builtin_kind = IR_BUILTIN_INTERLOCKED_MAX; break;
+                case AST_BUILTIN_FUNC_INTERLOCKED_OR: ir_builtin_kind = IR_BUILTIN_INTERLOCKED_OR; break;
+                case AST_BUILTIN_FUNC_INTERLOCKED_XOR: ir_builtin_kind = IR_BUILTIN_INTERLOCKED_XOR; break;
+                default: assert(0); break;
+                }
+
+                expr->value = irBuildBuiltinCall(
+                    m, ir_builtin_kind, result_type, ir_param_values, ir_param_count);
+                break;
+            }
+
+            case AST_BUILTIN_FUNC_INTERLOCKED_EXCHANGE: {
+                uint32_t ir_param_count = 5;
+                IRInst **ir_param_values = NEW_ARRAY(compiler, IRInst *, ir_param_count);
+
+                IRType *uint_type = irNewIntType(m, 32, false);
+
+                ir_param_values[0] = param_values[0];
+                ir_param_values[1] = irBuildConstInt(m, uint_type, SpvScopeDevice);
+                ir_param_values[2] = irBuildConstInt(m, uint_type, SpvMemorySemanticsMaskNone);
+                ir_param_values[3] = param_values[1];
+                ir_param_values[4] = param_values[2];
+
+                expr->value = irBuildBuiltinCall(
+                    m, IR_BUILTIN_INTERLOCKED_EXCHANGE, result_type, ir_param_values, ir_param_count);
+                break;
+            }
+
+            case IR_BUILTIN_INTERLOCKED_COMPARE_EXCHANGE: {
+                uint32_t ir_param_count = 7;
+                IRInst **ir_param_values = NEW_ARRAY(compiler, IRInst *, ir_param_count);
+
+                IRType *uint_type = irNewIntType(m, 32, false);
+
+                ir_param_values[0] = param_values[0];
+                ir_param_values[1] = irBuildConstInt(m, uint_type, SpvScopeDevice);
+                ir_param_values[2] = irBuildConstInt(m, uint_type, SpvMemorySemanticsMaskNone);
+                ir_param_values[3] = irBuildConstInt(m, uint_type, SpvMemorySemanticsMaskNone);
+                ir_param_values[4] = param_values[1];
+                ir_param_values[5] = param_values[2];
+                ir_param_values[6] = param_values[3];
+
+                expr->value = irBuildBuiltinCall(
+                    m, IR_BUILTIN_INTERLOCKED_COMPARE_EXCHANGE, result_type, ir_param_values, ir_param_count);
+                break;
+            }
+
+            case AST_BUILTIN_FUNC_INTERLOCKED_COMPARE_STORE: {
+                uint32_t ir_param_count = 6;
+                IRInst **ir_param_values = NEW_ARRAY(compiler, IRInst *, ir_param_count);
+
+                IRType *uint_type = irNewIntType(m, 32, false);
+
+                ir_param_values[0] = param_values[0];
+                ir_param_values[1] = irBuildConstInt(m, uint_type, SpvScopeDevice);
+                ir_param_values[2] = irBuildConstInt(m, uint_type, SpvMemorySemanticsMaskNone);
+                ir_param_values[3] = irBuildConstInt(m, uint_type, SpvMemorySemanticsMaskNone);
+                ir_param_values[4] = param_values[1];
+                ir_param_values[5] = param_values[2];
+
+                expr->value = irBuildBuiltinCall(
+                    m, IR_BUILTIN_INTERLOCKED_COMPARE_STORE, result_type, ir_param_values, ir_param_count);
+                break;
+            }
+
+            case AST_BUILTIN_FUNC_ALL_MEMORY_BARRIER:
+            case AST_BUILTIN_FUNC_ALL_MEMORY_BARRIER_WITH_GROUP_SYNC:
+            case AST_BUILTIN_FUNC_DEVICE_MEMORY_BARRIER:
+            case AST_BUILTIN_FUNC_DEVICE_MEMORY_BARRIER_WITH_GROUP_SYNC:
+            case AST_BUILTIN_FUNC_GROUP_MEMORY_BARRIER:
+            case AST_BUILTIN_FUNC_GROUP_MEMORY_BARRIER_WITH_GROUP_SYNC: {
+                bool with_group_sync = false;
+                uint32_t barrier_execution_scope = 0;
+                uint32_t barrier_memory_scope = 0;
+                uint32_t barrier_semantics = 0;
+
+                switch (builtin_func_kind)
+                {
+                case AST_BUILTIN_FUNC_ALL_MEMORY_BARRIER: {
+                    with_group_sync = false;
+                    barrier_memory_scope = SpvScopeDevice;
+                    barrier_semantics =
+                        SpvMemorySemanticsAcquireReleaseMask | SpvMemorySemanticsUniformMemoryMask |
+                        SpvMemorySemanticsWorkgroupMemoryMask | SpvMemorySemanticsImageMemoryMask;
+                    break;
+                }
+                case AST_BUILTIN_FUNC_ALL_MEMORY_BARRIER_WITH_GROUP_SYNC: {
+                    with_group_sync = true;
+                    barrier_execution_scope = SpvScopeWorkgroup;
+                    barrier_memory_scope = SpvScopeDevice;
+                    barrier_semantics =
+                        SpvMemorySemanticsAcquireReleaseMask | SpvMemorySemanticsUniformMemoryMask |
+                        SpvMemorySemanticsWorkgroupMemoryMask | SpvMemorySemanticsImageMemoryMask;
+                    break;
+                }
+                case AST_BUILTIN_FUNC_DEVICE_MEMORY_BARRIER: {
+                    with_group_sync = false;
+                    barrier_memory_scope = SpvScopeDevice;
+                    barrier_semantics = SpvMemorySemanticsAcquireReleaseMask |
+                        SpvMemorySemanticsUniformMemoryMask |
+                        SpvMemorySemanticsImageMemoryMask;
+                    break;
+                }
+                case AST_BUILTIN_FUNC_DEVICE_MEMORY_BARRIER_WITH_GROUP_SYNC: {
+                    with_group_sync = true;
+                    barrier_execution_scope = SpvScopeWorkgroup;
+                    barrier_memory_scope = SpvScopeDevice;
+                    barrier_semantics = SpvMemorySemanticsAcquireReleaseMask |
+                        SpvMemorySemanticsUniformMemoryMask |
+                        SpvMemorySemanticsImageMemoryMask;
+                    break;
+                }
+                case AST_BUILTIN_FUNC_GROUP_MEMORY_BARRIER: {
+                    with_group_sync = false;
+                    barrier_memory_scope = SpvScopeWorkgroup;
+                    barrier_semantics =
+                        SpvMemorySemanticsAcquireReleaseMask | SpvMemorySemanticsWorkgroupMemoryMask;
+                    break;
+                }
+                case AST_BUILTIN_FUNC_GROUP_MEMORY_BARRIER_WITH_GROUP_SYNC: {
+                    with_group_sync = true;
+                    barrier_execution_scope = SpvScopeWorkgroup;
+                    barrier_memory_scope = SpvScopeWorkgroup;
+                    barrier_semantics =
+                        SpvMemorySemanticsAcquireReleaseMask | SpvMemorySemanticsWorkgroupMemoryMask;
+                    break;
+                }
+
+                default: assert(0); break;
+                }
+
+                expr->value = irBuildBarrier(
+                    m,
+                    with_group_sync,
+                    barrier_execution_scope,
+                    barrier_memory_scope,
+                    barrier_semantics);
+
+                break;
+            }
+
+            default: {
+                IRBuiltinInstKind ir_builtin_kind;
+                switch (builtin_func_kind)
+                {
+                case AST_BUILTIN_FUNC_ABS: ir_builtin_kind = IR_BUILTIN_ABS; break;
+                case AST_BUILTIN_FUNC_ACOS: ir_builtin_kind = IR_BUILTIN_ACOS; break;
+                case AST_BUILTIN_FUNC_ASFLOAT: ir_builtin_kind = IR_BUILTIN_ASFLOAT; break;
+                case AST_BUILTIN_FUNC_ASIN: ir_builtin_kind = IR_BUILTIN_ASIN; break;
+                case AST_BUILTIN_FUNC_ASINT: ir_builtin_kind = IR_BUILTIN_ASINT; break;
+                case AST_BUILTIN_FUNC_ASUINT: ir_builtin_kind = IR_BUILTIN_ASUINT; break;
+                case AST_BUILTIN_FUNC_ATAN: ir_builtin_kind = IR_BUILTIN_ATAN; break;
+                case AST_BUILTIN_FUNC_ATAN2: ir_builtin_kind = IR_BUILTIN_ATAN2; break;
+                case AST_BUILTIN_FUNC_CEIL: ir_builtin_kind = IR_BUILTIN_CEIL; break;
+                case AST_BUILTIN_FUNC_CLAMP: ir_builtin_kind = IR_BUILTIN_CLAMP; break;
+                case AST_BUILTIN_FUNC_COS: ir_builtin_kind = IR_BUILTIN_COS; break;
+                case AST_BUILTIN_FUNC_COSH: ir_builtin_kind = IR_BUILTIN_COSH; break;
+                case AST_BUILTIN_FUNC_CROSS: ir_builtin_kind = IR_BUILTIN_CROSS; break;
+                case AST_BUILTIN_FUNC_DDX: ir_builtin_kind = IR_BUILTIN_DDX; break;
+                case AST_BUILTIN_FUNC_DDY: ir_builtin_kind = IR_BUILTIN_DDY; break;
+                case AST_BUILTIN_FUNC_DEGREES: ir_builtin_kind = IR_BUILTIN_DEGREES; break;
+                case AST_BUILTIN_FUNC_DETERMINANT: ir_builtin_kind = IR_BUILTIN_DETERMINANT; break;
+                case AST_BUILTIN_FUNC_DISTANCE: ir_builtin_kind = IR_BUILTIN_DISTANCE; break;
+                case AST_BUILTIN_FUNC_DOT: ir_builtin_kind = IR_BUILTIN_DOT; break;
+                case AST_BUILTIN_FUNC_EXP: ir_builtin_kind = IR_BUILTIN_EXP; break;
+                case AST_BUILTIN_FUNC_EXP2: ir_builtin_kind = IR_BUILTIN_EXP2; break;
+                case AST_BUILTIN_FUNC_FLOOR: ir_builtin_kind = IR_BUILTIN_FLOOR; break;
+                case AST_BUILTIN_FUNC_FMOD: ir_builtin_kind = IR_BUILTIN_FMOD; break;
+                case AST_BUILTIN_FUNC_FRAC: ir_builtin_kind = IR_BUILTIN_FRAC; break;
+                case AST_BUILTIN_FUNC_LENGTH: ir_builtin_kind = IR_BUILTIN_LENGTH; break;
+                case AST_BUILTIN_FUNC_LERP: ir_builtin_kind = IR_BUILTIN_LERP; break;
+                case AST_BUILTIN_FUNC_LOG: ir_builtin_kind = IR_BUILTIN_LOG; break;
+                case AST_BUILTIN_FUNC_LOG2: ir_builtin_kind = IR_BUILTIN_LOG2; break;
+                case AST_BUILTIN_FUNC_MAX: ir_builtin_kind = IR_BUILTIN_MAX; break;
+                case AST_BUILTIN_FUNC_MIN: ir_builtin_kind = IR_BUILTIN_MIN; break;
+                case AST_BUILTIN_FUNC_MUL: ir_builtin_kind = IR_BUILTIN_MUL; break;
+                case AST_BUILTIN_FUNC_NORMALIZE: ir_builtin_kind = IR_BUILTIN_NORMALIZE; break;
+                case AST_BUILTIN_FUNC_POW: ir_builtin_kind = IR_BUILTIN_POW; break;
+                case AST_BUILTIN_FUNC_RADIANS: ir_builtin_kind = IR_BUILTIN_RADIANS; break;
+                case AST_BUILTIN_FUNC_REFLECT: ir_builtin_kind = IR_BUILTIN_REFLECT; break;
+                case AST_BUILTIN_FUNC_REFRACT: ir_builtin_kind = IR_BUILTIN_REFRACT; break;
+                case AST_BUILTIN_FUNC_RSQRT: ir_builtin_kind = IR_BUILTIN_RSQRT; break;
+                case AST_BUILTIN_FUNC_SIN: ir_builtin_kind = IR_BUILTIN_SIN; break;
+                case AST_BUILTIN_FUNC_SINH: ir_builtin_kind = IR_BUILTIN_SINH; break;
+                case AST_BUILTIN_FUNC_SMOOTHSTEP: ir_builtin_kind = IR_BUILTIN_SMOOTHSTEP; break;
+                case AST_BUILTIN_FUNC_SQRT: ir_builtin_kind = IR_BUILTIN_SQRT; break;
+                case AST_BUILTIN_FUNC_STEP: ir_builtin_kind = IR_BUILTIN_STEP; break;
+                case AST_BUILTIN_FUNC_TAN: ir_builtin_kind = IR_BUILTIN_TAN; break;
+                case AST_BUILTIN_FUNC_TANH: ir_builtin_kind = IR_BUILTIN_TANH; break;
+                case AST_BUILTIN_FUNC_TRANSPOSE: ir_builtin_kind = IR_BUILTIN_TRANSPOSE; break;
+                case AST_BUILTIN_FUNC_TRUNC: ir_builtin_kind = IR_BUILTIN_TRUNC; break;
+
+                case AST_BUILTIN_FUNC_INTERLOCKED_ADD:
+                case AST_BUILTIN_FUNC_INTERLOCKED_AND:
+                case AST_BUILTIN_FUNC_INTERLOCKED_COMPARE_EXCHANGE:
+                case AST_BUILTIN_FUNC_INTERLOCKED_COMPARE_STORE:
+                case AST_BUILTIN_FUNC_INTERLOCKED_EXCHANGE:
+                case AST_BUILTIN_FUNC_INTERLOCKED_MAX:
+                case AST_BUILTIN_FUNC_INTERLOCKED_MIN:
+                case AST_BUILTIN_FUNC_INTERLOCKED_OR:
+                case AST_BUILTIN_FUNC_INTERLOCKED_XOR:
+                case AST_BUILTIN_FUNC_ALL_MEMORY_BARRIER:
+                case AST_BUILTIN_FUNC_ALL_MEMORY_BARRIER_WITH_GROUP_SYNC:
+                case AST_BUILTIN_FUNC_DEVICE_MEMORY_BARRIER:
+                case AST_BUILTIN_FUNC_DEVICE_MEMORY_BARRIER_WITH_GROUP_SYNC:
+                case AST_BUILTIN_FUNC_GROUP_MEMORY_BARRIER:
+                case AST_BUILTIN_FUNC_GROUP_MEMORY_BARRIER_WITH_GROUP_SYNC:
+                    assert(0);
+                    break;
+                }
+
+                uint32_t ir_param_count = param_count;
+                IRInst **ir_param_values = NEW_ARRAY(compiler, IRInst *, ir_param_count);
+
+                for (uint32_t i = 0; i < param_count; ++i)
+                {
+                    ir_param_values[i] = irLoadVal(m, param_values[i]);
+                    assert(ir_param_values[i]);
+                }
+
+                expr->value = irBuildBuiltinCall(
+                    m, ir_builtin_kind, result_type, ir_param_values, ir_param_count);
+                break;
+            }
+            }
+
+            assert(expr->value);
+            break;
+        }
+
         if (expr->func_call.self_param)
         {
             // Method call
@@ -3075,7 +3356,8 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
                 expr->value =
                     irBuildSampleImplicitLod(m, result_type, sampled_image, coords);
             }
-            else if (self_type->kind == TYPE_IMAGE && strcmp(method_name, "SampleLevel") == 0)
+            else if (
+                self_type->kind == TYPE_IMAGE && strcmp(method_name, "SampleLevel") == 0)
             {
                 uint32_t param_count = arrLength(expr->func_call.params);
                 IRInst **param_values = NEW_ARRAY(compiler, IRInst *, param_count);
@@ -3107,7 +3389,9 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
                 expr->value =
                     irBuildSampleExplicitLod(m, result_type, sampled_image, coords, lod);
             }
-            else if (self_type->kind == TYPE_IMAGE && strcmp(method_name, "GetDimensions") == 0)
+            else if (
+                self_type->kind == TYPE_IMAGE &&
+                strcmp(method_name, "GetDimensions") == 0)
             {
                 uint32_t param_count = expr->func_call.params.len;
                 IRInst **param_values = NEW_ARRAY(compiler, IRInst *, param_count);
@@ -3131,8 +3415,7 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
                 assert(image->type->kind == IR_TYPE_IMAGE);
                 switch (image->type->image.dim)
                 {
-                case SpvDim1D:
-                {
+                case SpvDim1D: {
                     uint32_t index;
 
                     index = 0;
@@ -3143,11 +3426,10 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
 
                     irBuildStore(m, param_values[1], width);
                     irBuildStore(m, param_values[2], mip_levels_float);
-                    
+
                     break;
                 }
-                case SpvDim2D:
-                {
+                case SpvDim2D: {
                     uint32_t index;
 
                     index = 0;
@@ -3165,8 +3447,7 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
                     irBuildStore(m, param_values[3], mip_levels_float);
                     break;
                 }
-                case SpvDim3D:
-                {
+                case SpvDim3D: {
                     uint32_t index;
 
                     index = 0;
@@ -3176,7 +3457,7 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
                     index = 1;
                     IRInst *height = irBuildCompositeExtract(m, size, &index, 1);
                     height = irBuildCast(m, float_type, height);
-                    
+
                     index = 2;
                     IRInst *depth = irBuildCompositeExtract(m, size, &index, 1);
                     depth = irBuildCast(m, float_type, depth);
@@ -3189,8 +3470,7 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
                     irBuildStore(m, param_values[4], mip_levels_float);
                     break;
                 }
-                case SpvDimCube:
-                {
+                case SpvDimCube: {
                     uint32_t index;
 
                     index = 0;
@@ -3335,156 +3615,6 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
             expr->value = irBuildFuncCall(m, func_val, param_values, param_count);
         }
 
-        break;
-    }
-
-    case EXPR_BUILTIN_CALL: {
-        uint32_t param_count = arrLength(expr->builtin_call.params);
-        IRInst **param_values = NEW_ARRAY(compiler, IRInst *, param_count);
-
-        IRType *result_type = convertTypeToIR(m->mod, m, expr->type);
-
-        switch (expr->builtin_call.kind)
-        {
-        case IR_BUILTIN_INTERLOCKED_OR:
-        case IR_BUILTIN_INTERLOCKED_XOR:
-        case IR_BUILTIN_INTERLOCKED_MIN:
-        case IR_BUILTIN_INTERLOCKED_MAX:
-        case IR_BUILTIN_INTERLOCKED_ADD:
-        case IR_BUILTIN_INTERLOCKED_AND: {
-            param_count = 4;
-            param_values = NEW_ARRAY(compiler, IRInst *, param_count);
-
-            IRType *uint_type = irNewIntType(m, 32, false);
-
-            AstExpr *ptr = expr->builtin_call.params.ptr[0];
-            irModuleBuildExpr(m, ptr);
-            assert(ptr->value);
-
-            AstExpr *value = expr->builtin_call.params.ptr[1];
-            irModuleBuildExpr(m, value);
-            assert(value->value);
-
-            param_values[0] = ptr->value;
-            param_values[1] = irBuildConstInt(m, uint_type, SpvScopeDevice);
-            param_values[2] = irBuildConstInt(m, uint_type, SpvMemorySemanticsMaskNone);
-            param_values[3] = value->value;
-            break;
-        }
-
-        case IR_BUILTIN_INTERLOCKED_EXCHANGE: {
-            param_count = 5;
-            param_values = NEW_ARRAY(compiler, IRInst *, param_count);
-
-            IRType *uint_type = irNewIntType(m, 32, false);
-
-            AstExpr *ptr = expr->builtin_call.params.ptr[0];
-            irModuleBuildExpr(m, ptr);
-            assert(ptr->value);
-
-            AstExpr *value = expr->builtin_call.params.ptr[1];
-            irModuleBuildExpr(m, value);
-            assert(value->value);
-
-            AstExpr *original_value = expr->builtin_call.params.ptr[2];
-            irModuleBuildExpr(m, original_value);
-            assert(original_value->value);
-
-            param_values[0] = ptr->value;
-            param_values[1] = irBuildConstInt(m, uint_type, SpvScopeDevice);
-            param_values[2] = irBuildConstInt(m, uint_type, SpvMemorySemanticsMaskNone);
-            param_values[3] = value->value;
-            param_values[4] = original_value->value;
-            break;
-        }
-
-        case IR_BUILTIN_INTERLOCKED_COMPARE_EXCHANGE: {
-            param_count = 7;
-            param_values = NEW_ARRAY(compiler, IRInst *, param_count);
-
-            IRType *uint_type = irNewIntType(m, 32, false);
-
-            AstExpr *ptr = expr->builtin_call.params.ptr[0];
-            irModuleBuildExpr(m, ptr);
-            assert(ptr->value);
-
-            AstExpr *compare_value = expr->builtin_call.params.ptr[1];
-            irModuleBuildExpr(m, compare_value);
-            assert(compare_value->value);
-
-            AstExpr *value = expr->builtin_call.params.ptr[2];
-            irModuleBuildExpr(m, value);
-            assert(value->value);
-
-            AstExpr *original_value = expr->builtin_call.params.ptr[3];
-            irModuleBuildExpr(m, original_value);
-            assert(original_value->value);
-
-            param_values[0] = ptr->value;
-            param_values[1] = irBuildConstInt(m, uint_type, SpvScopeDevice);
-            param_values[2] = irBuildConstInt(m, uint_type, SpvMemorySemanticsMaskNone);
-            param_values[3] = irBuildConstInt(m, uint_type, SpvMemorySemanticsMaskNone);
-            param_values[4] = compare_value->value;
-            param_values[5] = value->value;
-            param_values[6] = original_value->value;
-            break;
-        }
-
-        case IR_BUILTIN_INTERLOCKED_COMPARE_STORE: {
-            param_count = 6;
-            param_values = NEW_ARRAY(compiler, IRInst *, param_count);
-
-            IRType *uint_type = irNewIntType(m, 32, false);
-
-            AstExpr *ptr = expr->builtin_call.params.ptr[0];
-            irModuleBuildExpr(m, ptr);
-            assert(ptr->value);
-
-            AstExpr *compare_value = expr->builtin_call.params.ptr[1];
-            irModuleBuildExpr(m, compare_value);
-            assert(compare_value->value);
-
-            AstExpr *value = expr->builtin_call.params.ptr[2];
-            irModuleBuildExpr(m, value);
-            assert(value->value);
-
-            param_values[0] = ptr->value;
-            param_values[1] = irBuildConstInt(m, uint_type, SpvScopeDevice);
-            param_values[2] = irBuildConstInt(m, uint_type, SpvMemorySemanticsMaskNone);
-            param_values[3] = irBuildConstInt(m, uint_type, SpvMemorySemanticsMaskNone);
-            param_values[4] = compare_value->value;
-            param_values[5] = value->value;
-            break;
-        }
-
-        default: {
-            param_count = arrLength(expr->builtin_call.params);
-            param_values = NEW_ARRAY(compiler, IRInst *, param_count);
-
-            for (uint32_t i = 0; i < param_count; ++i)
-            {
-                AstExpr *param = expr->builtin_call.params.ptr[i];
-                irModuleBuildExpr(m, param);
-                assert(param->value);
-                param_values[i] = irLoadVal(m, param->value);
-            }
-            break;
-        }
-        }
-
-        expr->value = irBuildBuiltinCall(
-            m, expr->builtin_call.kind, result_type, param_values, param_count);
-
-        break;
-    }
-
-    case EXPR_BARRIER_CALL: {
-        expr->value = irBuildBarrier(
-            m,
-            expr->barrier.with_group_sync,
-            expr->barrier.execution_scope,
-            expr->barrier.memory_scope,
-            expr->barrier.semantics);
         break;
     }
 
@@ -3882,8 +4012,7 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
         break;
     }
 
-    case EXPR_TERNARY:
-    {
+    case EXPR_TERNARY: {
         IRType *ir_type = convertTypeToIR(m->mod, m, expr->type);
 
         irModuleBuildExpr(m, expr->ternary.cond);
@@ -3897,23 +4026,18 @@ static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
 
         if (ir_type->kind == IR_TYPE_VECTOR)
         {
-            IRInst **fields = NEW_ARRAY(m->compiler, IRInst*, ir_type->vector.size);
+            IRInst **fields = NEW_ARRAY(m->compiler, IRInst *, ir_type->vector.size);
             for (uint32_t i = 0; i < ir_type->vector.size; ++i)
             {
                 fields[i] = cond;
             }
 
             IRType *cond_vec_type = irNewVectorType(m, cond->type, ir_type->vector.size);
-            cond = irBuildCompositeConstruct(
-                m, cond_vec_type, fields, ir_type->vector.size);
+            cond =
+                irBuildCompositeConstruct(m, cond_vec_type, fields, ir_type->vector.size);
         }
 
-        expr->value = irBuildSelect(
-            m,
-            ir_type,
-            cond,
-            true_value,
-            false_value);
+        expr->value = irBuildSelect(m, ir_type, cond, true_value, false_value);
         break;
     }
 

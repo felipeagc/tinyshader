@@ -17,6 +17,7 @@ TsCompiler *tsCompilerCreate()
     ts__sbInit(&compiler->sb);
 
     ts__hashInit(compiler, &compiler->keyword_table, 32);
+    ts__hashInit(compiler, &compiler->builtin_function_table, 32);
 
     ts__hashSet(&compiler->keyword_table, "const", (void *)TOKEN_CONST);
     ts__hashSet(&compiler->keyword_table, "return", (void *)TOKEN_RETURN);
@@ -48,97 +49,6 @@ TsCompiler *tsCompilerCreate()
     ts__hashSet(&compiler->keyword_table, "Texture3D", (void *)TOKEN_TEXTURE_3D);
     ts__hashSet(&compiler->keyword_table, "TextureCube", (void *)TOKEN_TEXTURE_CUBE);
 
-    ts__hashSet(&compiler->keyword_table, "dot", (void *)TOKEN_BUILTIN_DOT);
-    ts__hashSet(&compiler->keyword_table, "cross", (void *)TOKEN_BUILTIN_CROSS);
-    ts__hashSet(&compiler->keyword_table, "length", (void *)TOKEN_BUILTIN_LENGTH);
-    ts__hashSet(&compiler->keyword_table, "normalize", (void *)TOKEN_BUILTIN_NORMALIZE);
-    ts__hashSet(&compiler->keyword_table, "mul", (void *)TOKEN_BUILTIN_MUL);
-    ts__hashSet(&compiler->keyword_table, "distance", (void *)TOKEN_BUILTIN_DISTANCE);
-    ts__hashSet(&compiler->keyword_table, "degrees", (void *)TOKEN_BUILTIN_DEGREES);
-    ts__hashSet(&compiler->keyword_table, "radians", (void *)TOKEN_BUILTIN_RADIANS);
-
-    ts__hashSet(&compiler->keyword_table, "sin", (void *)TOKEN_BUILTIN_SIN);
-    ts__hashSet(&compiler->keyword_table, "cos", (void *)TOKEN_BUILTIN_COS);
-    ts__hashSet(&compiler->keyword_table, "tan", (void *)TOKEN_BUILTIN_TAN);
-    ts__hashSet(&compiler->keyword_table, "asin", (void *)TOKEN_BUILTIN_ASIN);
-    ts__hashSet(&compiler->keyword_table, "acos", (void *)TOKEN_BUILTIN_ACOS);
-    ts__hashSet(&compiler->keyword_table, "atan", (void *)TOKEN_BUILTIN_ATAN);
-    ts__hashSet(&compiler->keyword_table, "sinh", (void *)TOKEN_BUILTIN_SINH);
-    ts__hashSet(&compiler->keyword_table, "cosh", (void *)TOKEN_BUILTIN_COSH);
-    ts__hashSet(&compiler->keyword_table, "tanh", (void *)TOKEN_BUILTIN_TANH);
-    ts__hashSet(&compiler->keyword_table, "atan2", (void *)TOKEN_BUILTIN_ATAN2);
-
-    ts__hashSet(&compiler->keyword_table, "sqrt", (void *)TOKEN_BUILTIN_SQRT);
-    ts__hashSet(&compiler->keyword_table, "rsqrt", (void *)TOKEN_BUILTIN_RSQRT);
-
-    ts__hashSet(&compiler->keyword_table, "reflect", (void *)TOKEN_BUILTIN_REFLECT);
-    ts__hashSet(&compiler->keyword_table, "refract", (void *)TOKEN_BUILTIN_REFRACT);
-
-    ts__hashSet(&compiler->keyword_table, "pow", (void *)TOKEN_BUILTIN_POW);
-    ts__hashSet(&compiler->keyword_table, "exp", (void *)TOKEN_BUILTIN_EXP);
-    ts__hashSet(&compiler->keyword_table, "exp2", (void *)TOKEN_BUILTIN_EXP2);
-    ts__hashSet(&compiler->keyword_table, "log", (void *)TOKEN_BUILTIN_LOG);
-    ts__hashSet(&compiler->keyword_table, "log2", (void *)TOKEN_BUILTIN_LOG2);
-
-    ts__hashSet(&compiler->keyword_table, "abs", (void *)TOKEN_BUILTIN_ABS);
-    ts__hashSet(&compiler->keyword_table, "min", (void *)TOKEN_BUILTIN_MIN);
-    ts__hashSet(&compiler->keyword_table, "max", (void *)TOKEN_BUILTIN_MAX);
-    ts__hashSet(&compiler->keyword_table, "frac", (void *)TOKEN_BUILTIN_FRAC);
-    ts__hashSet(&compiler->keyword_table, "trunc", (void *)TOKEN_BUILTIN_TRUNC);
-    ts__hashSet(&compiler->keyword_table, "ceil", (void *)TOKEN_BUILTIN_CEIL);
-    ts__hashSet(&compiler->keyword_table, "floor", (void *)TOKEN_BUILTIN_FLOOR);
-    ts__hashSet(&compiler->keyword_table, "lerp", (void *)TOKEN_BUILTIN_LERP);
-    ts__hashSet(&compiler->keyword_table, "clamp", (void *)TOKEN_BUILTIN_CLAMP);
-    ts__hashSet(&compiler->keyword_table, "step", (void *)TOKEN_BUILTIN_STEP);
-    ts__hashSet(&compiler->keyword_table, "smoothstep", (void *)TOKEN_BUILTIN_SMOOTHSTEP);
-    ts__hashSet(&compiler->keyword_table, "fmod", (void *)TOKEN_BUILTIN_FMOD);
-
-    ts__hashSet(&compiler->keyword_table, "ddx", (void *)TOKEN_BUILTIN_DDX);
-    ts__hashSet(&compiler->keyword_table, "ddy", (void *)TOKEN_BUILTIN_DDY);
-
-    ts__hashSet(&compiler->keyword_table, "asuint", (void *)TOKEN_BUILTIN_ASUINT);
-    ts__hashSet(&compiler->keyword_table, "asint", (void *)TOKEN_BUILTIN_ASINT);
-    ts__hashSet(&compiler->keyword_table, "asfloat", (void *)TOKEN_BUILTIN_ASFLOAT);
-
-    ts__hashSet(
-        &compiler->keyword_table,
-        "InterlockedAdd",
-        (void *)TOKEN_BUILTIN_INTERLOCKED_ADD);
-    ts__hashSet(
-        &compiler->keyword_table,
-        "InterlockedAnd",
-        (void *)TOKEN_BUILTIN_INTERLOCKED_AND);
-    ts__hashSet(
-        &compiler->keyword_table,
-        "InterlockedMin",
-        (void *)TOKEN_BUILTIN_INTERLOCKED_MIN);
-    ts__hashSet(
-        &compiler->keyword_table,
-        "InterlockedMax",
-        (void *)TOKEN_BUILTIN_INTERLOCKED_MAX);
-    ts__hashSet(
-        &compiler->keyword_table, "InterlockedOr", (void *)TOKEN_BUILTIN_INTERLOCKED_OR);
-    ts__hashSet(
-        &compiler->keyword_table,
-        "InterlockedXor",
-        (void *)TOKEN_BUILTIN_INTERLOCKED_XOR);
-    ts__hashSet(
-        &compiler->keyword_table,
-        "InterlockedExchange",
-        (void *)TOKEN_BUILTIN_INTERLOCKED_EXCHANGE);
-    ts__hashSet(
-        &compiler->keyword_table,
-        "InterlockedCompareExchange",
-        (void *)TOKEN_BUILTIN_INTERLOCKED_COMPARE_EXCHANGE);
-    ts__hashSet(
-        &compiler->keyword_table,
-        "InterlockedCompareStore",
-        (void *)TOKEN_BUILTIN_INTERLOCKED_COMPARE_STORE);
-
-    ts__hashSet(&compiler->keyword_table, "transpose", (void *)TOKEN_BUILTIN_TRANSPOSE);
-    ts__hashSet(
-        &compiler->keyword_table, "determinant", (void *)TOKEN_BUILTIN_DETERMINANT);
-
     ts__hashSet(&compiler->keyword_table, "discard", (void *)TOKEN_DISCARD);
 
     ts__hashSet(&compiler->keyword_table, "uint", (void *)TOKEN_UINT);
@@ -152,30 +62,121 @@ TsCompiler *tsCompilerCreate()
     ts__hashSet(&compiler->keyword_table, "static", (void *)TOKEN_STATIC);
     ts__hashSet(&compiler->keyword_table, "groupshared", (void *)TOKEN_GROUPSHARED);
 
+    ts__hashSet(&compiler->builtin_function_table, "dot", (void *)AST_BUILTIN_FUNC_DOT);
+    ts__hashSet(&compiler->builtin_function_table, "cross", (void *)AST_BUILTIN_FUNC_CROSS);
+    ts__hashSet(&compiler->builtin_function_table, "length", (void *)AST_BUILTIN_FUNC_LENGTH);
+    ts__hashSet(&compiler->builtin_function_table, "normalize", (void *)AST_BUILTIN_FUNC_NORMALIZE);
+    ts__hashSet(&compiler->builtin_function_table, "mul", (void *)AST_BUILTIN_FUNC_MUL);
+    ts__hashSet(&compiler->builtin_function_table, "distance", (void *)AST_BUILTIN_FUNC_DISTANCE);
+    ts__hashSet(&compiler->builtin_function_table, "degrees", (void *)AST_BUILTIN_FUNC_DEGREES);
+    ts__hashSet(&compiler->builtin_function_table, "radians", (void *)AST_BUILTIN_FUNC_RADIANS);
+
+    ts__hashSet(&compiler->builtin_function_table, "sin", (void *)AST_BUILTIN_FUNC_SIN);
+    ts__hashSet(&compiler->builtin_function_table, "cos", (void *)AST_BUILTIN_FUNC_COS);
+    ts__hashSet(&compiler->builtin_function_table, "tan", (void *)AST_BUILTIN_FUNC_TAN);
+    ts__hashSet(&compiler->builtin_function_table, "asin", (void *)AST_BUILTIN_FUNC_ASIN);
+    ts__hashSet(&compiler->builtin_function_table, "acos", (void *)AST_BUILTIN_FUNC_ACOS);
+    ts__hashSet(&compiler->builtin_function_table, "atan", (void *)AST_BUILTIN_FUNC_ATAN);
+    ts__hashSet(&compiler->builtin_function_table, "sinh", (void *)AST_BUILTIN_FUNC_SINH);
+    ts__hashSet(&compiler->builtin_function_table, "cosh", (void *)AST_BUILTIN_FUNC_COSH);
+    ts__hashSet(&compiler->builtin_function_table, "tanh", (void *)AST_BUILTIN_FUNC_TANH);
+    ts__hashSet(&compiler->builtin_function_table, "atan2", (void *)AST_BUILTIN_FUNC_ATAN2);
+
+    ts__hashSet(&compiler->builtin_function_table, "sqrt", (void *)AST_BUILTIN_FUNC_SQRT);
+    ts__hashSet(&compiler->builtin_function_table, "rsqrt", (void *)AST_BUILTIN_FUNC_RSQRT);
+
+    ts__hashSet(&compiler->builtin_function_table, "reflect", (void *)AST_BUILTIN_FUNC_REFLECT);
+    ts__hashSet(&compiler->builtin_function_table, "refract", (void *)AST_BUILTIN_FUNC_REFRACT);
+
+    ts__hashSet(&compiler->builtin_function_table, "pow", (void *)AST_BUILTIN_FUNC_POW);
+    ts__hashSet(&compiler->builtin_function_table, "exp", (void *)AST_BUILTIN_FUNC_EXP);
+    ts__hashSet(&compiler->builtin_function_table, "exp2", (void *)AST_BUILTIN_FUNC_EXP2);
+    ts__hashSet(&compiler->builtin_function_table, "log", (void *)AST_BUILTIN_FUNC_LOG);
+    ts__hashSet(&compiler->builtin_function_table, "log2", (void *)AST_BUILTIN_FUNC_LOG2);
+
+    ts__hashSet(&compiler->builtin_function_table, "abs", (void *)AST_BUILTIN_FUNC_ABS);
+    ts__hashSet(&compiler->builtin_function_table, "min", (void *)AST_BUILTIN_FUNC_MIN);
+    ts__hashSet(&compiler->builtin_function_table, "max", (void *)AST_BUILTIN_FUNC_MAX);
+    ts__hashSet(&compiler->builtin_function_table, "frac", (void *)AST_BUILTIN_FUNC_FRAC);
+    ts__hashSet(&compiler->builtin_function_table, "trunc", (void *)AST_BUILTIN_FUNC_TRUNC);
+    ts__hashSet(&compiler->builtin_function_table, "ceil", (void *)AST_BUILTIN_FUNC_CEIL);
+    ts__hashSet(&compiler->builtin_function_table, "floor", (void *)AST_BUILTIN_FUNC_FLOOR);
+    ts__hashSet(&compiler->builtin_function_table, "lerp", (void *)AST_BUILTIN_FUNC_LERP);
+    ts__hashSet(&compiler->builtin_function_table, "clamp", (void *)AST_BUILTIN_FUNC_CLAMP);
+    ts__hashSet(&compiler->builtin_function_table, "step", (void *)AST_BUILTIN_FUNC_STEP);
+    ts__hashSet(&compiler->builtin_function_table, "smoothstep", (void *)AST_BUILTIN_FUNC_SMOOTHSTEP);
+    ts__hashSet(&compiler->builtin_function_table, "fmod", (void *)AST_BUILTIN_FUNC_FMOD);
+
+    ts__hashSet(&compiler->builtin_function_table, "ddx", (void *)AST_BUILTIN_FUNC_DDX);
+    ts__hashSet(&compiler->builtin_function_table, "ddy", (void *)AST_BUILTIN_FUNC_DDY);
+
+    ts__hashSet(&compiler->builtin_function_table, "asuint", (void *)AST_BUILTIN_FUNC_ASUINT);
+    ts__hashSet(&compiler->builtin_function_table, "asint", (void *)AST_BUILTIN_FUNC_ASINT);
+    ts__hashSet(&compiler->builtin_function_table, "asfloat", (void *)AST_BUILTIN_FUNC_ASFLOAT);
+
     ts__hashSet(
-        &compiler->keyword_table, "AllMemoryBarrier", (void *)TOKEN_BARRIER_ALL_MEMORY);
+        &compiler->builtin_function_table,
+        "InterlockedAdd",
+        (void *)AST_BUILTIN_FUNC_INTERLOCKED_ADD);
     ts__hashSet(
-        &compiler->keyword_table,
+        &compiler->builtin_function_table,
+        "InterlockedAnd",
+        (void *)AST_BUILTIN_FUNC_INTERLOCKED_AND);
+    ts__hashSet(
+        &compiler->builtin_function_table,
+        "InterlockedMin",
+        (void *)AST_BUILTIN_FUNC_INTERLOCKED_MIN);
+    ts__hashSet(
+        &compiler->builtin_function_table,
+        "InterlockedMax",
+        (void *)AST_BUILTIN_FUNC_INTERLOCKED_MAX);
+    ts__hashSet(
+        &compiler->builtin_function_table, "InterlockedOr", (void *)AST_BUILTIN_FUNC_INTERLOCKED_OR);
+    ts__hashSet(
+        &compiler->builtin_function_table,
+        "InterlockedXor",
+        (void *)AST_BUILTIN_FUNC_INTERLOCKED_XOR);
+    ts__hashSet(
+        &compiler->builtin_function_table,
+        "InterlockedExchange",
+        (void *)AST_BUILTIN_FUNC_INTERLOCKED_EXCHANGE);
+    ts__hashSet(
+        &compiler->builtin_function_table,
+        "InterlockedCompareExchange",
+        (void *)AST_BUILTIN_FUNC_INTERLOCKED_COMPARE_EXCHANGE);
+    ts__hashSet(
+        &compiler->builtin_function_table,
+        "InterlockedCompareStore",
+        (void *)AST_BUILTIN_FUNC_INTERLOCKED_COMPARE_STORE);
+
+    ts__hashSet(&compiler->builtin_function_table, "transpose", (void *)AST_BUILTIN_FUNC_TRANSPOSE);
+    ts__hashSet(
+        &compiler->builtin_function_table, "determinant", (void *)AST_BUILTIN_FUNC_DETERMINANT);
+
+    ts__hashSet(
+        &compiler->builtin_function_table, "AllMemoryBarrier", (void *)AST_BUILTIN_FUNC_ALL_MEMORY_BARRIER);
+    ts__hashSet(
+        &compiler->builtin_function_table,
         "AllMemoryBarrierWithGroupSync",
-        (void *)TOKEN_BARRIER_ALL_MEMORY_WITH_GROUP_SYNC);
+        (void *)AST_BUILTIN_FUNC_ALL_MEMORY_BARRIER_WITH_GROUP_SYNC);
 
     ts__hashSet(
-        &compiler->keyword_table,
+        &compiler->builtin_function_table,
         "DeviceMemoryBarrier",
-        (void *)TOKEN_BARRIER_DEVICE_MEMORY);
+        (void *)AST_BUILTIN_FUNC_DEVICE_MEMORY_BARRIER);
     ts__hashSet(
-        &compiler->keyword_table,
+        &compiler->builtin_function_table,
         "DeviceMemoryBarrierWithGroupSync",
-        (void *)TOKEN_BARRIER_DEVICE_MEMORY_WITH_GROUP_SYNC);
+        (void *)AST_BUILTIN_FUNC_DEVICE_MEMORY_BARRIER_WITH_GROUP_SYNC);
 
     ts__hashSet(
-        &compiler->keyword_table,
+        &compiler->builtin_function_table,
         "GroupMemoryBarrier",
-        (void *)TOKEN_BARRIER_GROUP_MEMORY);
+        (void *)AST_BUILTIN_FUNC_GROUP_MEMORY_BARRIER);
     ts__hashSet(
-        &compiler->keyword_table,
+        &compiler->builtin_function_table,
         "GroupMemoryBarrierWithGroupSync",
-        (void *)TOKEN_BARRIER_GROUP_MEMORY_WITH_GROUP_SYNC);
+        (void *)AST_BUILTIN_FUNC_GROUP_MEMORY_BARRIER_WITH_GROUP_SYNC);
 
     return compiler;
 }
@@ -183,6 +184,7 @@ TsCompiler *tsCompilerCreate()
 void tsCompilerDestroy(TsCompiler *compiler)
 {
     ts__hashDestroy(&compiler->keyword_table);
+    ts__hashDestroy(&compiler->builtin_function_table);
     ts__bumpDestroy(&compiler->alloc);
     ts__sbDestroy(&compiler->sb);
     free(compiler);
