@@ -3913,8 +3913,9 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
 }
 
 void ts__analyzerAnalyze(
-    Analyzer *a, TsCompiler *compiler, Module *module, AstDecl **decls, size_t decl_count)
+    TsCompiler *compiler, Module *module, AstDecl **decls, size_t decl_count)
 {
+    Analyzer *a = NEW(compiler, Analyzer);
     memset(a, 0, sizeof(*a));
     a->compiler = compiler;
     a->module = module;

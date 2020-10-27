@@ -256,7 +256,7 @@ static bool irIsTypeCastable(IRType *src_type, IRType *dst_type, SpvOp *op)
     assert(0);
 }
 
-static void irTypeSetDecorations(
+void ts__irTypeSetDecorations(
     IRModule *m, IRType *type, IRDecoration *decorations, uint32_t decoration_count)
 {
     type->decoration_count = decoration_count;
@@ -283,14 +283,14 @@ static IRType *irGetCachedType(IRModule *m, IRType *type)
     return type;
 }
 
-static IRType *irNewBasicType(IRModule *m, IRTypeKind kind)
+IRType *ts__irNewBasicType(IRModule *m, IRTypeKind kind)
 {
     IRType *ty = NEW(m->compiler, IRType);
     ty->kind = kind;
     return irGetCachedType(m, ty);
 }
 
-static IRType *irNewPointerType(IRModule *m, SpvStorageClass storage_class, IRType *sub)
+IRType *ts__irNewPointerType(IRModule *m, SpvStorageClass storage_class, IRType *sub)
 {
     IRType *ty = NEW(m->compiler, IRType);
     ty->kind = IR_TYPE_POINTER;
@@ -299,7 +299,7 @@ static IRType *irNewPointerType(IRModule *m, SpvStorageClass storage_class, IRTy
     return irGetCachedType(m, ty);
 }
 
-static IRType *irNewVectorType(IRModule *m, IRType *elem_type, uint32_t size)
+IRType *ts__irNewVectorType(IRModule *m, IRType *elem_type, uint32_t size)
 {
     IRType *ty = NEW(m->compiler, IRType);
     ty->kind = IR_TYPE_VECTOR;
@@ -308,7 +308,7 @@ static IRType *irNewVectorType(IRModule *m, IRType *elem_type, uint32_t size)
     return irGetCachedType(m, ty);
 }
 
-static IRType *irNewMatrixType(IRModule *m, IRType *col_type, uint32_t col_count)
+IRType *ts__irNewMatrixType(IRModule *m, IRType *col_type, uint32_t col_count)
 {
     IRType *ty = NEW(m->compiler, IRType);
     ty->kind = IR_TYPE_MATRIX;
@@ -317,7 +317,7 @@ static IRType *irNewMatrixType(IRModule *m, IRType *col_type, uint32_t col_count
     return irGetCachedType(m, ty);
 }
 
-static IRType *irNewFloatType(IRModule *m, uint32_t bits)
+IRType *ts__irNewFloatType(IRModule *m, uint32_t bits)
 {
     IRType *ty = NEW(m->compiler, IRType);
     ty->kind = IR_TYPE_FLOAT;
@@ -325,7 +325,7 @@ static IRType *irNewFloatType(IRModule *m, uint32_t bits)
     return irGetCachedType(m, ty);
 }
 
-static IRType *irNewIntType(IRModule *m, uint32_t bits, bool is_signed)
+IRType *ts__irNewIntType(IRModule *m, uint32_t bits, bool is_signed)
 {
     IRType *ty = NEW(m->compiler, IRType);
     ty->kind = IR_TYPE_INT;
@@ -334,7 +334,7 @@ static IRType *irNewIntType(IRModule *m, uint32_t bits, bool is_signed)
     return irGetCachedType(m, ty);
 }
 
-static IRType *irNewRuntimeArrayType(IRModule *m, IRType *sub)
+IRType *ts__irNewRuntimeArrayType(IRModule *m, IRType *sub)
 {
     IRType *ty = NEW(m->compiler, IRType);
     ty->kind = IR_TYPE_RUNTIME_ARRAY;
@@ -342,8 +342,8 @@ static IRType *irNewRuntimeArrayType(IRModule *m, IRType *sub)
     return irGetCachedType(m, ty);
 }
 
-static IRType *
-irNewFuncType(IRModule *m, IRType *return_type, IRType **params, uint32_t param_count)
+IRType *
+ts__irNewFuncType(IRModule *m, IRType *return_type, IRType **params, uint32_t param_count)
 {
     IRType *ty = NEW(m->compiler, IRType);
     ty->kind = IR_TYPE_FUNC;
@@ -357,7 +357,7 @@ irNewFuncType(IRModule *m, IRType *return_type, IRType **params, uint32_t param_
     return irGetCachedType(m, ty);
 }
 
-static IRType *irNewStructType(
+IRType *ts__irNewStructType(
     IRModule *m,
     char *name,
     IRType **fields,
@@ -389,7 +389,7 @@ static IRType *irNewStructType(
     return irGetCachedType(m, ty);
 }
 
-static IRType *irNewImageType(IRModule *m, IRType *sampled_type, SpvDim dim)
+IRType *ts__irNewImageType(IRModule *m, IRType *sampled_type, SpvDim dim)
 {
     IRType *ty = NEW(m->compiler, IRType);
     ty->kind = IR_TYPE_IMAGE;
@@ -403,7 +403,7 @@ static IRType *irNewImageType(IRModule *m, IRType *sampled_type, SpvDim dim)
     return irGetCachedType(m, ty);
 }
 
-static IRType *irNewSampledImageType(IRModule *m, IRType *image_type)
+IRType *ts__irNewSampledImageType(IRModule *m, IRType *image_type)
 {
     IRType *ty = NEW(m->compiler, IRType);
     ty->kind = IR_TYPE_SAMPLED_IMAGE;
@@ -411,146 +411,12 @@ static IRType *irNewSampledImageType(IRModule *m, IRType *image_type)
     return irGetCachedType(m, ty);
 }
 
-static IRType *convertTypeToIR(Module *module, IRModule *ir_module, AstType *type)
-{
-    switch (type->kind)
-    {
-    case TYPE_TYPE: assert(0); break;
-
-    case TYPE_VOID: {
-        return irNewBasicType(ir_module, IR_TYPE_VOID);
-    }
-
-    case TYPE_BOOL: {
-        return irNewBasicType(ir_module, IR_TYPE_BOOL);
-    }
-
-    case TYPE_FLOAT: {
-        return irNewFloatType(ir_module, type->float_.bits);
-    }
-
-    case TYPE_INT: {
-        return irNewIntType(ir_module, type->int_.bits, type->int_.is_signed);
-    }
-
-    case TYPE_CONSTANT_BUFFER: {
-        IRType *struct_type = convertTypeToIR(module, ir_module, type->buffer.sub);
-
-        IRDecoration struct_dec = {0};
-        struct_dec.kind = SpvDecorationBlock;
-
-        irTypeSetDecorations(ir_module, struct_type, &struct_dec, 1);
-
-        return struct_type;
-    }
-
-    case TYPE_RW_STRUCTURED_BUFFER:
-    case TYPE_STRUCTURED_BUFFER: {
-        IRType *subtype = convertTypeToIR(module, ir_module, type->buffer.sub);
-        IRType *array_type = irNewRuntimeArrayType(ir_module, subtype);
-
-        assert(type->buffer.sub->size > 0);
-
-        IRDecoration array_dec = {0};
-        array_dec.kind = SpvDecorationArrayStride;
-        array_dec.value = type->buffer.sub->size;
-
-        irTypeSetDecorations(ir_module, array_type, &array_dec, 1);
-
-        ts__sbReset(&module->compiler->sb);
-        ts__sbSprintf(
-            &module->compiler->sb, "__tmp_struct%u", module->compiler->counter++);
-        char *struct_name = ts__sbBuild(&module->compiler->sb, &module->compiler->alloc);
-
-        IRMemberDecoration member_decs[2] = {0};
-        member_decs[0].kind = SpvDecorationOffset;
-        member_decs[0].member_index = 0;
-        member_decs[0].value = 0;
-
-        member_decs[1].kind = SpvDecorationNonWritable;
-        member_decs[1].member_index = 0;
-
-        IRType *struct_wrapper =
-            irNewStructType(ir_module, struct_name, &array_type, 1, member_decs, 2);
-
-        IRDecoration struct_dec = {0};
-        struct_dec.kind = SpvDecorationBufferBlock;
-
-        irTypeSetDecorations(ir_module, struct_wrapper, &struct_dec, 1);
-
-        return struct_wrapper;
-    }
-
-    case TYPE_STRUCT: {
-        IRType **field_types =
-            NEW_ARRAY(module->compiler, IRType *, type->struct_.field_count);
-        for (uint32_t i = 0; i < type->struct_.field_count; ++i)
-        {
-            field_types[i] = convertTypeToIR(module, ir_module, type->struct_.fields[i]);
-        }
-        IRType *struct_type = irNewStructType(
-            ir_module,
-            type->struct_.name,
-            field_types,
-            type->struct_.field_count,
-            type->struct_.field_decorations.ptr,
-            arrLength(type->struct_.field_decorations));
-
-        return struct_type;
-    }
-
-    case TYPE_VECTOR: {
-        IRType *elem_type = convertTypeToIR(module, ir_module, type->vector.elem_type);
-        return irNewVectorType(ir_module, elem_type, type->vector.size);
-    }
-
-    case TYPE_IMAGE: {
-        IRType *sampled_type = convertTypeToIR(
-            module, ir_module, ts__getScalarType(type->image.sampled_type));
-        return irNewImageType(ir_module, sampled_type, type->image.dim);
-    }
-
-    case TYPE_SAMPLER: {
-        return irNewBasicType(ir_module, IR_TYPE_SAMPLER);
-    }
-
-    case TYPE_FUNC: {
-        IRType *return_type = convertTypeToIR(module, ir_module, type->func.return_type);
-        IRType **param_types =
-            NEW_ARRAY(module->compiler, IRType *, type->func.param_count);
-        for (uint32_t i = 0; i < type->func.param_count; ++i)
-        {
-            param_types[i] = convertTypeToIR(module, ir_module, type->func.params[i]);
-        }
-        return irNewFuncType(ir_module, return_type, param_types, type->func.param_count);
-    }
-
-    case TYPE_MATRIX: {
-        IRType *col_type = convertTypeToIR(module, ir_module, type->matrix.col_type);
-        return irNewMatrixType(ir_module, col_type, type->matrix.col_count);
-    }
-
-    case TYPE_POINTER: {
-        IRType *elem_type = convertTypeToIR(module, ir_module, type->ptr.sub);
-        return irNewPointerType(ir_module, type->ptr.storage_class, elem_type);
-    }
-
-    case TYPE_SAMPLED_IMAGE: {
-        IRType *image_type =
-            convertTypeToIR(module, ir_module, type->sampled_image.image_type);
-        return irNewSampledImageType(ir_module, image_type);
-    }
-    }
-
-    return NULL;
-}
-
 static uint32_t irModuleReserveId(IRModule *m)
 {
     return m->id_bound++;
 }
 
-static IRInst *irAddEntryPoint(
+IRInst *ts__irAddEntryPoint(
     IRModule *m,
     char *name,
     IRInst *func,
@@ -570,15 +436,15 @@ static IRInst *irAddEntryPoint(
     return inst;
 }
 
-static void
-irEntryPointSetComputeDims(IRInst *entry_point, uint32_t x, uint32_t y, uint32_t z)
+void
+ts__irEntryPointSetComputeDims(IRInst *entry_point, uint32_t x, uint32_t y, uint32_t z)
 {
     entry_point->entry_point.compute_dims.x = x;
     entry_point->entry_point.compute_dims.y = y;
     entry_point->entry_point.compute_dims.z = z;
 }
 
-static IRInst *irAddFunction(IRModule *m, IRType *func_type)
+IRInst *ts__irAddFunction(IRModule *m, IRType *func_type)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->id = irModuleReserveId(m);
@@ -590,8 +456,8 @@ static IRInst *irAddFunction(IRModule *m, IRType *func_type)
     return inst;
 }
 
-static IRInst *
-irAddFuncParam(IRModule *m, IRInst *func, IRType *type, bool is_by_reference)
+IRInst *
+ts__irAddFuncParam(IRModule *m, IRInst *func, IRType *type, bool is_by_reference)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->id = irModuleReserveId(m);
@@ -605,7 +471,7 @@ irAddFuncParam(IRModule *m, IRInst *func, IRType *type, bool is_by_reference)
 }
 
 // Does not add the block to the function
-static IRInst *irCreateBlock(IRModule *m, IRInst *func)
+IRInst *ts__irCreateBlock(IRModule *m, IRInst *func)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_BLOCK;
@@ -618,19 +484,19 @@ static IRInst *irCreateBlock(IRModule *m, IRInst *func)
 }
 
 // Finally adds the block to the function
-static void irAddBlock(IRModule *m, IRInst *block)
+void ts__irAddBlock(IRModule *m, IRInst *block)
 {
     assert(block->block.func->kind == IR_INST_FUNCTION);
     arrPush(m->compiler, &block->block.func->func.blocks, block);
 }
 
-static IRInst *irAddGlobal(IRModule *m, IRType *type, SpvStorageClass storage_class)
+IRInst *ts__irAddGlobal(IRModule *m, IRType *type, SpvStorageClass storage_class)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->id = irModuleReserveId(m);
     inst->kind = IR_INST_VARIABLE;
     inst->var.storage_class = storage_class;
-    inst->type = irNewPointerType(m, inst->var.storage_class, type);
+    inst->type = ts__irNewPointerType(m, inst->var.storage_class, type);
 
     arrPush(m->compiler, &m->globals, inst);
     arrPush(m->compiler, &m->all_globals, inst);
@@ -638,13 +504,13 @@ static IRInst *irAddGlobal(IRModule *m, IRType *type, SpvStorageClass storage_cl
     return inst;
 }
 
-static IRInst *irAddInput(IRModule *m, IRInst *func, IRType *type)
+IRInst *ts__irAddInput(IRModule *m, IRInst *func, IRType *type)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->id = irModuleReserveId(m);
     inst->kind = IR_INST_VARIABLE;
     inst->var.storage_class = SpvStorageClassInput;
-    inst->type = irNewPointerType(m, inst->var.storage_class, type);
+    inst->type = ts__irNewPointerType(m, inst->var.storage_class, type);
 
     arrPush(m->compiler, &func->func.inputs, inst);
     arrPush(m->compiler, &m->all_globals, inst);
@@ -652,13 +518,13 @@ static IRInst *irAddInput(IRModule *m, IRInst *func, IRType *type)
     return inst;
 }
 
-static IRInst *irAddOutput(IRModule *m, IRInst *func, IRType *type)
+IRInst *ts__irAddOutput(IRModule *m, IRInst *func, IRType *type)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->id = irModuleReserveId(m);
     inst->kind = IR_INST_VARIABLE;
     inst->var.storage_class = SpvStorageClassOutput;
-    inst->type = irNewPointerType(m, inst->var.storage_class, type);
+    inst->type = ts__irNewPointerType(m, inst->var.storage_class, type);
 
     arrPush(m->compiler, &func->func.outputs, inst);
     arrPush(m->compiler, &m->all_globals, inst);
@@ -666,17 +532,17 @@ static IRInst *irAddOutput(IRModule *m, IRInst *func, IRType *type)
     return inst;
 }
 
-static IRInst *irGetCurrentBlock(IRModule *m)
+IRInst *ts__irGetCurrentBlock(IRModule *m)
 {
     return m->current_block;
 }
 
-static void irPositionAtEnd(IRModule *m, IRInst *block)
+void ts__irPositionAtEnd(IRModule *m, IRInst *block)
 {
     m->current_block = block;
 }
 
-static bool irBlockHasTerminator(IRInst *block)
+bool ts__irBlockHasTerminator(IRInst *block)
 {
     if (arrLength(block->block.insts) == 0) return false;
 
@@ -813,7 +679,13 @@ static IRInst *irGetCachedConst(IRModule *m, IRInst *inst)
     return inst;
 }
 
-static IRInst *irBuildConstFloat(IRModule *m, IRType *type, double value)
+////////////////////////////////
+//
+// IR instruction builders
+//
+////////////////////////////////
+
+IRInst *ts__irBuildConstFloat(IRModule *m, IRType *type, double value)
 {
     assert(type->kind == IR_TYPE_FLOAT);
 
@@ -846,7 +718,7 @@ static IRInst *irBuildConstFloat(IRModule *m, IRType *type, double value)
     return inst;
 }
 
-static IRInst *irBuildConstInt(IRModule *m, IRType *type, uint64_t value)
+IRInst *ts__irBuildConstInt(IRModule *m, IRType *type, uint64_t value)
 {
     assert(type->kind == IR_TYPE_INT);
 
@@ -895,12 +767,12 @@ static IRInst *irBuildConstInt(IRModule *m, IRType *type, uint64_t value)
     return inst;
 }
 
-static IRInst *irBuildConstBool(IRModule *m, bool value)
+IRInst *ts__irBuildConstBool(IRModule *m, bool value)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_CONSTANT_BOOL;
 
-    inst->type = irNewBasicType(m, IR_TYPE_BOOL);
+    inst->type = ts__irNewBasicType(m, IR_TYPE_BOOL);
     inst->constant_bool.value = value;
 
     inst = irGetCachedConst(m, inst);
@@ -908,31 +780,31 @@ static IRInst *irBuildConstBool(IRModule *m, bool value)
     return inst;
 }
 
-static IRInst *irBuildAlloca(IRModule *m, IRType *type)
+IRInst *ts__irBuildAlloca(IRModule *m, IRType *type)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_VARIABLE;
     inst->var.storage_class = SpvStorageClassFunction;
-    inst->type = irNewPointerType(m, inst->var.storage_class, type);
+    inst->type = ts__irNewPointerType(m, inst->var.storage_class, type);
 
-    IRInst *block = irGetCurrentBlock(m);
+    IRInst *block = ts__irGetCurrentBlock(m);
     arrPush(m->compiler, &block->block.insts, inst);
 
     return inst;
 }
 
-static void irBuildStore(IRModule *m, IRInst *pointer, IRInst *value)
+void ts__irBuildStore(IRModule *m, IRInst *pointer, IRInst *value)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_STORE;
     inst->store.pointer = pointer;
     inst->store.value = value;
 
-    IRInst *block = irGetCurrentBlock(m);
+    IRInst *block = ts__irGetCurrentBlock(m);
     arrPush(m->compiler, &block->block.insts, inst);
 }
 
-static IRInst *irBuildLoad(IRModule *m, IRInst *pointer)
+IRInst *ts__irBuildLoad(IRModule *m, IRInst *pointer)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_LOAD;
@@ -943,19 +815,19 @@ static IRInst *irBuildLoad(IRModule *m, IRInst *pointer)
     inst->type = pointer->type->ptr.sub;
     inst->load.pointer = pointer;
 
-    IRInst *block = irGetCurrentBlock(m);
+    IRInst *block = ts__irGetCurrentBlock(m);
     arrPush(m->compiler, &block->block.insts, inst);
 
     return inst;
 }
 
-static IRInst *irBuildAccessChain(
+IRInst *ts__irBuildAccessChain(
     IRModule *m, IRType *type, IRInst *base, IRInst **indices, uint32_t index_count)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_ACCESS_CHAIN;
 
-    inst->type = irNewPointerType(m, base->type->ptr.storage_class, type);
+    inst->type = ts__irNewPointerType(m, base->type->ptr.storage_class, type);
 
     assert(base->type->kind == IR_TYPE_POINTER);
 
@@ -963,13 +835,13 @@ static IRInst *irBuildAccessChain(
     inst->access_chain.indices = indices;
     inst->access_chain.index_count = index_count;
 
-    IRInst *block = irGetCurrentBlock(m);
+    IRInst *block = ts__irGetCurrentBlock(m);
     arrPush(m->compiler, &block->block.insts, inst);
 
     return inst;
 }
 
-static IRInst *irBuildVectorShuffle(
+IRInst *ts__irBuildVectorShuffle(
     IRModule *m,
     IRInst *vector_a,
     IRInst *vector_b,
@@ -983,20 +855,20 @@ static IRInst *irBuildVectorShuffle(
     assert(vector_b->type->kind == IR_TYPE_VECTOR);
     assert(vector_a->type->vector.elem_type == vector_b->type->vector.elem_type);
 
-    inst->type = irNewVectorType(m, vector_a->type->vector.elem_type, index_count);
+    inst->type = ts__irNewVectorType(m, vector_a->type->vector.elem_type, index_count);
 
     inst->vector_shuffle.vector_a = vector_a;
     inst->vector_shuffle.vector_b = vector_b;
     inst->vector_shuffle.indices = indices;
     inst->vector_shuffle.index_count = index_count;
 
-    IRInst *block = irGetCurrentBlock(m);
+    IRInst *block = ts__irGetCurrentBlock(m);
     arrPush(m->compiler, &block->block.insts, inst);
 
     return inst;
 }
 
-static IRInst *irBuildCompositeExtract(
+IRInst *ts__irBuildCompositeExtract(
     IRModule *m, IRInst *value, uint32_t *indices, uint32_t index_count)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
@@ -1010,7 +882,7 @@ static IRInst *irBuildCompositeExtract(
         }
         else
         {
-            inst->type = irNewVectorType(m, value->type->vector.elem_type, index_count);
+            inst->type = ts__irNewVectorType(m, value->type->vector.elem_type, index_count);
         }
     }
     else
@@ -1022,13 +894,13 @@ static IRInst *irBuildCompositeExtract(
     inst->composite_extract.indices = indices;
     inst->composite_extract.index_count = index_count;
 
-    IRInst *block = irGetCurrentBlock(m);
+    IRInst *block = ts__irGetCurrentBlock(m);
     arrPush(m->compiler, &block->block.insts, inst);
 
     return inst;
 }
 
-static IRInst *irBuildCompositeConstruct(
+IRInst *ts__irBuildCompositeConstruct(
     IRModule *m, IRType *type, IRInst **fields, uint32_t field_count)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
@@ -1039,15 +911,15 @@ static IRInst *irBuildCompositeConstruct(
     inst->composite_construct.fields = fields;
     inst->composite_construct.field_count = field_count;
 
-    IRInst *block = irGetCurrentBlock(m);
+    IRInst *block = ts__irGetCurrentBlock(m);
     assert(block);
     arrPush(m->compiler, &block->block.insts, inst);
 
     return inst;
 }
 
-static IRInst *
-irBuildFuncCall(IRModule *m, IRInst *function, IRInst **params, uint32_t param_count)
+IRInst *
+ts__irBuildFuncCall(IRModule *m, IRInst *function, IRInst **params, uint32_t param_count)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_FUNC_CALL;
@@ -1061,13 +933,13 @@ irBuildFuncCall(IRModule *m, IRInst *function, IRInst **params, uint32_t param_c
     inst->func_call.params = params;
     inst->func_call.param_count = param_count;
 
-    IRInst *block = irGetCurrentBlock(m);
+    IRInst *block = ts__irGetCurrentBlock(m);
     arrPush(m->compiler, &block->block.insts, inst);
 
     return inst;
 }
 
-static IRInst *irBuildBuiltinCall(
+IRInst *ts__irBuildBuiltinCall(
     IRModule *m,
     IRBuiltinInstKind kind,
     IRType *result_type,
@@ -1084,13 +956,13 @@ static IRInst *irBuildBuiltinCall(
     inst->builtin_call.params = params;
     inst->builtin_call.param_count = param_count;
 
-    IRInst *block = irGetCurrentBlock(m);
+    IRInst *block = ts__irGetCurrentBlock(m);
     arrPush(m->compiler, &block->block.insts, inst);
 
     return inst;
 }
 
-static IRInst *irBuildBarrier(
+IRInst *ts__irBuildBarrier(
     IRModule *m,
     bool with_group_sync,
     uint32_t execution_scope,
@@ -1100,24 +972,24 @@ static IRInst *irBuildBarrier(
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_BARRIER;
 
-    inst->type = irNewBasicType(m, IR_TYPE_VOID);
+    inst->type = ts__irNewBasicType(m, IR_TYPE_VOID);
     assert(inst->type);
 
-    IRType *uint_type = irNewIntType(m, 32, false);
+    IRType *uint_type = ts__irNewIntType(m, 32, false);
 
     inst->barrier.with_group_sync = with_group_sync;
-    inst->barrier.execution_scope = irBuildConstInt(m, uint_type, execution_scope);
-    inst->barrier.memory_scope = irBuildConstInt(m, uint_type, memory_scope);
-    inst->barrier.semantics = irBuildConstInt(m, uint_type, semantics);
+    inst->barrier.execution_scope = ts__irBuildConstInt(m, uint_type, execution_scope);
+    inst->barrier.memory_scope = ts__irBuildConstInt(m, uint_type, memory_scope);
+    inst->barrier.semantics = ts__irBuildConstInt(m, uint_type, semantics);
 
-    IRInst *block = irGetCurrentBlock(m);
+    IRInst *block = ts__irGetCurrentBlock(m);
     arrPush(m->compiler, &block->block.insts, inst);
 
     return inst;
 }
 
-static IRInst *
-irBuildSampleImplicitLod(IRModule *m, IRType *type, IRInst *image_sampler, IRInst *coords)
+IRInst *
+ts__irBuildSampleImplicitLod(IRModule *m, IRType *type, IRInst *image_sampler, IRInst *coords)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_SAMPLE_IMPLICIT_LOD;
@@ -1127,13 +999,13 @@ irBuildSampleImplicitLod(IRModule *m, IRType *type, IRInst *image_sampler, IRIns
     inst->sample.image_sampler = image_sampler;
     inst->sample.coords = coords;
 
-    IRInst *block = irGetCurrentBlock(m);
+    IRInst *block = ts__irGetCurrentBlock(m);
     arrPush(m->compiler, &block->block.insts, inst);
 
     return inst;
 }
 
-static IRInst *irBuildSampleExplicitLod(
+IRInst *ts__irBuildSampleExplicitLod(
     IRModule *m, IRType *type, IRInst *image_sampler, IRInst *coords, IRInst *lod)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
@@ -1145,13 +1017,13 @@ static IRInst *irBuildSampleExplicitLod(
     inst->sample.coords = coords;
     inst->sample.lod = lod;
 
-    IRInst *block = irGetCurrentBlock(m);
+    IRInst *block = ts__irGetCurrentBlock(m);
     arrPush(m->compiler, &block->block.insts, inst);
 
     return inst;
 }
 
-static IRInst *irBuildQuerySizeLod(IRModule *m, IRInst *image, IRInst *lod)
+IRInst *ts__irBuildQuerySizeLod(IRModule *m, IRInst *image, IRInst *lod)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_QUERY_SIZE_LOD;
@@ -1171,37 +1043,37 @@ static IRInst *irBuildQuerySizeLod(IRModule *m, IRInst *image, IRInst *lod)
 
     assert(dim > 0);
 
-    inst->type = irNewVectorType(m, irNewIntType(m, 32, false), dim);
+    inst->type = ts__irNewVectorType(m, ts__irNewIntType(m, 32, false), dim);
     assert(inst->type);
 
     inst->query_size_lod.image = image;
     inst->query_size_lod.lod = lod;
 
-    IRInst *block = irGetCurrentBlock(m);
+    IRInst *block = ts__irGetCurrentBlock(m);
     arrPush(m->compiler, &block->block.insts, inst);
 
     return inst;
 }
 
-static IRInst *irBuildQueryLevels(IRModule *m, IRInst *image)
+IRInst *ts__irBuildQueryLevels(IRModule *m, IRInst *image)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_QUERY_LEVELS;
 
     m->uses_image_query = true;
 
-    inst->type = irNewIntType(m, 32, false);
+    inst->type = ts__irNewIntType(m, 32, false);
     assert(inst->type);
 
     inst->query_levels.image = image;
 
-    IRInst *block = irGetCurrentBlock(m);
+    IRInst *block = ts__irGetCurrentBlock(m);
     arrPush(m->compiler, &block->block.insts, inst);
 
     return inst;
 }
 
-static IRInst *irBuildCast(IRModule *m, IRType *dst_type, IRInst *value)
+IRInst *ts__irBuildCast(IRModule *m, IRType *dst_type, IRInst *value)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_CAST;
@@ -1221,13 +1093,13 @@ static IRInst *irBuildCast(IRModule *m, IRType *dst_type, IRInst *value)
     inst->cast.dst_type = dst_type;
     inst->cast.value = value;
 
-    IRInst *block = irGetCurrentBlock(m);
+    IRInst *block = ts__irGetCurrentBlock(m);
     arrPush(m->compiler, &block->block.insts, inst);
 
     return inst;
 }
 
-static IRInst *irBuildUnary(IRModule *m, SpvOp op, IRType *type, IRInst *right)
+IRInst *ts__irBuildUnary(IRModule *m, SpvOp op, IRType *type, IRInst *right)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_UNARY;
@@ -1237,14 +1109,14 @@ static IRInst *irBuildUnary(IRModule *m, SpvOp op, IRType *type, IRInst *right)
     inst->unary.op = op;
     inst->unary.right = right;
 
-    IRInst *block = irGetCurrentBlock(m);
+    IRInst *block = ts__irGetCurrentBlock(m);
     arrPush(m->compiler, &block->block.insts, inst);
 
     return inst;
 }
 
-static IRInst *
-irBuildBinary(IRModule *m, SpvOp op, IRType *type, IRInst *left, IRInst *right)
+IRInst *
+ts__irBuildBinary(IRModule *m, SpvOp op, IRType *type, IRInst *left, IRInst *right)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_BINARY;
@@ -1255,13 +1127,13 @@ irBuildBinary(IRModule *m, SpvOp op, IRType *type, IRInst *left, IRInst *right)
     inst->binary.left = left;
     inst->binary.right = right;
 
-    IRInst *block = irGetCurrentBlock(m);
+    IRInst *block = ts__irGetCurrentBlock(m);
     arrPush(m->compiler, &block->block.insts, inst);
 
     return inst;
 }
 
-static IRInst *irBuildSelect(
+IRInst *ts__irBuildSelect(
     IRModule *m, IRType *type, IRInst *cond, IRInst *true_value, IRInst *false_value)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
@@ -1273,33 +1145,33 @@ static IRInst *irBuildSelect(
     inst->select.true_value = true_value;
     inst->select.false_value = false_value;
 
-    IRInst *block = irGetCurrentBlock(m);
+    IRInst *block = ts__irGetCurrentBlock(m);
     arrPush(m->compiler, &block->block.insts, inst);
 
     return inst;
 }
 
-static void irBuildReturn(IRModule *m, IRInst *value)
+void ts__irBuildReturn(IRModule *m, IRInst *value)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_RETURN;
     inst->return_.value = value;
 
-    IRInst *block = irGetCurrentBlock(m);
+    IRInst *block = ts__irGetCurrentBlock(m);
     arrPush(m->compiler, &block->block.insts, inst);
 }
 
-static void irBuildDiscard(IRModule *m)
+void ts__irBuildDiscard(IRModule *m)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_DISCARD;
 
-    IRInst *block = irGetCurrentBlock(m);
+    IRInst *block = ts__irGetCurrentBlock(m);
     arrPush(m->compiler, &block->block.insts, inst);
 }
 
-static void
-irBuildBr(IRModule *m, IRInst *target, IRInst *merge_block, IRInst *continue_block)
+void
+ts__irBuildBr(IRModule *m, IRInst *target, IRInst *merge_block, IRInst *continue_block)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_BRANCH;
@@ -1307,11 +1179,11 @@ irBuildBr(IRModule *m, IRInst *target, IRInst *merge_block, IRInst *continue_blo
     inst->branch.merge_block = merge_block;
     inst->branch.continue_block = continue_block;
 
-    IRInst *block = irGetCurrentBlock(m);
+    IRInst *block = ts__irGetCurrentBlock(m);
     arrPush(m->compiler, &block->block.insts, inst);
 }
 
-static void irBuildCondBr(
+void ts__irBuildCondBr(
     IRModule *m,
     IRInst *cond,
     IRInst *true_block,
@@ -1327,9 +1199,15 @@ static void irBuildCondBr(
     inst->cond_branch.merge_block = merge_block;
     inst->cond_branch.continue_block = continue_block;
 
-    IRInst *block = irGetCurrentBlock(m);
+    IRInst *block = ts__irGetCurrentBlock(m);
     arrPush(m->compiler, &block->block.insts, inst);
 }
+
+////////////////////////////////
+//
+// IR instruction encoding
+//
+////////////////////////////////
 
 static void
 irModuleEncodeInst(IRModule *m, SpvOp opcode, uint32_t *params, size_t params_count)
@@ -1614,7 +1492,7 @@ static void irModuleEncodeEntryPoints(IRModule *m)
 
 static void irModuleEncodeBlock(IRModule *m, IRInst *block)
 {
-    assert(irBlockHasTerminator(block));
+    assert(ts__irBlockHasTerminator(block));
 
     {
         uint32_t params[1] = {block->id};
@@ -2756,1873 +2634,35 @@ static void irModuleEncodeModule(IRModule *m)
     m->stream.ptr[3] = m->id_bound;
 }
 
-////////////////////////////////
-//
-// IR generation from AST
-//
-////////////////////////////////
-
-static void irModuleBuildDecl(IRModule *m, AstDecl *decl);
-static void irModuleBuildStmt(IRModule *m, AstStmt *stmt);
-static void irModuleBuildExpr(IRModule *m, AstExpr *expr);
-
-static bool isLvalue(IRInst *value)
+IRModule *ts__irModuleCreate(TsCompiler *compiler)
 {
-    return (
-        value->kind == IR_INST_VARIABLE || value->kind == IR_INST_ACCESS_CHAIN ||
-        (value->kind == IR_INST_FUNC_PARAM && value->func_param.is_by_reference));
-}
-
-static IRInst *irLoadVal(IRModule *m, IRInst *value)
-{
-    assert(value);
-    if (isLvalue(value))
-    {
-        return irBuildLoad(m, value);
-    }
-
-    return value;
-}
-
-static IRInst *irBoolVal(IRModule *m, IRInst *value)
-{
-    IRType *bool_type = irNewBasicType(m, IR_TYPE_BOOL);
-
-    switch (value->type->kind)
-    {
-    case IR_TYPE_INT: {
-        return irBuildBinary(
-            m, SpvOpINotEqual, bool_type, value, irBuildConstInt(m, value->type, 0));
-    }
-
-    case IR_TYPE_FLOAT: {
-        return irBuildBinary(
-            m,
-            SpvOpFOrdNotEqual,
-            bool_type,
-            value,
-            irBuildConstFloat(m, value->type, 0.0));
-    }
-
-    case IR_TYPE_BOOL: {
-        return value;
-    }
-
-    default: assert(0); break;
-    }
-
-    return NULL;
-}
-
-static void irModuleBuildExpr(IRModule *m, AstExpr *expr)
-{
-    TsCompiler *compiler = m->compiler;
-
-    assert(expr->type);
-
-    switch (expr->kind)
-    {
-    case EXPR_PRIMARY: {
-        IRType *ir_type = convertTypeToIR(m->mod, m, expr->type);
-
-        switch (expr->primary.token->kind)
-        {
-        case TOKEN_FLOAT_LIT: {
-            expr->value = irBuildConstFloat(m, ir_type, expr->primary.token->double_);
-            break;
-        }
-
-        case TOKEN_INT_LIT: {
-            switch (expr->type->kind)
-            {
-            case TYPE_FLOAT: {
-                expr->value =
-                    irBuildConstFloat(m, ir_type, (double)expr->primary.token->int_);
-                break;
-            }
-
-            case TYPE_INT: {
-                expr->value =
-                    irBuildConstInt(m, ir_type, (uint64_t)expr->primary.token->int_);
-                break;
-            }
-
-            default: assert(0);
-            }
-            break;
-        }
-
-        case TOKEN_TRUE: {
-            expr->value = irBuildConstBool(m, true);
-            break;
-        }
-
-        case TOKEN_FALSE: {
-            expr->value = irBuildConstBool(m, false);
-            break;
-        }
-
-        default: assert(0);
-        }
-        break;
-    }
-
-    case EXPR_VAR_ASSIGN: {
-        irModuleBuildExpr(m, expr->var_assign.value_expr);
-        IRInst *to_store = expr->var_assign.value_expr->value;
-        assert(to_store);
-        to_store = irLoadVal(m, to_store);
-
-        irModuleBuildExpr(m, expr->var_assign.assigned_expr);
-        IRInst *assigned_value = expr->var_assign.assigned_expr->value;
-
-        irBuildStore(m, assigned_value, to_store);
-
-        break;
-    }
-
-    case EXPR_IDENT: {
-        AstDecl *decl = expr->ident.decl;
-        assert(decl);
-        expr->value = decl->value;
-        break;
-    }
-
-    case EXPR_SUBSCRIPT: {
-        irModuleBuildExpr(m, expr->subscript.left);
-        irModuleBuildExpr(m, expr->subscript.right);
-        assert(expr->subscript.left->value);
-        assert(expr->subscript.right->value);
-
-        IRType *ir_type = convertTypeToIR(m->mod, m, expr->type);
-
-        uint32_t index_count = 0;
-        IRInst **indices = NULL;
-
-        IRType *index_type = irNewIntType(m, 32, false);
-
-        switch (expr->subscript.left->type->kind)
-        {
-        case TYPE_RW_STRUCTURED_BUFFER:
-        case TYPE_STRUCTURED_BUFFER: {
-            index_count = 2;
-            indices = NEW_ARRAY(compiler, IRInst *, index_count);
-
-            indices[0] = irBuildConstInt(m, index_type, 0);
-            indices[1] = expr->subscript.right->value;
-            break;
-        }
-
-        case TYPE_VECTOR: {
-            index_count = 1;
-            indices = NEW_ARRAY(compiler, IRInst *, index_count);
-            indices[0] = expr->subscript.right->value;
-            break;
-        }
-
-        case TYPE_MATRIX: {
-            index_count = 1;
-            indices = NEW_ARRAY(compiler, IRInst *, index_count);
-            indices[0] = expr->subscript.right->value;
-            break;
-        }
-
-        default: assert(0); break;
-        }
-
-        assert(index_count > 0);
-
-        expr->value = irBuildAccessChain(
-            m, ir_type, expr->subscript.left->value, indices, index_count);
-
-        break;
-    }
-
-    case EXPR_ACCESS: {
-        IRType *index_type = irNewIntType(m, 32, false);
-
-        AstExpr *base = expr->access.base;
-        assert(base->type);
-
-        irModuleBuildExpr(m, base);
-        IRInst *value = base->value;
-        assert(value);
-
-        uint32_t index_count = 0;
-        IRInst **indices = NEW_ARRAY(compiler, IRInst *, arrLength(expr->access.chain));
-
-        AstType *struct_type = ts__getStructType(base->type);
-
-        if (struct_type)
-        {
-            assert(struct_type->kind == TYPE_STRUCT);
-
-            for (uint32_t i = 0; i < arrLength(expr->access.chain); ++i)
-            {
-                AstExpr *field_ident = expr->access.chain.ptr[i];
-                assert(field_ident->kind == EXPR_IDENT);
-
-                if (!field_ident->ident.decl) break;
-
-                index_count++;
-
-                AstDecl *field_decl = field_ident->ident.decl;
-                assert(field_decl->kind == DECL_STRUCT_FIELD);
-
-                indices[i] =
-                    irBuildConstInt(m, index_type, field_decl->struct_field.index);
-            }
-
-            AstType *last_type = expr->access.chain.ptr[index_count - 1]->type;
-            IRType *ir_last_type = convertTypeToIR(m->mod, m, last_type);
-            value =
-                irBuildAccessChain(m, ir_last_type, base->value, indices, index_count);
-        }
-
-        for (uint32_t i = index_count; i < arrLength(expr->access.chain); ++i)
-        {
-            // Must be a vector swizzle
-
-            AstExpr *field_ident = expr->access.chain.ptr[i];
-            assert(field_ident->kind == EXPR_IDENT);
-            assert(!field_ident->ident.decl);
-            assert(field_ident->ident.shuffle_indices);
-            assert(field_ident->ident.shuffle_index_count > 0);
-
-            uint32_t *shuffle_indices = field_ident->ident.shuffle_indices;
-            uint32_t shuffle_index_count = field_ident->ident.shuffle_index_count;
-
-            if (shuffle_index_count == 1)
-            {
-                if (!isLvalue(value))
-                {
-                    // It's a temporary value
-                    IRInst *vec_value = irLoadVal(m, value);
-                    value = irBuildCompositeExtract(
-                        m, vec_value, shuffle_indices, shuffle_index_count);
-                }
-                else
-                {
-                    // It's a variable
-                    IRInst **ir_indices = NEW_ARRAY(compiler, IRInst *, 1);
-                    ir_indices[0] = irBuildConstInt(m, index_type, shuffle_indices[0]);
-                    IRType *accessed_type = convertTypeToIR(m->mod, m, field_ident->type);
-                    value = irBuildAccessChain(m, accessed_type, value, ir_indices, 1);
-                }
-            }
-            else
-            {
-                IRInst *vec_value = irLoadVal(m, value);
-
-                value = irBuildVectorShuffle(
-                    m, vec_value, vec_value, shuffle_indices, shuffle_index_count);
-            }
-        }
-
-        expr->value = value;
-
-        break;
-    }
-
-    case EXPR_FUNC_CALL: {
-        AstExpr *func_expr = expr->func_call.func_expr;
-
-        bool is_builtin_func = false;
-        AstBuiltinFunction builtin_func_kind;
-
-        // Builtin function
-        if (func_expr->kind == EXPR_IDENT)
-        {
-            void *result;
-            is_builtin_func = ts__hashGet(
-                &compiler->builtin_function_table,
-                func_expr->ident.name,
-                &result);
-            if (is_builtin_func)
-            {
-                builtin_func_kind = (AstBuiltinFunction)result;
-            }
-        }
-
-        if (is_builtin_func)
-        {
-            IRType *result_type = convertTypeToIR(m->mod, m, expr->type);
-            uint32_t param_count = expr->func_call.params.len;
-            IRInst **param_values = NEW_ARRAY(compiler, IRInst *, param_count);
-
-            for (uint32_t i = 0; i < param_count; ++i)
-            {
-                AstExpr *param = expr->func_call.params.ptr[i];
-                irModuleBuildExpr(m, param);
-                param_values[i] = param->value;
-                assert(param_values[i]);
-            }
-
-            switch (builtin_func_kind)
-            {
-            case AST_BUILTIN_FUNC_INTERLOCKED_ADD:
-            case AST_BUILTIN_FUNC_INTERLOCKED_AND:
-            case AST_BUILTIN_FUNC_INTERLOCKED_MIN:
-            case AST_BUILTIN_FUNC_INTERLOCKED_MAX:
-            case AST_BUILTIN_FUNC_INTERLOCKED_OR:
-            case AST_BUILTIN_FUNC_INTERLOCKED_XOR: {
-                uint32_t ir_param_count = 4;
-                IRInst **ir_param_values = NEW_ARRAY(compiler, IRInst *, ir_param_count);
-
-                IRType *uint_type = irNewIntType(m, 32, false);
-
-                ir_param_values[0] = param_values[0];
-                ir_param_values[1] = irBuildConstInt(m, uint_type, SpvScopeDevice);
-                ir_param_values[2] =
-                    irBuildConstInt(m, uint_type, SpvMemorySemanticsMaskNone);
-                ir_param_values[3] = param_values[1];
-
-                IRBuiltinInstKind ir_builtin_kind;
-                switch (builtin_func_kind)
-                {
-                case AST_BUILTIN_FUNC_INTERLOCKED_ADD: ir_builtin_kind = IR_BUILTIN_INTERLOCKED_ADD; break;
-                case AST_BUILTIN_FUNC_INTERLOCKED_AND: ir_builtin_kind = IR_BUILTIN_INTERLOCKED_AND; break;
-                case AST_BUILTIN_FUNC_INTERLOCKED_MIN: ir_builtin_kind = IR_BUILTIN_INTERLOCKED_MIN; break;
-                case AST_BUILTIN_FUNC_INTERLOCKED_MAX: ir_builtin_kind = IR_BUILTIN_INTERLOCKED_MAX; break;
-                case AST_BUILTIN_FUNC_INTERLOCKED_OR: ir_builtin_kind = IR_BUILTIN_INTERLOCKED_OR; break;
-                case AST_BUILTIN_FUNC_INTERLOCKED_XOR: ir_builtin_kind = IR_BUILTIN_INTERLOCKED_XOR; break;
-                default: assert(0); break;
-                }
-
-                expr->value = irBuildBuiltinCall(
-                    m, ir_builtin_kind, result_type, ir_param_values, ir_param_count);
-                break;
-            }
-
-            case AST_BUILTIN_FUNC_INTERLOCKED_EXCHANGE: {
-                uint32_t ir_param_count = 5;
-                IRInst **ir_param_values = NEW_ARRAY(compiler, IRInst *, ir_param_count);
-
-                IRType *uint_type = irNewIntType(m, 32, false);
-
-                ir_param_values[0] = param_values[0];
-                ir_param_values[1] = irBuildConstInt(m, uint_type, SpvScopeDevice);
-                ir_param_values[2] = irBuildConstInt(m, uint_type, SpvMemorySemanticsMaskNone);
-                ir_param_values[3] = param_values[1];
-                ir_param_values[4] = param_values[2];
-
-                expr->value = irBuildBuiltinCall(
-                    m, IR_BUILTIN_INTERLOCKED_EXCHANGE, result_type, ir_param_values, ir_param_count);
-                break;
-            }
-
-            case IR_BUILTIN_INTERLOCKED_COMPARE_EXCHANGE: {
-                uint32_t ir_param_count = 7;
-                IRInst **ir_param_values = NEW_ARRAY(compiler, IRInst *, ir_param_count);
-
-                IRType *uint_type = irNewIntType(m, 32, false);
-
-                ir_param_values[0] = param_values[0];
-                ir_param_values[1] = irBuildConstInt(m, uint_type, SpvScopeDevice);
-                ir_param_values[2] = irBuildConstInt(m, uint_type, SpvMemorySemanticsMaskNone);
-                ir_param_values[3] = irBuildConstInt(m, uint_type, SpvMemorySemanticsMaskNone);
-                ir_param_values[4] = param_values[1];
-                ir_param_values[5] = param_values[2];
-                ir_param_values[6] = param_values[3];
-
-                expr->value = irBuildBuiltinCall(
-                    m, IR_BUILTIN_INTERLOCKED_COMPARE_EXCHANGE, result_type, ir_param_values, ir_param_count);
-                break;
-            }
-
-            case AST_BUILTIN_FUNC_INTERLOCKED_COMPARE_STORE: {
-                uint32_t ir_param_count = 6;
-                IRInst **ir_param_values = NEW_ARRAY(compiler, IRInst *, ir_param_count);
-
-                IRType *uint_type = irNewIntType(m, 32, false);
-
-                ir_param_values[0] = param_values[0];
-                ir_param_values[1] = irBuildConstInt(m, uint_type, SpvScopeDevice);
-                ir_param_values[2] = irBuildConstInt(m, uint_type, SpvMemorySemanticsMaskNone);
-                ir_param_values[3] = irBuildConstInt(m, uint_type, SpvMemorySemanticsMaskNone);
-                ir_param_values[4] = param_values[1];
-                ir_param_values[5] = param_values[2];
-
-                expr->value = irBuildBuiltinCall(
-                    m, IR_BUILTIN_INTERLOCKED_COMPARE_STORE, result_type, ir_param_values, ir_param_count);
-                break;
-            }
-
-            case AST_BUILTIN_FUNC_ALL_MEMORY_BARRIER:
-            case AST_BUILTIN_FUNC_ALL_MEMORY_BARRIER_WITH_GROUP_SYNC:
-            case AST_BUILTIN_FUNC_DEVICE_MEMORY_BARRIER:
-            case AST_BUILTIN_FUNC_DEVICE_MEMORY_BARRIER_WITH_GROUP_SYNC:
-            case AST_BUILTIN_FUNC_GROUP_MEMORY_BARRIER:
-            case AST_BUILTIN_FUNC_GROUP_MEMORY_BARRIER_WITH_GROUP_SYNC: {
-                bool with_group_sync = false;
-                uint32_t barrier_execution_scope = 0;
-                uint32_t barrier_memory_scope = 0;
-                uint32_t barrier_semantics = 0;
-
-                switch (builtin_func_kind)
-                {
-                case AST_BUILTIN_FUNC_ALL_MEMORY_BARRIER: {
-                    with_group_sync = false;
-                    barrier_memory_scope = SpvScopeDevice;
-                    barrier_semantics =
-                        SpvMemorySemanticsAcquireReleaseMask | SpvMemorySemanticsUniformMemoryMask |
-                        SpvMemorySemanticsWorkgroupMemoryMask | SpvMemorySemanticsImageMemoryMask;
-                    break;
-                }
-                case AST_BUILTIN_FUNC_ALL_MEMORY_BARRIER_WITH_GROUP_SYNC: {
-                    with_group_sync = true;
-                    barrier_execution_scope = SpvScopeWorkgroup;
-                    barrier_memory_scope = SpvScopeDevice;
-                    barrier_semantics =
-                        SpvMemorySemanticsAcquireReleaseMask | SpvMemorySemanticsUniformMemoryMask |
-                        SpvMemorySemanticsWorkgroupMemoryMask | SpvMemorySemanticsImageMemoryMask;
-                    break;
-                }
-                case AST_BUILTIN_FUNC_DEVICE_MEMORY_BARRIER: {
-                    with_group_sync = false;
-                    barrier_memory_scope = SpvScopeDevice;
-                    barrier_semantics = SpvMemorySemanticsAcquireReleaseMask |
-                        SpvMemorySemanticsUniformMemoryMask |
-                        SpvMemorySemanticsImageMemoryMask;
-                    break;
-                }
-                case AST_BUILTIN_FUNC_DEVICE_MEMORY_BARRIER_WITH_GROUP_SYNC: {
-                    with_group_sync = true;
-                    barrier_execution_scope = SpvScopeWorkgroup;
-                    barrier_memory_scope = SpvScopeDevice;
-                    barrier_semantics = SpvMemorySemanticsAcquireReleaseMask |
-                        SpvMemorySemanticsUniformMemoryMask |
-                        SpvMemorySemanticsImageMemoryMask;
-                    break;
-                }
-                case AST_BUILTIN_FUNC_GROUP_MEMORY_BARRIER: {
-                    with_group_sync = false;
-                    barrier_memory_scope = SpvScopeWorkgroup;
-                    barrier_semantics =
-                        SpvMemorySemanticsAcquireReleaseMask | SpvMemorySemanticsWorkgroupMemoryMask;
-                    break;
-                }
-                case AST_BUILTIN_FUNC_GROUP_MEMORY_BARRIER_WITH_GROUP_SYNC: {
-                    with_group_sync = true;
-                    barrier_execution_scope = SpvScopeWorkgroup;
-                    barrier_memory_scope = SpvScopeWorkgroup;
-                    barrier_semantics =
-                        SpvMemorySemanticsAcquireReleaseMask | SpvMemorySemanticsWorkgroupMemoryMask;
-                    break;
-                }
-
-                default: assert(0); break;
-                }
-
-                expr->value = irBuildBarrier(
-                    m,
-                    with_group_sync,
-                    barrier_execution_scope,
-                    barrier_memory_scope,
-                    barrier_semantics);
-
-                break;
-            }
-
-            default: {
-                IRBuiltinInstKind ir_builtin_kind;
-                switch (builtin_func_kind)
-                {
-                case AST_BUILTIN_FUNC_ABS: ir_builtin_kind = IR_BUILTIN_ABS; break;
-                case AST_BUILTIN_FUNC_ACOS: ir_builtin_kind = IR_BUILTIN_ACOS; break;
-                case AST_BUILTIN_FUNC_ASFLOAT: ir_builtin_kind = IR_BUILTIN_ASFLOAT; break;
-                case AST_BUILTIN_FUNC_ASIN: ir_builtin_kind = IR_BUILTIN_ASIN; break;
-                case AST_BUILTIN_FUNC_ASINT: ir_builtin_kind = IR_BUILTIN_ASINT; break;
-                case AST_BUILTIN_FUNC_ASUINT: ir_builtin_kind = IR_BUILTIN_ASUINT; break;
-                case AST_BUILTIN_FUNC_ATAN: ir_builtin_kind = IR_BUILTIN_ATAN; break;
-                case AST_BUILTIN_FUNC_ATAN2: ir_builtin_kind = IR_BUILTIN_ATAN2; break;
-                case AST_BUILTIN_FUNC_CEIL: ir_builtin_kind = IR_BUILTIN_CEIL; break;
-                case AST_BUILTIN_FUNC_CLAMP: ir_builtin_kind = IR_BUILTIN_CLAMP; break;
-                case AST_BUILTIN_FUNC_COS: ir_builtin_kind = IR_BUILTIN_COS; break;
-                case AST_BUILTIN_FUNC_COSH: ir_builtin_kind = IR_BUILTIN_COSH; break;
-                case AST_BUILTIN_FUNC_CROSS: ir_builtin_kind = IR_BUILTIN_CROSS; break;
-                case AST_BUILTIN_FUNC_DDX: ir_builtin_kind = IR_BUILTIN_DDX; break;
-                case AST_BUILTIN_FUNC_DDY: ir_builtin_kind = IR_BUILTIN_DDY; break;
-                case AST_BUILTIN_FUNC_DEGREES: ir_builtin_kind = IR_BUILTIN_DEGREES; break;
-                case AST_BUILTIN_FUNC_DETERMINANT: ir_builtin_kind = IR_BUILTIN_DETERMINANT; break;
-                case AST_BUILTIN_FUNC_DISTANCE: ir_builtin_kind = IR_BUILTIN_DISTANCE; break;
-                case AST_BUILTIN_FUNC_DOT: ir_builtin_kind = IR_BUILTIN_DOT; break;
-                case AST_BUILTIN_FUNC_EXP: ir_builtin_kind = IR_BUILTIN_EXP; break;
-                case AST_BUILTIN_FUNC_EXP2: ir_builtin_kind = IR_BUILTIN_EXP2; break;
-                case AST_BUILTIN_FUNC_FLOOR: ir_builtin_kind = IR_BUILTIN_FLOOR; break;
-                case AST_BUILTIN_FUNC_FMOD: ir_builtin_kind = IR_BUILTIN_FMOD; break;
-                case AST_BUILTIN_FUNC_FRAC: ir_builtin_kind = IR_BUILTIN_FRAC; break;
-                case AST_BUILTIN_FUNC_LENGTH: ir_builtin_kind = IR_BUILTIN_LENGTH; break;
-                case AST_BUILTIN_FUNC_LERP: ir_builtin_kind = IR_BUILTIN_LERP; break;
-                case AST_BUILTIN_FUNC_LOG: ir_builtin_kind = IR_BUILTIN_LOG; break;
-                case AST_BUILTIN_FUNC_LOG2: ir_builtin_kind = IR_BUILTIN_LOG2; break;
-                case AST_BUILTIN_FUNC_MAX: ir_builtin_kind = IR_BUILTIN_MAX; break;
-                case AST_BUILTIN_FUNC_MIN: ir_builtin_kind = IR_BUILTIN_MIN; break;
-                case AST_BUILTIN_FUNC_MUL: ir_builtin_kind = IR_BUILTIN_MUL; break;
-                case AST_BUILTIN_FUNC_NORMALIZE: ir_builtin_kind = IR_BUILTIN_NORMALIZE; break;
-                case AST_BUILTIN_FUNC_POW: ir_builtin_kind = IR_BUILTIN_POW; break;
-                case AST_BUILTIN_FUNC_RADIANS: ir_builtin_kind = IR_BUILTIN_RADIANS; break;
-                case AST_BUILTIN_FUNC_REFLECT: ir_builtin_kind = IR_BUILTIN_REFLECT; break;
-                case AST_BUILTIN_FUNC_REFRACT: ir_builtin_kind = IR_BUILTIN_REFRACT; break;
-                case AST_BUILTIN_FUNC_RSQRT: ir_builtin_kind = IR_BUILTIN_RSQRT; break;
-                case AST_BUILTIN_FUNC_SIN: ir_builtin_kind = IR_BUILTIN_SIN; break;
-                case AST_BUILTIN_FUNC_SINH: ir_builtin_kind = IR_BUILTIN_SINH; break;
-                case AST_BUILTIN_FUNC_SMOOTHSTEP: ir_builtin_kind = IR_BUILTIN_SMOOTHSTEP; break;
-                case AST_BUILTIN_FUNC_SQRT: ir_builtin_kind = IR_BUILTIN_SQRT; break;
-                case AST_BUILTIN_FUNC_STEP: ir_builtin_kind = IR_BUILTIN_STEP; break;
-                case AST_BUILTIN_FUNC_TAN: ir_builtin_kind = IR_BUILTIN_TAN; break;
-                case AST_BUILTIN_FUNC_TANH: ir_builtin_kind = IR_BUILTIN_TANH; break;
-                case AST_BUILTIN_FUNC_TRANSPOSE: ir_builtin_kind = IR_BUILTIN_TRANSPOSE; break;
-                case AST_BUILTIN_FUNC_TRUNC: ir_builtin_kind = IR_BUILTIN_TRUNC; break;
-
-                case AST_BUILTIN_FUNC_INTERLOCKED_ADD:
-                case AST_BUILTIN_FUNC_INTERLOCKED_AND:
-                case AST_BUILTIN_FUNC_INTERLOCKED_COMPARE_EXCHANGE:
-                case AST_BUILTIN_FUNC_INTERLOCKED_COMPARE_STORE:
-                case AST_BUILTIN_FUNC_INTERLOCKED_EXCHANGE:
-                case AST_BUILTIN_FUNC_INTERLOCKED_MAX:
-                case AST_BUILTIN_FUNC_INTERLOCKED_MIN:
-                case AST_BUILTIN_FUNC_INTERLOCKED_OR:
-                case AST_BUILTIN_FUNC_INTERLOCKED_XOR:
-                case AST_BUILTIN_FUNC_ALL_MEMORY_BARRIER:
-                case AST_BUILTIN_FUNC_ALL_MEMORY_BARRIER_WITH_GROUP_SYNC:
-                case AST_BUILTIN_FUNC_DEVICE_MEMORY_BARRIER:
-                case AST_BUILTIN_FUNC_DEVICE_MEMORY_BARRIER_WITH_GROUP_SYNC:
-                case AST_BUILTIN_FUNC_GROUP_MEMORY_BARRIER:
-                case AST_BUILTIN_FUNC_GROUP_MEMORY_BARRIER_WITH_GROUP_SYNC:
-                    assert(0);
-                    break;
-                }
-
-                uint32_t ir_param_count = param_count;
-                IRInst **ir_param_values = NEW_ARRAY(compiler, IRInst *, ir_param_count);
-
-                for (uint32_t i = 0; i < param_count; ++i)
-                {
-                    ir_param_values[i] = irLoadVal(m, param_values[i]);
-                    assert(ir_param_values[i]);
-                }
-
-                expr->value = irBuildBuiltinCall(
-                    m, ir_builtin_kind, result_type, ir_param_values, ir_param_count);
-                break;
-            }
-            }
-
-            assert(expr->value);
-            break;
-        }
-
-        if (expr->func_call.self_param)
-        {
-            // Method call
-            AstExpr *method_name_expr = expr->func_call.func_expr;
-            assert(method_name_expr->kind == EXPR_IDENT);
-            char *method_name = method_name_expr->ident.name;
-
-            AstType *self_type = expr->func_call.self_param->type;
-
-            irModuleBuildExpr(m, expr->func_call.self_param);
-            assert(expr->func_call.self_param->value);
-
-            if (self_type->kind == TYPE_IMAGE && strcmp(method_name, "Sample") == 0)
-            {
-                uint32_t param_count = arrLength(expr->func_call.params);
-                IRInst **param_values = NEW_ARRAY(compiler, IRInst *, param_count);
-
-                IRInst *self_value = irLoadVal(m, expr->func_call.self_param->value);
-
-                for (uint32_t i = 0; i < arrLength(expr->func_call.params); ++i)
-                {
-                    AstExpr *param = expr->func_call.params.ptr[i];
-                    irModuleBuildExpr(m, param);
-                    assert(param->value);
-                    param_values[i] = irLoadVal(m, param->value);
-                }
-
-                IRInst **sampled_image_params = NEW_ARRAY(compiler, IRInst *, 2);
-                sampled_image_params[0] = self_value;
-                sampled_image_params[1] = param_values[0];
-
-                IRInst *sampled_image = irBuildBuiltinCall(
-                    m,
-                    IR_BUILTIN_CREATE_SAMPLED_IMAGE,
-                    irNewSampledImageType(m, self_value->type),
-                    sampled_image_params,
-                    2);
-
-                IRType *result_type = convertTypeToIR(m->mod, m, expr->type);
-                IRInst *coords = param_values[1];
-                expr->value =
-                    irBuildSampleImplicitLod(m, result_type, sampled_image, coords);
-            }
-            else if (
-                self_type->kind == TYPE_IMAGE && strcmp(method_name, "SampleLevel") == 0)
-            {
-                uint32_t param_count = arrLength(expr->func_call.params);
-                IRInst **param_values = NEW_ARRAY(compiler, IRInst *, param_count);
-
-                IRInst *self_value = irLoadVal(m, expr->func_call.self_param->value);
-
-                for (uint32_t i = 0; i < arrLength(expr->func_call.params); ++i)
-                {
-                    AstExpr *param = expr->func_call.params.ptr[i];
-                    irModuleBuildExpr(m, param);
-                    assert(param->value);
-                    param_values[i] = irLoadVal(m, param->value);
-                }
-
-                IRInst **sampled_image_params = NEW_ARRAY(compiler, IRInst *, 2);
-                sampled_image_params[0] = self_value;
-                sampled_image_params[1] = param_values[0];
-
-                IRInst *sampled_image = irBuildBuiltinCall(
-                    m,
-                    IR_BUILTIN_CREATE_SAMPLED_IMAGE,
-                    irNewSampledImageType(m, self_value->type),
-                    sampled_image_params,
-                    2);
-
-                IRType *result_type = convertTypeToIR(m->mod, m, expr->type);
-                IRInst *coords = param_values[1];
-                IRInst *lod = param_values[2];
-                expr->value =
-                    irBuildSampleExplicitLod(m, result_type, sampled_image, coords, lod);
-            }
-            else if (
-                self_type->kind == TYPE_IMAGE &&
-                strcmp(method_name, "GetDimensions") == 0)
-            {
-                uint32_t param_count = expr->func_call.params.len;
-                IRInst **param_values = NEW_ARRAY(compiler, IRInst *, param_count);
-
-                IRInst *image = irLoadVal(m, expr->func_call.self_param->value);
-
-                for (uint32_t i = 0; i < expr->func_call.params.len; ++i)
-                {
-                    AstExpr *param = expr->func_call.params.ptr[i];
-                    irModuleBuildExpr(m, param);
-                    assert(param->value);
-                    param_values[i] = param->value;
-                }
-
-                IRInst *lod = irLoadVal(m, param_values[0]);
-                IRInst *size = irBuildQuerySizeLod(m, image, lod);
-                IRInst *mip_levels = irBuildQueryLevels(m, image);
-
-                IRType *float_type = irNewFloatType(m, 32);
-
-                assert(image->type->kind == IR_TYPE_IMAGE);
-                switch (image->type->image.dim)
-                {
-                case SpvDim1D: {
-                    uint32_t index;
-
-                    index = 0;
-                    IRInst *width = irBuildCompositeExtract(m, size, &index, 1);
-                    width = irBuildCast(m, float_type, width);
-
-                    IRInst *mip_levels_float = irBuildCast(m, float_type, mip_levels);
-
-                    irBuildStore(m, param_values[1], width);
-                    irBuildStore(m, param_values[2], mip_levels_float);
-
-                    break;
-                }
-                case SpvDim2D: {
-                    uint32_t index;
-
-                    index = 0;
-                    IRInst *width = irBuildCompositeExtract(m, size, &index, 1);
-                    width = irBuildCast(m, float_type, width);
-
-                    index = 1;
-                    IRInst *height = irBuildCompositeExtract(m, size, &index, 1);
-                    height = irBuildCast(m, float_type, height);
-
-                    IRInst *mip_levels_float = irBuildCast(m, float_type, mip_levels);
-
-                    irBuildStore(m, param_values[1], width);
-                    irBuildStore(m, param_values[2], height);
-                    irBuildStore(m, param_values[3], mip_levels_float);
-                    break;
-                }
-                case SpvDim3D: {
-                    uint32_t index;
-
-                    index = 0;
-                    IRInst *width = irBuildCompositeExtract(m, size, &index, 1);
-                    width = irBuildCast(m, float_type, width);
-
-                    index = 1;
-                    IRInst *height = irBuildCompositeExtract(m, size, &index, 1);
-                    height = irBuildCast(m, float_type, height);
-
-                    index = 2;
-                    IRInst *depth = irBuildCompositeExtract(m, size, &index, 1);
-                    depth = irBuildCast(m, float_type, depth);
-
-                    IRInst *mip_levels_float = irBuildCast(m, float_type, mip_levels);
-
-                    irBuildStore(m, param_values[1], width);
-                    irBuildStore(m, param_values[2], height);
-                    irBuildStore(m, param_values[3], depth);
-                    irBuildStore(m, param_values[4], mip_levels_float);
-                    break;
-                }
-                case SpvDimCube: {
-                    uint32_t index;
-
-                    index = 0;
-                    IRInst *width = irBuildCompositeExtract(m, size, &index, 1);
-                    width = irBuildCast(m, float_type, width);
-
-                    index = 1;
-                    IRInst *height = irBuildCompositeExtract(m, size, &index, 1);
-                    height = irBuildCast(m, float_type, height);
-
-                    IRInst *mip_levels_float = irBuildCast(m, float_type, mip_levels);
-
-                    irBuildStore(m, param_values[1], width);
-                    irBuildStore(m, param_values[2], height);
-                    irBuildStore(m, param_values[3], mip_levels_float);
-                    break;
-                }
-
-                default: assert(0); break;
-                }
-            }
-            else
-            {
-                assert(0);
-            }
-            break;
-        }
-
-        AstType *func_type = expr->func_call.func_expr->type;
-        assert(func_type);
-
-        if (func_type->kind == TYPE_TYPE)
-        {
-            // Type constructor
-            AstType *constructed_type = expr->func_call.func_expr->as_type;
-            assert(constructed_type);
-            IRType *ir_constructed_type = convertTypeToIR(m->mod, m, constructed_type);
-
-            uint32_t param_count = arrLength(expr->func_call.params);
-            ArrayOfAstExprPtr params = expr->func_call.params;
-
-            switch (constructed_type->kind)
-            {
-            case TYPE_VECTOR: {
-                assert(constructed_type->vector.size == param_count);
-                IRInst **fields =
-                    NEW_ARRAY(compiler, IRInst *, constructed_type->vector.size);
-
-                for (uint32_t i = 0; i < param_count; ++i)
-                {
-                    irModuleBuildExpr(m, params.ptr[i]);
-                    assert(params.ptr[i]->value);
-                    fields[i] = irLoadVal(m, params.ptr[i]->value);
-                }
-
-                expr->value = irBuildCompositeConstruct(
-                    m, ir_constructed_type, fields, constructed_type->vector.size);
-                break;
-            }
-            case TYPE_MATRIX: {
-                AstType *col_type = constructed_type->matrix.col_type;
-                assert(col_type->kind == TYPE_VECTOR);
-
-                uint32_t col_count = constructed_type->matrix.col_count;
-                uint32_t col_size = col_type->vector.size;
-
-                uint32_t matrix_elem_count = col_size * col_count;
-                assert(matrix_elem_count == param_count);
-
-                IRInst **columns = NEW_ARRAY(compiler, IRInst *, col_count);
-
-                for (uint32_t i = 0; i < col_count; ++i)
-                {
-                    IRInst **col_fields = NEW_ARRAY(compiler, IRInst *, col_size);
-                    for (uint32_t j = 0; j < col_size; ++j)
-                    {
-                        AstExpr *elem = params.ptr[i * col_size + j];
-
-                        irModuleBuildExpr(m, elem);
-                        assert(elem->value);
-                        col_fields[j] = irLoadVal(m, elem->value);
-                    }
-
-                    columns[i] = irBuildCompositeConstruct(
-                        m, ir_constructed_type->matrix.col_type, col_fields, col_size);
-                }
-
-                expr->value =
-                    irBuildCompositeConstruct(m, ir_constructed_type, columns, col_count);
-                break;
-            }
-            case TYPE_INT:
-            case TYPE_FLOAT: {
-                assert(param_count == 1);
-
-                irModuleBuildExpr(m, params.ptr[0]);
-                assert(params.ptr[0]->value);
-                expr->value = irBuildCast(
-                    m, ir_constructed_type, irLoadVal(m, params.ptr[0]->value));
-                break;
-            }
-            default: {
-                assert(0);
-                break;
-            }
-            }
-        }
-        else
-        {
-            // Actual function call
-            assert(func_type->kind == TYPE_FUNC);
-
-            irModuleBuildExpr(m, expr->func_call.func_expr);
-            IRInst *func_val = expr->func_call.func_expr->value;
-            assert(func_val);
-
-            uint32_t param_count = arrLength(expr->func_call.params);
-            IRInst **param_values = NEW_ARRAY(compiler, IRInst *, param_count);
-
-            for (uint32_t i = 0; i < param_count; ++i)
-            {
-                AstExpr *param = expr->func_call.params.ptr[i];
-                irModuleBuildExpr(m, param);
-                assert(param->value);
-                param_values[i] = param->value;
-                if (func_type->func.params[i]->kind == TYPE_POINTER)
-                {
-                    if (!isLvalue(param_values[i]))
-                    {
-                        ts__addErr(
-                            compiler,
-                            &param->loc,
-                            "function parameter needs to be an lvalue");
-                    }
-                }
-                else
-                {
-                    param_values[i] = irLoadVal(m, param_values[i]);
-                }
-            }
-
-            expr->value = irBuildFuncCall(m, func_val, param_values, param_count);
-        }
-
-        break;
-    }
-
-    case EXPR_UNARY: {
-        switch (expr->unary.op)
-        {
-        case UNOP_NEG: {
-            irModuleBuildExpr(m, expr->unary.right);
-            IRInst *right_val = irLoadVal(m, expr->unary.right->value);
-
-            AstType *scalar_type = ts__getScalarType(expr->type);
-            SpvOp op = {0};
-
-            switch (scalar_type->kind)
-            {
-            case TYPE_FLOAT: op = SpvOpFNegate; break;
-            case TYPE_INT: op = SpvOpSNegate; break;
-            default: assert(0); break;
-            }
-
-            IRType *ir_type = convertTypeToIR(m->mod, m, expr->type);
-            expr->value = irBuildUnary(m, op, ir_type, right_val);
-            break;
-        }
-
-        case UNOP_NOT: {
-            assert(0); // TODO: broken: use SpvINotEqual + SpvOpLogicalNot
-
-            irModuleBuildExpr(m, expr->unary.right);
-            IRInst *right_val = irLoadVal(m, expr->unary.right->value);
-
-            IRType *ir_type = convertTypeToIR(m->mod, m, expr->type);
-            expr->value = irBuildUnary(m, SpvOpNot, ir_type, right_val);
-            break;
-        }
-
-        case UNOP_PRE_INC: {
-            irModuleBuildExpr(m, expr->unary.right);
-            IRInst *right_val_ptr = expr->unary.right->value;
-            IRInst *right_val = irLoadVal(m, right_val_ptr);
-
-            IRType *ir_type = convertTypeToIR(m->mod, m, expr->type);
-
-            SpvOp op_kind;
-            IRInst *one_val = NULL;
-
-            switch (expr->type->kind)
-            {
-            case TYPE_FLOAT:
-                op_kind = SpvOpFAdd;
-                one_val = irBuildConstFloat(m, ir_type, 1.0);
-                break;
-            case TYPE_INT:
-                op_kind = SpvOpIAdd;
-                one_val = irBuildConstInt(m, ir_type, 1);
-                break;
-            default: assert(0); break;
-            }
-
-            expr->value = irBuildBinary(m, op_kind, ir_type, right_val, one_val);
-
-            if (isLvalue(right_val_ptr))
-            {
-                irBuildStore(m, right_val_ptr, expr->value);
-            }
-            break;
-        }
-
-        case UNOP_PRE_DEC: {
-            irModuleBuildExpr(m, expr->unary.right);
-            IRInst *right_val_ptr = expr->unary.right->value;
-            IRInst *right_val = irLoadVal(m, right_val_ptr);
-
-            IRType *ir_type = convertTypeToIR(m->mod, m, expr->type);
-
-            SpvOp op_kind;
-            IRInst *one_val = NULL;
-
-            switch (expr->type->kind)
-            {
-            case TYPE_FLOAT:
-                op_kind = SpvOpFSub;
-                one_val = irBuildConstFloat(m, ir_type, 1.0);
-                break;
-            case TYPE_INT:
-                op_kind = SpvOpISub;
-                one_val = irBuildConstInt(m, ir_type, 1);
-                break;
-            default: assert(0); break;
-            }
-
-            expr->value = irBuildBinary(m, op_kind, ir_type, right_val, one_val);
-
-            if (isLvalue(right_val_ptr))
-            {
-                irBuildStore(m, right_val_ptr, expr->value);
-            }
-            break;
-        }
-
-        case UNOP_POST_INC: {
-            irModuleBuildExpr(m, expr->unary.right);
-            IRInst *right_val_ptr = expr->unary.right->value;
-            IRInst *right_val = irLoadVal(m, right_val_ptr);
-
-            IRType *ir_type = convertTypeToIR(m->mod, m, expr->type);
-
-            SpvOp op_kind;
-            IRInst *one_val = NULL;
-
-            switch (expr->type->kind)
-            {
-            case TYPE_FLOAT:
-                op_kind = SpvOpFAdd;
-                one_val = irBuildConstFloat(m, ir_type, 1.0);
-                break;
-            case TYPE_INT:
-                op_kind = SpvOpIAdd;
-                one_val = irBuildConstInt(m, ir_type, 1);
-                break;
-            default: assert(0); break;
-            }
-
-            if (isLvalue(right_val_ptr))
-            {
-                irBuildStore(
-                    m,
-                    right_val_ptr,
-                    irBuildBinary(m, op_kind, ir_type, right_val, one_val));
-            }
-
-            expr->value = right_val;
-            break;
-        }
-
-        case UNOP_POST_DEC: {
-            irModuleBuildExpr(m, expr->unary.right);
-            IRInst *right_val_ptr = expr->unary.right->value;
-            IRInst *right_val = irLoadVal(m, right_val_ptr);
-
-            IRType *ir_type = convertTypeToIR(m->mod, m, expr->type);
-
-            SpvOp op_kind;
-            IRInst *one_val = NULL;
-
-            switch (expr->type->kind)
-            {
-            case TYPE_FLOAT:
-                op_kind = SpvOpFSub;
-                one_val = irBuildConstFloat(m, ir_type, 1.0);
-                break;
-            case TYPE_INT:
-                op_kind = SpvOpISub;
-                one_val = irBuildConstInt(m, ir_type, 1);
-                break;
-            default: assert(0); break;
-            }
-
-            if (isLvalue(right_val_ptr))
-            {
-                irBuildStore(
-                    m,
-                    right_val_ptr,
-                    irBuildBinary(m, op_kind, ir_type, right_val, one_val));
-            }
-
-            expr->value = right_val;
-            break;
-        }
-
-        case UNOP_BITNOT: {
-            irModuleBuildExpr(m, expr->unary.right);
-            IRInst *right_val = irLoadVal(m, expr->unary.right->value);
-
-            IRType *ir_type = convertTypeToIR(m->mod, m, expr->type);
-            expr->value = irBuildUnary(m, SpvOpNot, ir_type, right_val);
-            break;
-        }
-        }
-        break;
-    }
-
-    case EXPR_BINARY: {
-        irModuleBuildExpr(m, expr->binary.left);
-        IRInst *left_val = irLoadVal(m, expr->binary.left->value);
-        irModuleBuildExpr(m, expr->binary.right);
-        IRInst *right_val = irLoadVal(m, expr->binary.right->value);
-
-        AstType *elem_type = ts__getElemType(expr->binary.left->type);
-        assert(elem_type);
-        SpvOp op = {0};
-
-        IRType *ir_type = convertTypeToIR(m->mod, m, expr->type);
-
-        switch (expr->binary.op)
-        {
-        case BINOP_ADD:
-        case BINOP_SUB:
-        case BINOP_MUL:
-        case BINOP_DIV:
-        case BINOP_MOD: {
-            if (left_val->type->kind == IR_TYPE_VECTOR &&
-                right_val->type->kind != IR_TYPE_VECTOR)
-            {
-                uint32_t field_count = left_val->type->vector.size;
-
-                IRInst **fields = NEW_ARRAY(compiler, IRInst *, field_count);
-                for (uint32_t i = 0; i < field_count; ++i)
-                {
-                    fields[i] = right_val;
-                }
-                right_val = irBuildCompositeConstruct(m, ir_type, fields, field_count);
-            }
-            else if (
-                right_val->type->kind == IR_TYPE_VECTOR &&
-                left_val->type->kind != IR_TYPE_VECTOR)
-            {
-                uint32_t field_count = right_val->type->vector.size;
-
-                IRInst **fields = NEW_ARRAY(compiler, IRInst *, field_count);
-                for (uint32_t i = 0; i < field_count; ++i)
-                {
-                    fields[i] = left_val;
-                }
-                left_val = irBuildCompositeConstruct(m, ir_type, fields, field_count);
-            }
-
-            break;
-        }
-
-        default: break;
-        }
-
-        switch (expr->binary.op)
-        {
-        case BINOP_ADD: {
-            switch (elem_type->kind)
-            {
-            case TYPE_FLOAT: op = SpvOpFAdd; break;
-            case TYPE_INT: op = SpvOpIAdd; break;
-            default: assert(0); break;
-            }
-            break;
-        }
-        case BINOP_SUB: {
-            switch (elem_type->kind)
-            {
-            case TYPE_FLOAT: op = SpvOpFSub; break;
-            case TYPE_INT: op = SpvOpISub; break;
-            default: assert(0); break;
-            }
-            break;
-        }
-        case BINOP_MUL: {
-            switch (elem_type->kind)
-            {
-            case TYPE_FLOAT: op = SpvOpFMul; break;
-            case TYPE_INT: op = SpvOpIMul; break;
-            default: assert(0); break;
-            }
-            break;
-        }
-        case BINOP_DIV: {
-            switch (elem_type->kind)
-            {
-            case TYPE_FLOAT: op = SpvOpFDiv; break;
-            case TYPE_INT:
-                if (elem_type->int_.is_signed)
-                    op = SpvOpSDiv;
-                else
-                    op = SpvOpUDiv;
-                break;
-            default: assert(0); break;
-            }
-            break;
-        }
-        case BINOP_MOD: {
-            switch (elem_type->kind)
-            {
-            case TYPE_FLOAT: op = SpvOpFRem; break;
-            case TYPE_INT:
-                if (elem_type->int_.is_signed)
-                    op = SpvOpSMod;
-                else
-                    op = SpvOpUMod;
-                break;
-            default: assert(0); break;
-            }
-            break;
-        }
-
-        case BINOP_EQ: {
-            switch (elem_type->kind)
-            {
-            case TYPE_FLOAT: op = SpvOpFOrdEqual; break;
-            case TYPE_INT: op = SpvOpIEqual; break;
-            default: assert(0); break;
-            }
-            break;
-        }
-
-        case BINOP_NOTEQ: {
-            switch (elem_type->kind)
-            {
-            case TYPE_FLOAT: op = SpvOpFOrdNotEqual; break;
-            case TYPE_INT: op = SpvOpINotEqual; break;
-            default: assert(0); break;
-            }
-            break;
-        }
-
-        case BINOP_LESS: {
-            switch (elem_type->kind)
-            {
-            case TYPE_FLOAT: op = SpvOpFOrdLessThan; break;
-            case TYPE_INT:
-                if (elem_type->int_.is_signed)
-                    op = SpvOpSLessThan;
-                else
-                    op = SpvOpULessThan;
-                break;
-            default: assert(0); break;
-            }
-            break;
-        }
-
-        case BINOP_LESSEQ: {
-            switch (elem_type->kind)
-            {
-            case TYPE_FLOAT: op = SpvOpFOrdLessThanEqual; break;
-            case TYPE_INT:
-                if (elem_type->int_.is_signed)
-                    op = SpvOpSLessThanEqual;
-                else
-                    op = SpvOpULessThanEqual;
-                break;
-            default: assert(0); break;
-            }
-            break;
-        }
-
-        case BINOP_GREATER: {
-            switch (elem_type->kind)
-            {
-            case TYPE_FLOAT: op = SpvOpFOrdGreaterThan; break;
-            case TYPE_INT:
-                if (elem_type->int_.is_signed)
-                    op = SpvOpSGreaterThan;
-                else
-                    op = SpvOpUGreaterThan;
-                break;
-            default: assert(0); break;
-            }
-            break;
-        }
-
-        case BINOP_GREATEREQ: {
-            switch (elem_type->kind)
-            {
-            case TYPE_FLOAT: op = SpvOpFOrdGreaterThanEqual; break;
-            case TYPE_INT:
-                if (elem_type->int_.is_signed)
-                    op = SpvOpSGreaterThanEqual;
-                else
-                    op = SpvOpUGreaterThanEqual;
-                break;
-            default: assert(0); break;
-            }
-            break;
-        }
-        case BINOP_LSHIFT: {
-            op = SpvOpShiftLeftLogical;
-            break;
-        }
-        case BINOP_RSHIFT: {
-            op = SpvOpShiftRightLogical;
-            break;
-        }
-        case BINOP_BITXOR: {
-            op = SpvOpBitwiseXor;
-            break;
-        }
-        case BINOP_BITOR: {
-            op = SpvOpBitwiseOr;
-            break;
-        }
-        case BINOP_BITAND: {
-            op = SpvOpBitwiseAnd;
-            break;
-        }
-        }
-
-        expr->value = irBuildBinary(m, op, ir_type, left_val, right_val);
-
-        break;
-    }
-
-    case EXPR_TERNARY: {
-        IRType *ir_type = convertTypeToIR(m->mod, m, expr->type);
-
-        irModuleBuildExpr(m, expr->ternary.cond);
-        IRInst *cond = irLoadVal(m, expr->ternary.cond->value);
-
-        irModuleBuildExpr(m, expr->ternary.true_expr);
-        IRInst *true_value = irLoadVal(m, expr->ternary.true_expr->value);
-
-        irModuleBuildExpr(m, expr->ternary.false_expr);
-        IRInst *false_value = irLoadVal(m, expr->ternary.false_expr->value);
-
-        if (ir_type->kind == IR_TYPE_VECTOR)
-        {
-            IRInst **fields = NEW_ARRAY(m->compiler, IRInst *, ir_type->vector.size);
-            for (uint32_t i = 0; i < ir_type->vector.size; ++i)
-            {
-                fields[i] = cond;
-            }
-
-            IRType *cond_vec_type = irNewVectorType(m, cond->type, ir_type->vector.size);
-            cond =
-                irBuildCompositeConstruct(m, cond_vec_type, fields, ir_type->vector.size);
-        }
-
-        expr->value = irBuildSelect(m, ir_type, cond, true_value, false_value);
-        break;
-    }
-
-    case EXPR_CONSTANT_BUFFER_TYPE:
-    case EXPR_STRUCTURED_BUFFER_TYPE:
-    case EXPR_RW_STRUCTURED_BUFFER_TYPE:
-    case EXPR_SAMPLER_TYPE:
-    case EXPR_TEXTURE_TYPE: {
-        break;
-    }
-    }
-}
-
-static void irModuleBuildStmt(IRModule *m, AstStmt *stmt)
-{
-    switch (stmt->kind)
-    {
-    case STMT_DECL: {
-        irModuleBuildDecl(m, stmt->decl);
-        break;
-    }
-
-    case STMT_EXPR: {
-        irModuleBuildExpr(m, stmt->expr);
-        break;
-    }
-
-    case STMT_RETURN: {
-        if (stmt->return_.value)
-        {
-            irModuleBuildExpr(m, stmt->return_.value);
-            assert(stmt->return_.value->value);
-            irBuildReturn(m, irLoadVal(m, stmt->return_.value->value));
-        }
-        else
-        {
-            irBuildReturn(m, NULL);
-        }
-        break;
-    }
-
-    case STMT_DISCARD: {
-        irBuildDiscard(m);
-        break;
-    }
-
-    case STMT_CONTINUE: {
-        assert(arrLength(m->continue_stack) > 0);
-        IRInst *block = m->continue_stack.ptr[arrLength(m->continue_stack) - 1];
-        irBuildBr(m, block, NULL, NULL);
-        break;
-    }
-
-    case STMT_BREAK: {
-        assert(arrLength(m->break_stack) > 0);
-        IRInst *block = m->break_stack.ptr[arrLength(m->break_stack) - 1];
-        irBuildBr(m, block, NULL, NULL);
-        break;
-    }
-
-    case STMT_BLOCK: {
-        for (uint32_t i = 0; i < arrLength(stmt->block.stmts); ++i)
-        {
-            AstStmt *sub_stmt = stmt->block.stmts.ptr[i];
-            irModuleBuildStmt(m, sub_stmt);
-
-            if (irBlockHasTerminator(irGetCurrentBlock(m)))
-            {
-                break;
-            }
-        }
-        break;
-    }
-
-    case STMT_IF: {
-        irModuleBuildExpr(m, stmt->if_.cond);
-        IRInst *cond = stmt->if_.cond->value;
-        assert(cond);
-        cond = irLoadVal(m, cond);
-        cond = irBoolVal(m, cond);
-
-        IRInst *current_block = irGetCurrentBlock(m);
-        IRInst *func = current_block->block.func;
-
-        IRInst *then_block = irCreateBlock(m, func);
-        IRInst *else_block = NULL;
-        if (stmt->if_.else_stmt)
-        {
-            else_block = irCreateBlock(m, func);
-        }
-        IRInst *merge_block = irCreateBlock(m, func);
-        if (!else_block) else_block = merge_block;
-
-        irBuildCondBr(m, cond, then_block, else_block, merge_block, NULL);
-
-        // Then
-        {
-            irPositionAtEnd(m, then_block);
-            irAddBlock(m, then_block);
-
-            irModuleBuildStmt(m, stmt->if_.if_stmt);
-
-            if (!irBlockHasTerminator(irGetCurrentBlock(m)))
-            {
-                irBuildBr(m, merge_block, NULL, NULL);
-            }
-        }
-
-        // Else
-        if (stmt->if_.else_stmt)
-        {
-            irPositionAtEnd(m, else_block);
-            irAddBlock(m, else_block);
-
-            irModuleBuildStmt(m, stmt->if_.else_stmt);
-
-            if (!irBlockHasTerminator(irGetCurrentBlock(m)))
-            {
-                irBuildBr(m, merge_block, NULL, NULL);
-            }
-        }
-
-        irPositionAtEnd(m, merge_block);
-        irAddBlock(m, merge_block);
-
-        break;
-    }
-
-    case STMT_WHILE: {
-        IRInst *current_block = irGetCurrentBlock(m);
-        IRInst *func = current_block->block.func;
-
-        IRInst *check_block = irCreateBlock(m, func);
-        IRInst *body_block = irCreateBlock(m, func);
-        IRInst *continue_block = irCreateBlock(m, func);
-        IRInst *merge_block = irCreateBlock(m, func);
-
-        irBuildBr(m, check_block, NULL, NULL);
-
-        {
-            irPositionAtEnd(m, check_block);
-            irAddBlock(m, check_block);
-
-            irModuleBuildExpr(m, stmt->while_.cond);
-            IRInst *cond = stmt->while_.cond->value;
-            assert(cond);
-            cond = irLoadVal(m, cond);
-            cond = irBoolVal(m, cond);
-
-            if (!irBlockHasTerminator(irGetCurrentBlock(m)))
-            {
-                irBuildCondBr(
-                    m, cond, body_block, merge_block, merge_block, continue_block);
-            }
-        }
-
-        {
-            irPositionAtEnd(m, body_block);
-            irAddBlock(m, body_block);
-
-            arrPush(m->compiler, &m->continue_stack, continue_block);
-            arrPush(m->compiler, &m->break_stack, merge_block);
-            irModuleBuildStmt(m, stmt->while_.stmt);
-            arrPop(&m->continue_stack);
-            arrPop(&m->break_stack);
-
-            if (!irBlockHasTerminator(irGetCurrentBlock(m)))
-            {
-                irBuildBr(m, continue_block, NULL, NULL);
-            }
-        }
-
-        {
-            irPositionAtEnd(m, continue_block);
-            irAddBlock(m, continue_block);
-
-            irBuildBr(m, check_block, NULL, NULL);
-        }
-
-        irPositionAtEnd(m, merge_block);
-        irAddBlock(m, merge_block);
-
-        break;
-    }
-
-    case STMT_DO_WHILE: {
-        IRInst *current_block = irGetCurrentBlock(m);
-        IRInst *func = current_block->block.func;
-
-        IRInst *header_block = irCreateBlock(m, func);
-        IRInst *body_block = irCreateBlock(m, func);
-        IRInst *continue_block = irCreateBlock(m, func);
-        IRInst *merge_block = irCreateBlock(m, func);
-
-        irBuildBr(m, header_block, NULL, NULL);
-
-        {
-            irPositionAtEnd(m, header_block);
-            irAddBlock(m, header_block);
-
-            irBuildBr(m, body_block, merge_block, continue_block);
-        }
-
-        {
-            irPositionAtEnd(m, body_block);
-            irAddBlock(m, body_block);
-
-            arrPush(m->compiler, &m->continue_stack, continue_block);
-            arrPush(m->compiler, &m->break_stack, merge_block);
-            irModuleBuildStmt(m, stmt->do_while.stmt);
-            arrPop(&m->continue_stack);
-            arrPop(&m->break_stack);
-
-            if (!irBlockHasTerminator(irGetCurrentBlock(m)))
-            {
-                irBuildBr(m, continue_block, NULL, NULL);
-            }
-        }
-
-        {
-            irPositionAtEnd(m, continue_block);
-            irAddBlock(m, continue_block);
-
-            irModuleBuildExpr(m, stmt->do_while.cond);
-            IRInst *cond = stmt->do_while.cond->value;
-            assert(cond);
-            cond = irLoadVal(m, cond);
-            cond = irBoolVal(m, cond);
-
-            if (!irBlockHasTerminator(irGetCurrentBlock(m)))
-            {
-                irBuildCondBr(m, cond, header_block, merge_block, NULL, NULL);
-            }
-        }
-
-        irPositionAtEnd(m, merge_block);
-        irAddBlock(m, merge_block);
-
-        break;
-    }
-
-    case STMT_FOR: {
-        IRInst *current_block = irGetCurrentBlock(m);
-        IRInst *func = current_block->block.func;
-
-        if (stmt->for_.init)
-        {
-            irModuleBuildStmt(m, stmt->for_.init);
-        }
-
-        IRInst *check_block = irCreateBlock(m, func);
-        IRInst *body_block = irCreateBlock(m, func);
-        IRInst *continue_block = irCreateBlock(m, func);
-        IRInst *merge_block = irCreateBlock(m, func);
-
-        irBuildBr(m, check_block, NULL, NULL);
-
-        {
-            irPositionAtEnd(m, check_block);
-            irAddBlock(m, check_block);
-
-            IRInst *cond = NULL;
-
-            if (stmt->for_.cond)
-            {
-                irModuleBuildExpr(m, stmt->for_.cond);
-                cond = stmt->for_.cond->value;
-                assert(cond);
-                cond = irLoadVal(m, cond);
-                cond = irBoolVal(m, cond);
-            }
-            else
-            {
-                cond = irBuildConstBool(m, true);
-            }
-
-            if (!irBlockHasTerminator(irGetCurrentBlock(m)))
-            {
-                irBuildCondBr(
-                    m, cond, body_block, merge_block, merge_block, continue_block);
-            }
-        }
-
-        {
-            irPositionAtEnd(m, body_block);
-            irAddBlock(m, body_block);
-
-            arrPush(m->compiler, &m->continue_stack, continue_block);
-            arrPush(m->compiler, &m->break_stack, merge_block);
-            irModuleBuildStmt(m, stmt->for_.stmt);
-            arrPop(&m->continue_stack);
-            arrPop(&m->break_stack);
-
-            if (!irBlockHasTerminator(irGetCurrentBlock(m)))
-            {
-                irBuildBr(m, continue_block, NULL, NULL);
-            }
-        }
-
-        {
-            irPositionAtEnd(m, continue_block);
-            irAddBlock(m, continue_block);
-
-            if (stmt->for_.inc)
-            {
-                irModuleBuildExpr(m, stmt->for_.inc);
-            }
-
-            irBuildBr(m, check_block, NULL, NULL);
-        }
-
-        irPositionAtEnd(m, merge_block);
-        irAddBlock(m, merge_block);
-
-        break;
-    }
-    }
-}
-
-static void irModuleBuildDecl(IRModule *m, AstDecl *decl)
-{
-    switch (decl->kind)
-    {
-    case DECL_FUNC: {
-        if (!decl->func.called) break;
-
-        if (decl->func.execution_model)
-        {
-            ArrayOfIRInstPtr globals = {0};
-
-            // Only required for spir-v 1.5:
-            //
-            // for (uint32_t i = 0; i < arrLength(m->globals); ++i)
-            // {
-            //     arrPush(m->compiler, &globals, m->globals[i]);
-            // }
-
-            for (uint32_t i = 0; i < arrLength(decl->value->func.inputs); ++i)
-            {
-                arrPush(m->compiler, &globals, decl->value->func.inputs.ptr[i]);
-            }
-
-            for (uint32_t i = 0; i < arrLength(decl->value->func.outputs); ++i)
-            {
-                arrPush(m->compiler, &globals, decl->value->func.outputs.ptr[i]);
-            }
-
-            IRInst *entry_point = irAddEntryPoint(
-                m,
-                decl->name,
-                decl->value,
-                *decl->func.execution_model,
-                globals.ptr,
-                arrLength(globals));
-
-            if (*decl->func.execution_model == SpvExecutionModelGLCompute)
-            {
-                irEntryPointSetComputeDims(
-                    entry_point,
-                    decl->func.compute_dims[0],
-                    decl->func.compute_dims[1],
-                    decl->func.compute_dims[2]);
-            }
-        }
-
-        IRInst *entry_block = irCreateBlock(m, decl->value);
-        irPositionAtEnd(m, entry_block);
-        irAddBlock(m, entry_block);
-
-        IRInst **old_inputs =
-            NEW_ARRAY(m->compiler, IRInst *, arrLength(decl->func.inputs));
-
-        IRInst **old_func_params =
-            NEW_ARRAY(m->compiler, IRInst *, arrLength(decl->func.func_params));
-
-        for (uint32_t i = 0; i < arrLength(decl->func.inputs); ++i)
-        {
-            AstDecl *var = decl->func.inputs.ptr[i];
-            old_inputs[i] = var->value;
-
-            IRType *ir_type = convertTypeToIR(m->mod, m, var->type);
-            var->value = irBuildAlloca(m, ir_type);
-        }
-
-        for (uint32_t i = 0; i < arrLength(decl->func.func_params); ++i)
-        {
-            AstDecl *var = decl->func.func_params.ptr[i];
-            old_func_params[i] = var->value;
-
-            IRType *ir_type = convertTypeToIR(m->mod, m, var->type);
-            var->value = irBuildAlloca(m, ir_type);
-        }
-
-        for (uint32_t i = 0; i < arrLength(decl->func.var_decls); ++i)
-        {
-            AstDecl *var = decl->func.var_decls.ptr[i];
-            IRType *ir_type = convertTypeToIR(m->mod, m, var->type);
-            var->value = irBuildAlloca(m, ir_type);
-        }
-
-        for (uint32_t i = 0; i < arrLength(decl->func.inputs); ++i)
-        {
-            AstDecl *var = decl->func.inputs.ptr[i];
-            IRInst *loaded = irBuildLoad(m, old_inputs[i]);
-            irBuildStore(m, var->value, loaded);
-        }
-
-        for (uint32_t i = 0; i < arrLength(decl->func.func_params); ++i)
-        {
-            AstDecl *var = decl->func.func_params.ptr[i];
-            assert(!isLvalue(old_func_params[i]));
-            irBuildStore(m, var->value, old_func_params[i]);
-        }
-
-        for (uint32_t i = 0; i < arrLength(decl->func.stmts); ++i)
-        {
-            AstStmt *stmt = decl->func.stmts.ptr[i];
-            irModuleBuildStmt(m, stmt);
-            if (irBlockHasTerminator(irGetCurrentBlock(m)))
-            {
-                break;
-            }
-        }
-
-        if (!irBlockHasTerminator(irGetCurrentBlock(m)))
-        {
-            irBuildReturn(m, NULL);
-        }
-
-        break;
-    }
-
-    case DECL_VAR: {
-        IRInst *initializer = NULL;
-
-        if (decl->var.value_expr)
-        {
-            irModuleBuildExpr(m, decl->var.value_expr);
-            initializer = decl->var.value_expr->value;
-            assert(initializer);
-            initializer = irLoadVal(m, initializer);
-            irBuildStore(m, decl->value, initializer);
-        }
-
-        break;
-    }
-
-    case DECL_CONST: {
-        irModuleBuildExpr(m, decl->constant.value_expr);
-        decl->value = decl->constant.value_expr->value;
-        break;
-    }
-
-    case DECL_STRUCT_FIELD: break;
-    case DECL_STRUCT: break;
-    }
-}
-
-static void irModuleInit(IRModule *m, TsCompiler *compiler)
-{
+    IRModule *m = NEW(compiler, IRModule);
     memset(m, 0, sizeof(*m));
     m->compiler = compiler;
 
     ts__hashInit(compiler, &m->type_cache, 0);
     ts__hashInit(compiler, &m->const_cache, 0);
+
+    irModuleReserveId(m); // 0th ID
+    m->glsl_ext_inst = irModuleReserveId(m);
+
+    return m;
 }
 
-void irModuleDestroy(IRModule *m)
+void ts__irModuleDestroy(IRModule *m)
 {
     ts__hashDestroy(&m->type_cache);
     ts__hashDestroy(&m->const_cache);
     arrFree(m->compiler, &m->stream);
 }
 
-uint32_t *ts__irModuleCodegen(Module *mod, size_t *word_count)
+uint32_t *ts__irModuleCodegen(IRModule *ir_mod, size_t *word_count)
 {
-    TsCompiler *compiler = mod->compiler;
+    irModuleEncodeModule(ir_mod);
 
-    IRModule *m = NEW(compiler, IRModule);
-    irModuleInit(m, compiler);
-
-    m->mod = mod;
-
-    irModuleReserveId(m); // 0th ID
-
-    m->glsl_ext_inst = irModuleReserveId(m);
-
-    // Add functions / globals
-    for (uint32_t i = 0; i < mod->decl_count; ++i)
-    {
-        AstDecl *decl = mod->decls[i];
-        switch (decl->kind)
-        {
-        case DECL_FUNC: {
-            assert(decl->type);
-
-            if (!decl->func.called) break;
-
-            IRType *ir_type = convertTypeToIR(m->mod, m, decl->type);
-            decl->value = irAddFunction(m, ir_type);
-
-            for (uint32_t k = 0; k < arrLength(decl->func.func_params); ++k)
-            {
-                AstDecl *param = decl->func.func_params.ptr[k];
-                IRType *ir_param_type = convertTypeToIR(m->mod, m, param->type);
-                bool by_reference = false;
-                if (param->var.kind == VAR_IN_PARAM || param->var.kind == VAR_OUT_PARAM ||
-                    param->var.kind == VAR_INOUT_PARAM)
-                {
-                    ir_param_type =
-                        irNewPointerType(m, SpvStorageClassFunction, ir_param_type);
-                    by_reference = true;
-                }
-                param->value =
-                    irAddFuncParam(m, decl->value, ir_param_type, by_reference);
-            }
-
-            for (uint32_t k = 0; k < arrLength(decl->func.inputs); ++k)
-            {
-                AstDecl *input = decl->func.inputs.ptr[k];
-                IRType *ir_param_type = convertTypeToIR(m->mod, m, input->type);
-                input->value = irAddInput(m, decl->value, ir_param_type);
-                input->value->decorations = input->decorations;
-            }
-
-            for (uint32_t k = 0; k < arrLength(decl->func.outputs); ++k)
-            {
-                AstDecl *output = decl->func.outputs.ptr[k];
-                IRType *ir_param_type = convertTypeToIR(m->mod, m, output->type);
-                output->value = irAddOutput(m, decl->value, ir_param_type);
-                output->value->decorations = output->decorations;
-            }
-
-            break;
-        }
-
-        case DECL_VAR: {
-            IRType *ir_type = convertTypeToIR(m->mod, m, decl->type);
-            SpvStorageClass storage_class;
-
-            switch (decl->var.kind)
-            {
-            case VAR_UNIFORM: {
-                switch (ir_type->kind)
-                {
-                case IR_TYPE_SAMPLER:
-                case IR_TYPE_IMAGE:
-                case IR_TYPE_SAMPLED_IMAGE:
-                    storage_class = SpvStorageClassUniformConstant;
-                    break;
-                default: storage_class = SpvStorageClassUniform; break;
-                }
-                break;
-            }
-
-            case VAR_GROUPSHARED: {
-                storage_class = SpvStorageClassWorkgroup;
-                break;
-            }
-
-            default: assert(0); break;
-            }
-
-            decl->value = irAddGlobal(m, ir_type, storage_class);
-            decl->value->decorations = decl->decorations;
-            break;
-        }
-
-        default: break;
-        }
-    }
-
-    for (uint32_t i = 0; i < mod->decl_count; ++i)
-    {
-        AstDecl *decl = mod->decls[i];
-        irModuleBuildDecl(m, decl);
-    }
-
-    irModuleEncodeModule(m);
-
-    *word_count = arrLength(m->stream);
+    *word_count = ir_mod->stream.len;
     uint32_t *result = malloc((*word_count) * 4);
-    memcpy(result, m->stream.ptr, (*word_count) * 4);
-
-    irModuleDestroy(m);
+    memcpy(result, ir_mod->stream.ptr, (*word_count) * 4);
 
     return result;
 }

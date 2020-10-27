@@ -157,7 +157,7 @@ typedef enum TokenKind {
     TOKEN_ADDADD, // ++
     TOKEN_SUBSUB, // --
 
-    TOKEN_BITOR, // |
+    TOKEN_BITOR,  // |
     TOKEN_BITXOR, // ^
     TOKEN_BITAND, // &
     TOKEN_BITNOT, // ~
@@ -165,8 +165,8 @@ typedef enum TokenKind {
     TOKEN_LSHIFT, // <<
     TOKEN_RSHIFT, // >>
 
-    TOKEN_PERIOD, // .
-    TOKEN_COMMA, // ,
+    TOKEN_PERIOD,   // .
+    TOKEN_COMMA,    // ,
     TOKEN_QUESTION, // ?
 
     TOKEN_NOT,    // !
@@ -691,13 +691,9 @@ struct IRInst
 struct IRModule
 {
     TsCompiler *compiler;
-    Module *mod;
 
     HashMap type_cache;
     HashMap const_cache;
-
-    ArrayOfIRInstPtr continue_stack;
-    ArrayOfIRInstPtr break_stack;
 
     ArrayOfIRInstPtr entry_points;
     ArrayOfIRInstPtr constants;
@@ -1232,6 +1228,9 @@ struct Module
 
     HashMap type_cache;
 
+    ArrayOfIRInstPtr continue_stack;
+    ArrayOfIRInstPtr break_stack;
+
     AstDecl **decls;
     size_t decl_count;
 };
@@ -1343,7 +1342,6 @@ char *ts__preprocessRootFile(
 void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size);
 void ts__parserParse(Parser *p, TsCompiler *compiler, Token *tokens, size_t token_count);
 void ts__analyzerAnalyze(
-    Analyzer *a,
     TsCompiler *compiler,
     Module *module,
     AstDecl **decls,
@@ -1355,6 +1353,110 @@ AstType *ts__getLogicalType(AstType *type);
 AstType *ts__getElemType(AstType *type);
 AstType *ts__getStructType(AstType *type);
 
-uint32_t *ts__irModuleCodegen(Module *mod, size_t *word_count);
+void ts__astModuleBuild(Module *ast_mod, IRModule *ir_mod);
+
+IRModule *ts__irModuleCreate(TsCompiler *compiler);
+void ts__irModuleDestroy(IRModule *m);
+
+void ts__irTypeSetDecorations(
+    IRModule *m, IRType *type, IRDecoration *decorations, uint32_t decoration_count);
+
+IRType *ts__irNewBasicType(IRModule *m, IRTypeKind kind);
+IRType *ts__irNewPointerType(IRModule *m, SpvStorageClass storage_class, IRType *sub);
+IRType *ts__irNewVectorType(IRModule *m, IRType *elem_type, uint32_t size);
+IRType *ts__irNewMatrixType(IRModule *m, IRType *col_type, uint32_t col_count);
+IRType *ts__irNewFloatType(IRModule *m, uint32_t bits);
+IRType *ts__irNewIntType(IRModule *m, uint32_t bits, bool is_signed);
+IRType *ts__irNewRuntimeArrayType(IRModule *m, IRType *sub);
+IRType *
+ts__irNewFuncType(IRModule *m, IRType *return_type, IRType **params, uint32_t param_count);
+IRType *ts__irNewStructType(
+    IRModule *m,
+    char *name,
+    IRType **fields,
+    uint32_t field_count,
+    IRMemberDecoration *field_decorations,
+    uint32_t field_decoration_count);
+IRType *ts__irNewImageType(IRModule *m, IRType *sampled_type, SpvDim dim);
+IRType *ts__irNewSampledImageType(IRModule *m, IRType *image_type);
+
+IRInst *ts__irAddEntryPoint(
+    IRModule *m,
+    char *name,
+    IRInst *func,
+    SpvExecutionModel execution_model,
+    IRInst **globals,
+    uint32_t global_count);
+void
+ts__irEntryPointSetComputeDims(IRInst *entry_point, uint32_t x, uint32_t y, uint32_t z);
+IRInst *ts__irAddFunction(IRModule *m, IRType *func_type);
+IRInst *
+ts__irAddFuncParam(IRModule *m, IRInst *func, IRType *type, bool is_by_reference);
+IRInst *ts__irCreateBlock(IRModule *m, IRInst *func);
+void ts__irAddBlock(IRModule *m, IRInst *block);
+IRInst *ts__irAddGlobal(IRModule *m, IRType *type, SpvStorageClass storage_class);
+IRInst *ts__irAddInput(IRModule *m, IRInst *func, IRType *type);
+IRInst *ts__irAddOutput(IRModule *m, IRInst *func, IRType *type);
+IRInst *ts__irGetCurrentBlock(IRModule *m);
+void ts__irPositionAtEnd(IRModule *m, IRInst *block);
+bool ts__irBlockHasTerminator(IRInst *block);
+
+IRInst *ts__irBuildConstFloat(IRModule *m, IRType *type, double value);
+IRInst *ts__irBuildConstInt(IRModule *m, IRType *type, uint64_t value);
+IRInst *ts__irBuildConstBool(IRModule *m, bool value);
+IRInst *ts__irBuildAlloca(IRModule *m, IRType *type);
+void ts__irBuildStore(IRModule *m, IRInst *pointer, IRInst *value);
+IRInst *ts__irBuildLoad(IRModule *m, IRInst *pointer);
+IRInst *ts__irBuildAccessChain(
+    IRModule *m, IRType *type, IRInst *base, IRInst **indices, uint32_t index_count);
+IRInst *ts__irBuildVectorShuffle(
+    IRModule *m,
+    IRInst *vector_a,
+    IRInst *vector_b,
+    uint32_t *indices,
+    uint32_t index_count);
+IRInst *ts__irBuildCompositeExtract(
+    IRModule *m, IRInst *value, uint32_t *indices, uint32_t index_count);
+IRInst *ts__irBuildCompositeConstruct(
+    IRModule *m, IRType *type, IRInst **fields, uint32_t field_count);
+IRInst *
+ts__irBuildFuncCall(IRModule *m, IRInst *function, IRInst **params, uint32_t param_count);
+IRInst *ts__irBuildBuiltinCall(
+    IRModule *m,
+    IRBuiltinInstKind kind,
+    IRType *result_type,
+    IRInst **params,
+    uint32_t param_count);
+IRInst *ts__irBuildBarrier(
+    IRModule *m,
+    bool with_group_sync,
+    uint32_t execution_scope,
+    uint32_t memory_scope,
+    uint32_t semantics);
+IRInst *ts__irBuildSampleImplicitLod(
+    IRModule *m, IRType *type, IRInst *image_sampler, IRInst *coords);
+IRInst *ts__irBuildSampleExplicitLod(
+    IRModule *m, IRType *type, IRInst *image_sampler, IRInst *coords, IRInst *lod);
+IRInst *ts__irBuildQuerySizeLod(IRModule *m, IRInst *image, IRInst *lod);
+IRInst *ts__irBuildQueryLevels(IRModule *m, IRInst *image);
+IRInst *ts__irBuildCast(IRModule *m, IRType *dst_type, IRInst *value);
+IRInst *ts__irBuildUnary(IRModule *m, SpvOp op, IRType *type, IRInst *right);
+IRInst *
+ts__irBuildBinary(IRModule *m, SpvOp op, IRType *type, IRInst *left, IRInst *right);
+IRInst *ts__irBuildSelect(
+    IRModule *m, IRType *type, IRInst *cond, IRInst *true_value, IRInst *false_value);
+void ts__irBuildReturn(IRModule *m, IRInst *value);
+void ts__irBuildDiscard(IRModule *m);
+void ts__irBuildBr(
+    IRModule *m, IRInst *target, IRInst *merge_block, IRInst *continue_block);
+void ts__irBuildCondBr(
+    IRModule *m,
+    IRInst *cond,
+    IRInst *true_block,
+    IRInst *false_block,
+    IRInst *merge_block,
+    IRInst *continue_block);
+
+uint32_t *ts__irModuleCodegen(IRModule *mod, size_t *word_count);
 
 #endif

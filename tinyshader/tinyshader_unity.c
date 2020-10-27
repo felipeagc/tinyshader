@@ -3,3 +3,4 @@
 #include "tinyshader_parser.c"
 #include "tinyshader_analysis.c"
 #include "tinyshader_ir.c"
+#include "tinyshader_ast_ir.c"

@@ -10,6 +10,7 @@ add_library(
 	tinyshader/tinyshader_misc.c
 	tinyshader/tinyshader_parser.c
 	tinyshader/tinyshader_ir.c
+	tinyshader/tinyshader_ast_ir.c
 	tinyshader/tinyshader_analysis.c
 	tinyshader/spirv.h)
 

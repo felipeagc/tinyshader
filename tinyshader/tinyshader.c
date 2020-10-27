@@ -272,13 +272,16 @@ void tsCompile(TsCompiler *compiler, TsCompilerInput *input, TsCompilerOutput *o
     ts__parserParse(&parser, compiler, lexer.tokens.ptr, arrLength(lexer.tokens));
     if (handleErrors(compiler, output)) return;
 
-    Analyzer analyzer = {0};
     ts__analyzerAnalyze(
-        &analyzer, compiler, module, parser.decls.ptr, arrLength(parser.decls));
+        compiler, module, parser.decls.ptr, arrLength(parser.decls));
+    if (handleErrors(compiler, output)) return;
+
+    IRModule *ir_module = ts__irModuleCreate(compiler);
+    ts__astModuleBuild(module, ir_module);
     if (handleErrors(compiler, output)) return;
 
     size_t word_count;
-    uint32_t *words = ts__irModuleCodegen(module, &word_count);
+    uint32_t *words = ts__irModuleCodegen(ir_module, &word_count);
     if (handleErrors(compiler, output))
     {
         if (words) free(words);
@@ -288,6 +291,7 @@ void tsCompile(TsCompiler *compiler, TsCompilerInput *input, TsCompilerOutput *o
     output->spirv_byte_size = word_count * 4;
     output->spirv = (uint8_t *)words;
 
+    ts__irModuleDestroy(ir_module);
     moduleDestroy(module);
 }
 
