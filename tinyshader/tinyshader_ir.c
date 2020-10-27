@@ -891,7 +891,13 @@ IRInst *ts__irBuildCompositeExtract(
     }
 
     inst->composite_extract.value = value;
-    inst->composite_extract.indices = indices;
+
+    inst->composite_extract.indices = NEW_ARRAY(m->compiler, uint32_t, index_count);
+    memcpy(
+        inst->composite_extract.indices,
+        indices,
+        sizeof(uint32_t) * index_count);
+
     inst->composite_extract.index_count = index_count;
 
     IRInst *block = ts__irGetCurrentBlock(m);
@@ -2416,7 +2422,7 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
 
             for (uint32_t i = 0; i < inst->composite_extract.index_count; ++i)
             {
-                params[4 + i] = inst->composite_extract.indices[i];
+                params[3 + i] = inst->composite_extract.indices[i];
             }
 
             irModuleEncodeInst(m, SpvOpCompositeExtract, params, param_count);

@@ -1350,6 +1350,7 @@ void ts__analyzerAnalyze(
 AstType *ts__getScalarType(AstType *type);
 AstType *ts__getComparableType(AstType *type);
 AstType *ts__getLogicalType(AstType *type);
+uint32_t ts__getTypeElemCount(AstType *type);
 AstType *ts__getElemType(AstType *type);
 AstType *ts__getStructType(AstType *type);
 

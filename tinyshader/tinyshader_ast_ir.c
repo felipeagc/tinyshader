@@ -893,19 +893,36 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
             switch (constructed_type->kind)
             {
             case TYPE_VECTOR: {
-                assert(constructed_type->vector.size == param_count);
-                IRInst **fields =
-                    NEW_ARRAY(compiler, IRInst *, constructed_type->vector.size);
+                uint32_t elem_count = constructed_type->vector.size;
+                IRInst **elems = NEW_ARRAY(compiler, IRInst *, elem_count);
 
+                uint32_t elem_index = 0;
                 for (uint32_t i = 0; i < param_count; ++i)
                 {
                     astBuildExpr(ast_mod, ir_mod, params.ptr[i]);
                     assert(params.ptr[i]->value);
-                    fields[i] = loadVal(ir_mod, params.ptr[i]->value);
+                    IRInst *param_val = loadVal(ir_mod, params.ptr[i]->value);
+
+                    if (params.ptr[i]->type->kind == TYPE_VECTOR)
+                    {
+                        for (uint32_t j = 0;
+                            j < ts__getTypeElemCount(params.ptr[i]->type);
+                            ++j)
+                        {
+                            elems[elem_index++] =
+                                ts__irBuildCompositeExtract(ir_mod, param_val, &j, 1);
+                        }
+                    }
+                    else
+                    {
+                        elems[elem_index++] = param_val;
+                    }
                 }
 
+                assert(elem_index == elem_count);
+
                 expr->value = ts__irBuildCompositeConstruct(
-                    ir_mod, ir_constructed_type, fields, constructed_type->vector.size);
+                    ir_mod, ir_constructed_type, elems, elem_count);
                 break;
             }
             case TYPE_MATRIX: {
