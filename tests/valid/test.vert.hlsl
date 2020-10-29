@@ -1,18 +1,4 @@
-/* struct OtherOtherStruct { int c; }; */
-/* struct OtherStruct { */
-/* 	OtherOtherStruct c; */  
-/* 	float3 vec; */
-/* }; */
-
-/* struct Hello */
-/* { */
-/*     int a; */
-/*     int b; */
-/* 	OtherStruct c; */
-/* }; */
-
-#include "../examples/hello.hlsl"
-#include "../examples/hello.hlsl"
+#include "included.hlsl"
 
 #define SOME_CONST 1.0123123
 #define HELLO 123 + 123
@@ -31,8 +17,6 @@ struct Uniform
 	float4x4 view;
 };
 
-const int my_const = 123;
-
 ConstantBuffer<Uniform> gInput;
 Texture2D gInput2;
 SamplerState gInput3;
@@ -47,7 +31,7 @@ float rand(float2 uv)
 	return frac(sin(dot(uv.xy, float2(12.9898,78.233))) * 43758.5453);
 }
 
-void vertex(
+void main(
 	in uint vertexIndex : SV_VertexID,
 	in float3 pos : Heyy,
 	out float4 out_pos : SV_Position,
@@ -128,28 +112,4 @@ void vertex(
 	// if (pos.x > 0.0) {
 	// 	pos.x = sqrt(123.0);
 	// }
-}
-
-void pixel(in float4 pos : POSITION, in float2 uv : TEXCOORD0, out float4 color : SV_Target)
-{
-    for (; pos.x > 0;) {
-        if (pos.x <= 123)
-        {
-            break;
-        }
-    }
-
-    float4 my_color = gInput2.Sample(gInput3, uv) * float4(ddx(1.0), 1, 1, 1) *
-        float4(gInput.hey, gInput.hey, gInput.hey, gInput.hey);
-
-	my_color = gInput2.SampleLevel(gInput3, uv, 1);
-    float width;
-    float height;
-    float mip_levels;
-    gInput2.GetDimensions(0, width, height, mip_levels);
-
-    float3 up = abs(pos.x) < 0.999 ? float3(0.0, 0.0, 1.0) : float3(1.0, 0.0, 0.0);
-
-	color = my_color;
-    color.r = up.z;
 }
