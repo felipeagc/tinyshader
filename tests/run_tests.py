@@ -19,9 +19,9 @@ failed_tests = []
 
 def test_dir(dir, expected_result):
     if expected_result:
-        print("=== Running VALID tests ===")
+        print("\n=== Running VALID tests ===")
     else:
-        print("=== Running INVALID tests ===")
+        print("\n=== Running INVALID tests ===")
 
     for filename in os.listdir(dir):
         splitname = os.path.splitext(filename)
@@ -79,7 +79,7 @@ def test_dir(dir, expected_result):
 test_dir("./tests/valid", True)
 test_dir("./tests/invalid", False)
 
-print("=== RESULTS ===")
+print("\n=== RESULTS ===")
 
 if len(failed_tests) > 0:
     print("Tests failed:")

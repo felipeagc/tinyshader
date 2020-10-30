@@ -2069,6 +2069,42 @@ static AstStmt *parseStmt(Parser *p)
         return stmt;
     }
 
+    case TOKEN_CONST:
+    {
+        parserNext(p, 1);
+
+        AstExpr *type_expr = parseExpr(p);
+        if (!type_expr) return NULL;
+
+        // Constant variable declaration
+        Token *name_tok = parserConsume(p, TOKEN_IDENT);
+        if (!name_tok) return NULL;
+
+        AstDecl *decl = NEW(compiler, AstDecl);
+        decl->kind = DECL_VAR;
+        decl->name = name_tok->str;
+        decl->var.type_expr = type_expr;
+        decl->var.immutable = true;
+
+        if (parserPeek(p, 0)->kind == TOKEN_ASSIGN)
+        {
+            parserNext(p, 1);
+
+            AstExpr *value_expr = parseExpr(p);
+            if (!value_expr) return NULL;
+
+            decl->var.value_expr = value_expr;
+        }
+
+        AstStmt *stmt = NEW(compiler, AstStmt);
+        stmt->kind = STMT_DECL;
+        stmt->decl = decl;
+
+        if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
+
+        return stmt;
+    }
+
     default: {
         AstExpr *expr = parseExpr(p);
         if (!expr) return NULL;

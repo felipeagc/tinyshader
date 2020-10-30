@@ -1062,6 +1062,7 @@ struct AstDecl
             AstExpr *value_expr;
             char *semantic;
             AstVarKind kind;
+            bool immutable;
         } var;
 
         struct

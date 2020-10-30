@@ -1171,29 +1171,42 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
     }
 
     case EXPR_VAR_ASSIGN: {
-        analyzerAnalyzeExpr(a, expr->var_assign.assigned_expr, NULL);
-        if (!expr->var_assign.assigned_expr->type)
+        AstExpr *assigned_expr = expr->var_assign.assigned_expr;
+
+        analyzerAnalyzeExpr(a, assigned_expr, NULL);
+        if (!assigned_expr->type)
         {
             ts__addErr(
                 compiler,
-                &expr->var_assign.assigned_expr->loc,
+                &assigned_expr->loc,
                 "could not resolve type for expression");
             break;
         }
 
-        expr->type = expr->var_assign.assigned_expr->type;
+        expr->type = assigned_expr->type;
 
-        if (!expr->var_assign.assigned_expr->assignable)
+        if (!assigned_expr->assignable)
         {
-            ts__addErr(
-                compiler,
-                &expr->var_assign.assigned_expr->loc,
-                "expression is not assignable");
+            if (assigned_expr->kind == EXPR_IDENT &&
+                assigned_expr->ident.decl->kind == DECL_VAR &&
+                assigned_expr->ident.decl->var.immutable)
+            {
+                ts__addErr(
+                    compiler,
+                    &assigned_expr->loc,
+                    "assigned variable is constant: '%s'",
+                    assigned_expr->ident.name);
+            }
+            else
+            {
+                ts__addErr(
+                    compiler,
+                    &assigned_expr->loc,
+                    "expression is not assignable");
+            }
         }
 
-        analyzerAnalyzeExpr(
-            a, expr->var_assign.value_expr, expr->var_assign.assigned_expr->type);
-
+        analyzerAnalyzeExpr(a, expr->var_assign.value_expr, assigned_expr->type);
         break;
     }
 
@@ -1212,7 +1225,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
         if (decl->kind == DECL_VAR)
         {
-            expr->assignable = true;
+            expr->assignable = !decl->var.immutable;
         }
 
         expr->ident.decl = decl;
