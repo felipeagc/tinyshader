@@ -1,3 +1,7 @@
+/**
+ * This file is part of the tinyshader library.
+ * See tinyshader.h for license details.
+ */
 #include "tinyshader_internal.h"
 
 static char *irTypeToString(TsCompiler *compiler, IRType *type)

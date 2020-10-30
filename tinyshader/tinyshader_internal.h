@@ -1,3 +1,7 @@
+/**
+ * This file is part of the tinyshader library.
+ * See tinyshader.h for license details.
+ */
 #ifndef TINYSHADER_INTERNAL_H
 #define TINYSHADER_INTERNAL_H
 
