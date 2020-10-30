@@ -2216,6 +2216,8 @@ static AstDecl *parseTopLevel(Parser *p)
     }
 
     case TOKEN_CONST: {
+        Location decl_loc = parserBeginLoc(p);
+
         parserNext(p, 1);
         AstDecl *decl = NEW(compiler, AstDecl);
         decl->kind = DECL_CONST;
@@ -2238,10 +2240,15 @@ static AstDecl *parseTopLevel(Parser *p)
 
         if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
 
+        parserEndLoc(p, &decl_loc);
+        decl->loc = decl_loc;
+
         return decl;
     }
 
     case TOKEN_GROUPSHARED: {
+        Location decl_loc = parserBeginLoc(p);
+
         parserNext(p, 1);
         AstDecl *decl = NEW(compiler, AstDecl);
         decl->kind = DECL_VAR;
@@ -2259,10 +2266,15 @@ static AstDecl *parseTopLevel(Parser *p)
 
         if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
 
+        parserEndLoc(p, &decl_loc);
+        decl->loc = decl_loc;
+
         return decl;
     }
 
     case TOKEN_STRUCT: {
+        Location decl_loc = parserBeginLoc(p);
+
         parserNext(p, 1);
         AstDecl *decl = NEW(compiler, AstDecl);
         decl->kind = DECL_STRUCT;
@@ -2304,6 +2316,9 @@ static AstDecl *parseTopLevel(Parser *p)
 
         if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
 
+        parserEndLoc(p, &decl_loc);
+        decl->loc = decl_loc;
+
         return decl;
     }
 
@@ -2317,6 +2332,8 @@ static AstDecl *parseTopLevel(Parser *p)
     case TOKEN_SAMPLER_STATE: {
         AstExpr *type_expr = NULL;
         AstVarKind var_kind = {0};
+
+        Location decl_loc = parserBeginLoc(p);
 
         switch (parserPeek(p, 0)->kind)
         {
@@ -2454,10 +2471,15 @@ static AstDecl *parseTopLevel(Parser *p)
         decl->var.kind = var_kind;
         decl->attributes = attributes;
 
+        parserEndLoc(p, &decl_loc);
+        decl->loc = decl_loc;
+
         return decl;
     }
 
     default: {
+        Location decl_loc = parserBeginLoc(p);
+
         AstExpr *type_expr = parsePrefixedUnaryExpr(p);
         if (!type_expr) return NULL;
 
@@ -2543,6 +2565,9 @@ static AstDecl *parseTopLevel(Parser *p)
             }
 
             if (!parserConsume(p, TOKEN_RCURLY)) return NULL;
+
+            parserEndLoc(p, &decl_loc);
+            decl->loc = decl_loc;
 
             return decl;
         }
