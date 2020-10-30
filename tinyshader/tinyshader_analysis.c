@@ -187,12 +187,6 @@ static char *typeToString(TsCompiler *compiler, AstType *type)
 
         break;
     }
-
-    case TYPE_SAMPLED_IMAGE: {
-        prefix = "sampledImage";
-        sub = typeToString(compiler, type->sampled_image.image_type);
-        break;
-    }
     }
 
     ts__sbReset(&compiler->sb);
@@ -220,6 +214,162 @@ static char *typeToString(TsCompiler *compiler, AstType *type)
 
     type->string = ts__sbBuild(&compiler->sb, &compiler->alloc);
     return type->string;
+}
+
+static char *typeToPrettyString(TsCompiler *compiler, AstType *type)
+{
+    char *str = NULL;
+
+    switch (type->kind)
+    {
+    case TYPE_VOID: str = "void"; break;
+    case TYPE_TYPE: str = "type"; break;
+    case TYPE_BOOL: str = "bool"; break;
+
+    case TYPE_FLOAT:
+        switch (type->float_.bits)
+        {
+        case 32: str = "float"; break;
+        case 64: str = "double"; break;
+        default: assert(0); break;
+        }
+
+        break;
+
+    case TYPE_INT:
+    {
+        switch (type->float_.bits)
+        {
+        case 32:
+        {
+            if (type->int_.is_signed)
+                str = "int";
+            else
+                str = "uint";
+            break;
+        }
+
+        default: assert(0); break;
+        }
+
+        break;
+    }
+
+    case TYPE_VECTOR:
+    {
+        char *elem_str = typeToPrettyString(compiler, type->vector.elem_type);
+
+        ts__sbReset(&compiler->sb);
+        ts__sbSprintf(&compiler->sb, "%s%u", elem_str, type->vector.size);
+        str = ts__sbBuild(&compiler->sb, &compiler->alloc);
+        break;
+    }
+
+    case TYPE_MATRIX:
+    {
+        char *elem_str = typeToPrettyString(compiler,
+                                            type->matrix.col_type->vector.elem_type);
+        ts__sbReset(&compiler->sb);
+        ts__sbSprintf(&compiler->sb,
+                      "%s%ux%u",
+                      elem_str,
+                      type->matrix.col_count,
+                      type->matrix.col_type->vector.size);
+        str = ts__sbBuild(&compiler->sb, &compiler->alloc);
+        break;
+    }
+
+    case TYPE_POINTER: {
+        assert(0);
+        break;
+    }
+
+    case TYPE_CONSTANT_BUFFER:
+    {
+        char *sub_str = typeToPrettyString(compiler, type->buffer.sub);
+
+        ts__sbReset(&compiler->sb);
+        ts__sbSprintf(&compiler->sb, "ConstantBuffer<%s>", sub_str);
+        str = ts__sbBuild(&compiler->sb, &compiler->alloc);
+        break;
+    }
+
+    case TYPE_STRUCTURED_BUFFER:
+    {
+        char *sub_str = typeToPrettyString(compiler, type->buffer.sub);
+
+        ts__sbReset(&compiler->sb);
+        ts__sbSprintf(&compiler->sb, "StructuredBuffer<%s>", sub_str);
+        str = ts__sbBuild(&compiler->sb, &compiler->alloc);
+        break;
+    }
+
+    case TYPE_RW_STRUCTURED_BUFFER:
+    {
+        char *sub_str = typeToPrettyString(compiler, type->buffer.sub);
+
+        ts__sbReset(&compiler->sb);
+        ts__sbSprintf(&compiler->sb, "RWStructuredBuffer<%s>", sub_str);
+        str = ts__sbBuild(&compiler->sb, &compiler->alloc);
+        break;
+    }
+
+    case TYPE_FUNC: {
+        char *return_type = typeToPrettyString(compiler, type->func.return_type);
+        char **params = NEW_ARRAY(compiler, char *, type->func.param_count);
+        for (uint32_t i = 0; i < type->func.param_count; ++i)
+        {
+            params[i] = typeToPrettyString(compiler, type->func.params[i]);
+        }
+
+        ts__sbReset(&compiler->sb);
+        ts__sbAppend(&compiler->sb, return_type);
+        ts__sbAppend(&compiler->sb, "()(");
+        for (uint32_t i = 0; i < type->func.param_count; ++i)
+        {
+            if (i != 0) ts__sbAppend(&compiler->sb, ", ");
+            ts__sbAppend(&compiler->sb, params[i]);
+        }
+        ts__sbAppend(&compiler->sb, ")");
+        str = ts__sbBuild(&compiler->sb, &compiler->alloc);
+
+        break;
+    }
+
+    case TYPE_STRUCT: {
+        str = type->struct_.name;
+        break;
+    }
+
+    case TYPE_SAMPLER: {
+        str = "SamplerState";
+        break;
+    }
+
+    case TYPE_IMAGE: {
+        char *sub_str = typeToPrettyString(compiler, type->image.sampled_type);
+
+        ts__sbReset(&compiler->sb);
+
+        switch (type->image.dim)
+        {
+        case SpvDimCube: ts__sbAppend(&compiler->sb, "TextureCube"); break;
+        case SpvDim1D: ts__sbAppend(&compiler->sb, "Texture1D"); break;
+        case SpvDim2D: ts__sbAppend(&compiler->sb, "Texture2D"); break;
+        case SpvDim3D: ts__sbAppend(&compiler->sb, "Texture3D"); break;
+        default: assert(0); break;
+        }
+
+        ts__sbAppend(&compiler->sb, "<");
+        ts__sbAppend(&compiler->sb, sub_str);
+        ts__sbAppend(&compiler->sb, ">");
+        str = ts__sbBuild(&compiler->sb, &compiler->alloc);
+
+        break;
+    }
+    }
+
+    return str;
 }
 
 static uint32_t padToAlignment(uint32_t current, uint32_t align)
@@ -281,7 +431,6 @@ static uint32_t typeAlignOf(Module *m, AstType *type)
 
     case TYPE_IMAGE:
     case TYPE_SAMPLER:
-    case TYPE_SAMPLED_IMAGE:
     case TYPE_POINTER:
     case TYPE_BOOL:
     case TYPE_FUNC:
@@ -346,7 +495,6 @@ static uint32_t typeSizeOf(Module *m, AstType *type)
 
     case TYPE_IMAGE:
     case TYPE_SAMPLER:
-    case TYPE_SAMPLED_IMAGE:
     case TYPE_POINTER:
     case TYPE_BOOL:
     case TYPE_FUNC:
@@ -476,14 +624,6 @@ static AstType *newImageType(Module *m, AstType *sampled_type, SpvDim dim)
     ty->image.multisampled = 0;
     ty->image.sampled = 1;
     ty->image.format = SpvImageFormatUnknown;
-    return getCachedType(m, ty);
-}
-
-static AstType *newSampledImageType(Module *m, AstType *image_type)
-{
-    AstType *ty = NEW(m->compiler, AstType);
-    ty->kind = TYPE_SAMPLED_IMAGE;
-    ty->sampled_image.image_type = image_type;
     return getCachedType(m, ty);
 }
 
@@ -3281,7 +3421,10 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
         }
         else if (expr->type != expected_type)
         {
-            ts__addErr(compiler, &expr->loc, "unmatched types");
+            ts__addErr(compiler, &expr->loc,
+                       "unmatched types, expected '%s', instead got '%s'",
+                       typeToPrettyString(compiler, expected_type),
+                       typeToPrettyString(compiler, expr->type));
         }
     }
 }

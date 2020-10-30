@@ -181,12 +181,6 @@ static IRType *convertTypeToIR(Module *module, IRModule *ir_module, AstType *typ
         IRType *elem_type = convertTypeToIR(module, ir_module, type->ptr.sub);
         return ts__irNewPointerType(ir_module, type->ptr.storage_class, elem_type);
     }
-
-    case TYPE_SAMPLED_IMAGE: {
-        IRType *image_type =
-            convertTypeToIR(module, ir_module, type->sampled_image.image_type);
-        return ts__irNewSampledImageType(ir_module, image_type);
-    }
     }
 
     return NULL;

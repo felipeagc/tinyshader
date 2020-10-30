@@ -557,6 +557,12 @@ void ts__sbSprintf(StringBuilder *sb, const char *fmt, ...)
     ts__sbAppend(sb, sb->scratch);
 }
 
+void ts__sbVsprintf(StringBuilder *sb, const char *fmt, va_list vl)
+{
+    vsnprintf(sb->scratch, sb->cap, fmt, vl);
+    ts__sbAppend(sb, sb->scratch);
+}
+
 char *ts__sbBuildMalloc(StringBuilder *sb)
 {
     char *result = malloc(sb->len + 1);

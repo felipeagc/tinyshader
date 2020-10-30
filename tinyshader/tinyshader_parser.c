@@ -59,6 +59,7 @@ static Location preprocErrLoc(PreprocessorFile *f)
 {
     Location err_loc = {0};
     err_loc.path = f->file->path;
+    err_loc.buffer = f->file->text;
     err_loc.pos = (uint32_t)f->pos;
     err_loc.line = f->line;
     err_loc.col = f->col;
@@ -664,6 +665,7 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
     {
         memset(&l->token, 0, sizeof(Token));
         l->token.loc.path = l->file_path;
+        l->token.loc.buffer = l->text;
         l->token.loc.pos = (uint32_t)l->pos;
         l->token.loc.length = 0;
         l->token.loc.line = l->line;
@@ -835,6 +837,7 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
                     Location err_loc = l->token.loc;
                     err_loc.length = 1;
                     err_loc.path = l->file_path;
+                    err_loc.buffer = l->text;
                     err_loc.pos = (uint32_t)l->pos;
                     err_loc.line = l->line;
                     err_loc.col = l->col;
@@ -1011,6 +1014,7 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
                 Location err_loc = l->token.loc;
                 err_loc.length = 1;
                 err_loc.path = l->file_path;
+                err_loc.buffer = l->text;
                 err_loc.pos = (uint32_t)l->pos;
                 err_loc.line = l->line;
                 err_loc.col = l->col;
@@ -1210,6 +1214,7 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
                 Location err_loc = l->token.loc;
                 err_loc.length = 1;
                 err_loc.path = l->file_path;
+                err_loc.buffer = l->text;
                 err_loc.pos = (uint32_t)l->pos;
                 err_loc.line = l->line;
                 err_loc.col = l->col;
@@ -1231,6 +1236,7 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
     {
         Location err_loc = {0};
         err_loc.path = l->file_path;
+        err_loc.buffer = l->text;
         ts__addErr(l->compiler, &err_loc, "no tokens found for file");
     }
 }
@@ -1271,7 +1277,12 @@ static inline Token *parserConsume(Parser *p, TokenKind kind)
     Token *tok = parserPeek(p, 0);
     if (tok->kind != kind)
     {
-        ts__addErr(p->compiler, &tok->loc, "unexpected token");
+        ts__addErr(
+            p->compiler,
+            &tok->loc,
+            "unexpected token: '%.*s'",
+            (int)tok->loc.length,
+            &tok->loc.buffer[tok->loc.pos]);
         return NULL;
     }
     parserNext(p, 1);

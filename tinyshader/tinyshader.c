@@ -1,7 +1,16 @@
 #include "tinyshader_internal.h"
 
-void ts__addErr(TsCompiler *compiler, Location *loc, const char *msg)
+void ts__addErr(TsCompiler *compiler, Location *loc, const char *fmt, ...)
 {
+    va_list vl;
+
+    va_start(vl, fmt);
+    ts__sbReset(&compiler->sb);
+    ts__sbVsprintf(&compiler->sb, fmt, vl);
+    va_end(vl);
+
+    char *msg = ts__sbBuild(&compiler->sb, &compiler->alloc);
+
     Error err = {0};
     err.loc = *loc;
     err.message = msg;
