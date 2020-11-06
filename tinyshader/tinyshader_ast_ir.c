@@ -95,7 +95,39 @@ static IRType *convertTypeToIR(Module *module, IRModule *ir_module, AstType *typ
         return struct_type;
     }
 
-    case TYPE_RW_STRUCTURED_BUFFER:
+    case TYPE_RW_STRUCTURED_BUFFER: {
+        IRType *subtype = convertTypeToIR(module, ir_module, type->buffer.sub);
+        IRType *array_type = ts__irNewRuntimeArrayType(ir_module, subtype);
+
+        assert(type->buffer.sub->size > 0);
+
+        IRDecoration array_dec = {0};
+        array_dec.kind = SpvDecorationArrayStride;
+        array_dec.value = type->buffer.sub->size;
+
+        ts__irTypeSetDecorations(ir_module, array_type, &array_dec, 1);
+
+        ts__sbReset(&module->compiler->sb);
+        ts__sbSprintf(
+            &module->compiler->sb, "__tmp_struct%u", module->compiler->counter++);
+        char *struct_name = ts__sbBuild(&module->compiler->sb, &module->compiler->alloc);
+
+        IRMemberDecoration member_decs[1] = {0};
+        member_decs[0].kind = SpvDecorationOffset;
+        member_decs[0].member_index = 0;
+        member_decs[0].value = 0;
+
+        IRType *struct_wrapper =
+            ts__irNewStructType(ir_module, struct_name, &array_type, 1, member_decs, 1);
+
+        IRDecoration struct_dec = {0};
+        struct_dec.kind = SpvDecorationBufferBlock;
+
+        ts__irTypeSetDecorations(ir_module, struct_wrapper, &struct_dec, 1);
+
+        return struct_wrapper;
+    }
+
     case TYPE_STRUCTURED_BUFFER: {
         IRType *subtype = convertTypeToIR(module, ir_module, type->buffer.sub);
         IRType *array_type = ts__irNewRuntimeArrayType(ir_module, subtype);
@@ -285,21 +317,21 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
             indices = NEW_ARRAY(compiler, IRInst *, index_count);
 
             indices[0] = ts__irBuildConstInt(ir_mod, index_type, 0);
-            indices[1] = expr->subscript.right->value;
+            indices[1] = loadVal(ir_mod, expr->subscript.right->value);
             break;
         }
 
         case TYPE_VECTOR: {
             index_count = 1;
             indices = NEW_ARRAY(compiler, IRInst *, index_count);
-            indices[0] = expr->subscript.right->value;
+            indices[0] = loadVal(ir_mod, expr->subscript.right->value);
             break;
         }
 
         case TYPE_MATRIX: {
             index_count = 1;
             indices = NEW_ARRAY(compiler, IRInst *, index_count);
-            indices[0] = expr->subscript.right->value;
+            indices[0] = loadVal(ir_mod, expr->subscript.right->value);
             break;
         }
 

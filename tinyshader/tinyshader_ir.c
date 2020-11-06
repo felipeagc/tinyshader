@@ -182,15 +182,14 @@ static bool irIsTypeCastable(IRType *src_type, IRType *dst_type, SpvOp *op)
         {
             if (dst_type->kind == IR_TYPE_INT)
             {
-                if (dst_type->int_.is_signed)
+                if (dst_type->int_.bits == src_type->int_.bits)
                 {
-                    *op = SpvOpSConvert;
+                    *op = SpvOpBitcast;
                     return true;
                 }
-                else
-                {
-                    return false;
-                }
+
+                *op = SpvOpSConvert;
+                return true;
             }
             else if (dst_type->kind == IR_TYPE_FLOAT)
             {
@@ -206,9 +205,16 @@ static bool irIsTypeCastable(IRType *src_type, IRType *dst_type, SpvOp *op)
         {
             if (dst_type->kind == IR_TYPE_INT)
             {
+                if (dst_type->int_.bits == src_type->int_.bits)
+                {
+                    *op = SpvOpBitcast;
+                    return true;
+                }
+
                 if (dst_type->int_.is_signed)
                 {
-                    return false;
+                    *op = SpvOpSConvert;
+                    return true;
                 }
                 else
                 {

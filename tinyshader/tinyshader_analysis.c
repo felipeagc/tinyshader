@@ -667,14 +667,7 @@ static bool isTypeCastable(AstType *src_type, AstType *dst_type)
         {
             if (dst_type->kind == TYPE_INT)
             {
-                if (dst_type->int_.is_signed)
-                {
-                    return true;
-                }
-                else
-                {
-                    return false;
-                }
+                return true;
             }
             else if (dst_type->kind == TYPE_FLOAT)
             {
@@ -689,14 +682,7 @@ static bool isTypeCastable(AstType *src_type, AstType *dst_type)
         {
             if (dst_type->kind == TYPE_INT)
             {
-                if (dst_type->int_.is_signed)
-                {
-                    return false;
-                }
-                else
-                {
-                    return true;
-                }
+                return true;
             }
             else if (dst_type->kind == TYPE_FLOAT)
             {
@@ -712,14 +698,7 @@ static bool isTypeCastable(AstType *src_type, AstType *dst_type)
     {
         if (dst_type->kind == TYPE_INT)
         {
-            if (dst_type->int_.is_signed)
-            {
-                return true;
-            }
-            else
-            {
-                return true;
-            }
+            return true;
         }
         else if (dst_type->kind == TYPE_FLOAT)
         {
