@@ -56,6 +56,16 @@ void main(
     f4 = myfunc(4.0f);
     f4 = 1;
 
+    if ((dtid.x == 1 && dtid.y == 2) || 3) {
+        AllMemoryBarrier();
+    }
+
+    bool my_bool = 1.0f;
+    if (0.0f && my_bool) {
+        AllMemoryBarrier();
+    }
+
+
     // uint2 my_data_dims;
     // Buffer0.GetDimensions(my_data_dims.x, my_data_dims.y);
     // BufType my_data = Buffer0[0];

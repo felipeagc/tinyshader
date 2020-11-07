@@ -869,6 +869,8 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
         case '&': {
             if (lexerPeek(l, 1) == '=')
                 lexerAddSimpleToken(l, TOKEN_BITAND_ASSIGN, 2);
+            else if (lexerPeek(l, 1) == '&')
+                lexerAddSimpleToken(l, TOKEN_AND, 2);
             else
                 lexerAddSimpleToken(l, TOKEN_BITAND, 1);
             break;
@@ -876,6 +878,8 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
         case '|': {
             if (lexerPeek(l, 1) == '=')
                 lexerAddSimpleToken(l, TOKEN_BITOR_ASSIGN, 2);
+            else if (lexerPeek(l, 1) == '|')
+                lexerAddSimpleToken(l, TOKEN_OR, 2);
             else
                 lexerAddSimpleToken(l, TOKEN_BITOR, 1);
             break;
@@ -1816,11 +1820,67 @@ static AstExpr *parseBitOr(Parser *p)
     return expr;
 }
 
-static AstExpr *parseTernaryExpr(Parser *p)
+static AstExpr *parseLogicalAnd(Parser *p)
 {
     Location loc = parserBeginLoc(p);
 
     AstExpr *expr = parseBitOr(p);
+    if (!expr) return NULL;
+
+    while (!parserIsAtEnd(p) && (parserPeek(p, 0)->kind == TOKEN_AND))
+    {
+        parserNext(p, 1);
+
+        AstExpr *left = expr;
+        AstExpr *right = parseBitOr(p);
+        if (!right) return NULL;
+
+        expr = NEW(p->compiler, AstExpr);
+        expr->kind = EXPR_BINARY;
+        expr->binary.left = left;
+        expr->binary.right = right;
+        expr->binary.op = BINOP_LOGICAL_AND;
+
+        parserEndLoc(p, &loc);
+        expr->loc = loc;
+    }
+
+    return expr;
+}
+
+static AstExpr *parseLogicalOr(Parser *p)
+{
+    Location loc = parserBeginLoc(p);
+
+    AstExpr *expr = parseLogicalAnd(p);
+    if (!expr) return NULL;
+
+    while (!parserIsAtEnd(p) && (parserPeek(p, 0)->kind == TOKEN_OR))
+    {
+        parserNext(p, 1);
+
+        AstExpr *left = expr;
+        AstExpr *right = parseLogicalAnd(p);
+        if (!right) return NULL;
+
+        expr = NEW(p->compiler, AstExpr);
+        expr->kind = EXPR_BINARY;
+        expr->binary.left = left;
+        expr->binary.right = right;
+        expr->binary.op = BINOP_LOGICAL_OR;
+
+        parserEndLoc(p, &loc);
+        expr->loc = loc;
+    }
+
+    return expr;
+}
+
+static AstExpr *parseTernaryExpr(Parser *p)
+{
+    Location loc = parserBeginLoc(p);
+
+    AstExpr *expr = parseLogicalOr(p);
     if (!expr) return NULL;
 
     while (!parserIsAtEnd(p) && (parserPeek(p, 0)->kind == TOKEN_QUESTION))

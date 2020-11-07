@@ -235,18 +235,24 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
         switch (expr->primary.token->kind)
         {
         case TOKEN_FLOAT_LIT: {
-            AstType *scalar_type = ts__getScalarType(expr->type);
+            AstType *elem_type = ts__getElemType(expr->type);
             IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, expr->type);
-            IRType *ir_scalar_type = convertTypeToIR(ast_mod, ir_mod, scalar_type);
-            switch (scalar_type->kind)
+            IRType *ir_elem_type = convertTypeToIR(ast_mod, ir_mod, elem_type);
+            switch (elem_type->kind)
             {
             case TYPE_FLOAT: {
                 expr->value =
-                    ts__irBuildConstFloat(ir_mod, ir_scalar_type, (double)expr->primary.token->double_);
+                    ts__irBuildConstFloat(ir_mod, ir_elem_type, (double)expr->primary.token->double_);
                 break;
             }
 
-            default: assert(0);
+            case TYPE_BOOL: {
+                expr->value = ts__irBuildConstBool(
+                        ir_mod, expr->primary.token->double_ ? true : false);
+                break;
+            }
+
+            default: assert(0); break;
             }
 
             if (expr->type->kind == TYPE_VECTOR)
@@ -263,24 +269,30 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
         }
 
         case TOKEN_INT_LIT: {
-            AstType *scalar_type = ts__getScalarType(expr->type);
+            AstType *elem_type = ts__getElemType(expr->type);
             IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, expr->type);
-            IRType *ir_scalar_type = convertTypeToIR(ast_mod, ir_mod, scalar_type);
-            switch (scalar_type->kind)
+            IRType *ir_elem_type = convertTypeToIR(ast_mod, ir_mod, elem_type);
+            switch (elem_type->kind)
             {
             case TYPE_FLOAT: {
                 expr->value =
-                    ts__irBuildConstFloat(ir_mod, ir_scalar_type, (double)expr->primary.token->int_);
+                    ts__irBuildConstFloat(ir_mod, ir_elem_type, (double)expr->primary.token->int_);
                 break;
             }
 
             case TYPE_INT: {
                 expr->value =
-                    ts__irBuildConstInt(ir_mod, ir_scalar_type, (uint64_t)expr->primary.token->int_);
+                    ts__irBuildConstInt(ir_mod, ir_elem_type, (uint64_t)expr->primary.token->int_);
                 break;
             }
 
-            default: assert(0);
+            case TYPE_BOOL: {
+                expr->value = ts__irBuildConstBool(
+                        ir_mod, expr->primary.token->int_ ? true : false);
+                break;
+            }
+
+            default: assert(0); break;
             }
 
 
@@ -1466,6 +1478,14 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
         }
         case BINOP_BITAND: {
             op = SpvOpBitwiseAnd;
+            break;
+        }
+        case BINOP_LOGICAL_AND: {
+            op = SpvOpLogicalAnd;
+            break;
+        }
+        case BINOP_LOGICAL_OR: {
+            op = SpvOpLogicalOr;
             break;
         }
         }

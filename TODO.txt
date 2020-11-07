@@ -13,7 +13,6 @@ Vulkan-specifics:
 
 Language features:
     vector casting: float2(uint2(1, 2))
-    vector initialization with scalars: float4 a = 1.0f;
 
     parse register decorations
 
@@ -23,7 +22,6 @@ Language features:
     .GetDimensions on StructuredBuffers
     .Load on StructuredBuffers
 
-    && ||
     static variables
 
     struct literals

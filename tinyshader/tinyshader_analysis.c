@@ -1122,7 +1122,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
         case TOKEN_FLOAT_LIT: {
             if (expected_type)
             {
-                if (expected_type->kind == TYPE_FLOAT)
+                if ((expected_type->kind == TYPE_FLOAT) || (expected_type->kind == TYPE_BOOL))
                 {
                     expr->type = expected_type;
                 }
@@ -1145,7 +1145,9 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
         case TOKEN_INT_LIT: {
             if (expected_type)
             {
-                if ((expected_type->kind == TYPE_INT) || (expected_type->kind == TYPE_FLOAT))
+                if ((expected_type->kind == TYPE_INT) ||
+                    (expected_type->kind == TYPE_FLOAT) ||
+                    (expected_type->kind == TYPE_BOOL))
                 {
                     expr->type = expected_type;
                 }
@@ -3414,6 +3416,17 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
             expr->type = left_type;
 
+            break;
+        }
+
+        case BINOP_LOGICAL_AND:
+        case BINOP_LOGICAL_OR: {
+            AstType *bool_type = newBasicType(m, TYPE_BOOL);
+
+            analyzerAnalyzeExpr(a, expr->binary.left, bool_type);
+            analyzerAnalyzeExpr(a, expr->binary.right, bool_type);
+
+            expr->type = bool_type;
             break;
         }
         }

@@ -80,6 +80,8 @@ static void compileStage(
 
 int main(int argc, char *argv[])
 {
+    (void)argc;
+
     struct optparse_long longopts[] = {
         {"shader-stage", 'T', OPTPARSE_REQUIRED},
         {"entry-point", 'E', OPTPARSE_REQUIRED},

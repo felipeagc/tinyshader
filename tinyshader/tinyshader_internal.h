@@ -931,6 +931,9 @@ typedef enum AstBinaryOp {
     BINOP_BITOR,
     BINOP_BITAND,
     BINOP_BITXOR,
+
+    BINOP_LOGICAL_AND,
+    BINOP_LOGICAL_OR,
 } AstBinaryOp;
 
 typedef enum AstVarKind {
