@@ -571,11 +571,12 @@ bool ts__irBlockHasTerminator(IRInst *block)
 
 static char *irConstToString(TsCompiler *compiler, IRInst *inst)
 {
-    ts__sbReset(&compiler->sb);
 
     switch (inst->kind)
     {
     case IR_INST_CONSTANT: {
+        ts__sbReset(&compiler->sb);
+
         if (inst->type->kind == IR_TYPE_FLOAT)
         {
             switch (inst->type->float_.bits)
@@ -652,6 +653,8 @@ static char *irConstToString(TsCompiler *compiler, IRInst *inst)
     }
 
     case IR_INST_CONSTANT_BOOL: {
+        ts__sbReset(&compiler->sb);
+
         if (inst->constant_bool.value)
         {
             ts__sbAppendChar(&compiler->sb, 't');
@@ -659,6 +662,24 @@ static char *irConstToString(TsCompiler *compiler, IRInst *inst)
         else
         {
             ts__sbAppendChar(&compiler->sb, 'f');
+        }
+        break;
+    }
+
+    case IR_INST_CONSTANT_COMPOSITE: {
+        char **substrings = NEW_ARRAY(compiler, char*, inst->constant_composite.value_count);
+        for (uint32_t i = 0; i < inst->constant_composite.value_count; ++i)
+        {
+            IRInst *value = inst->constant_composite.values[i];
+            substrings[i] = irConstToString(compiler, value);
+        }
+
+        ts__sbReset(&compiler->sb);
+        ts__sbSprintf(&compiler->sb, "C%u$", inst->constant_composite.value_count);
+        for (uint32_t i = 0; i < inst->constant_composite.value_count; ++i)
+        {
+            ts__sbAppend(&compiler->sb, substrings[i]);
+            ts__sbAppend(&compiler->sb, ",");
         }
         break;
     }
@@ -771,6 +792,23 @@ IRInst *ts__irBuildConstInt(IRModule *m, IRType *type, uint64_t value)
 
     default: assert(0);
     }
+
+    inst = irGetCachedConst(m, inst);
+
+    return inst;
+}
+
+IRInst *ts__irBuildConstComposite(IRModule *m, IRType *type, IRInst **values, uint32_t value_count)
+{
+    IRInst *inst = NEW(m->compiler, IRInst);
+    inst->kind = IR_INST_CONSTANT_COMPOSITE;
+
+    IRInst **new_values = NEW_ARRAY(m->compiler, IRInst *, value_count);
+    memcpy(new_values, values, value_count * sizeof(IRInst *));
+
+    inst->type = type;
+    inst->constant_composite.values = new_values;
+    inst->constant_composite.value_count = value_count;
 
     inst = irGetCachedConst(m, inst);
 
@@ -2487,6 +2525,7 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
         case IR_INST_FUNC_PARAM:
         case IR_INST_CONSTANT:
         case IR_INST_CONSTANT_BOOL:
+        case IR_INST_CONSTANT_COMPOSITE:
         case IR_INST_FUNCTION:
         case IR_INST_ENTRY_POINT:
         case IR_INST_BLOCK: assert(0); break;
@@ -2515,6 +2554,23 @@ static void irModuleEncodeConstants(IRModule *m)
             memcpy(&params[2], inst->constant.value, inst->constant.value_size_bytes);
 
             irModuleEncodeInst(m, SpvOpConstant, params, 2 + value_words);
+            break;
+        }
+
+        case IR_INST_CONSTANT_COMPOSITE: {
+            inst->id = irModuleReserveId(m);
+
+            IRInst **values = inst->constant_composite.values;
+            uint32_t value_count = inst->constant_composite.value_count;
+            uint32_t *params = NEW_ARRAY(m->compiler, uint32_t, 2 + value_count);
+            params[0] = inst->type->id;
+            params[1] = inst->id;
+            for (uint32_t i = 0; i < value_count; ++i)
+            {
+                params[2 + i] = values[i]->id;
+            }
+
+            irModuleEncodeInst(m, SpvOpConstantComposite, params, 2 + value_count);
             break;
         }
 

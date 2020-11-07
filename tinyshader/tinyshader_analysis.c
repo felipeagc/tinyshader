@@ -1120,11 +1120,22 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
         }
 
         case TOKEN_FLOAT_LIT: {
-            if (expected_type && expected_type->kind == TYPE_FLOAT)
+            if (expected_type)
             {
-                expr->type = expected_type;
+                if (expected_type->kind == TYPE_FLOAT)
+                {
+                    expr->type = expected_type;
+                }
+                else if (expected_type->kind == TYPE_VECTOR)
+                {
+                    if (expected_type->vector.elem_type->kind == TYPE_FLOAT)
+                    {
+                        expr->type = expected_type;
+                    }
+                }
             }
-            else
+            
+            if (!expr->type)
             {
                 expr->type = newFloatType(a->module, 32);
             }
@@ -1132,12 +1143,23 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
         }
 
         case TOKEN_INT_LIT: {
-            if (expected_type &&
-                (expected_type->kind == TYPE_INT || expected_type->kind == TYPE_FLOAT))
+            if (expected_type)
             {
-                expr->type = expected_type;
+                if ((expected_type->kind == TYPE_INT) || (expected_type->kind == TYPE_FLOAT))
+                {
+                    expr->type = expected_type;
+                }
+                else if (expected_type->kind == TYPE_VECTOR)
+                {
+                    if ((expected_type->vector.elem_type->kind == TYPE_INT)
+                        || (expected_type->vector.elem_type->kind == TYPE_FLOAT))
+                    {
+                        expr->type = expected_type;
+                    }
+                }
             }
-            else
+
+            if (!expr->type)
             {
                 expr->type = newIntType(a->module, 32, true);
             }

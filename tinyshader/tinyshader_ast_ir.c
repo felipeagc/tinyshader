@@ -231,32 +231,70 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
     switch (expr->kind)
     {
     case EXPR_PRIMARY: {
-        IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, expr->type);
 
         switch (expr->primary.token->kind)
         {
         case TOKEN_FLOAT_LIT: {
-            expr->value = ts__irBuildConstFloat(ir_mod, ir_type, expr->primary.token->double_);
-            break;
-        }
-
-        case TOKEN_INT_LIT: {
-            switch (expr->type->kind)
+            AstType *scalar_type = ts__getScalarType(expr->type);
+            IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, expr->type);
+            IRType *ir_scalar_type = convertTypeToIR(ast_mod, ir_mod, scalar_type);
+            switch (scalar_type->kind)
             {
             case TYPE_FLOAT: {
                 expr->value =
-                    ts__irBuildConstFloat(ir_mod, ir_type, (double)expr->primary.token->int_);
-                break;
-            }
-
-            case TYPE_INT: {
-                expr->value =
-                    ts__irBuildConstInt(ir_mod, ir_type, (uint64_t)expr->primary.token->int_);
+                    ts__irBuildConstFloat(ir_mod, ir_scalar_type, (double)expr->primary.token->double_);
                 break;
             }
 
             default: assert(0);
             }
+
+            if (expr->type->kind == TYPE_VECTOR)
+            {
+                IRInst **values = NEW_ARRAY(compiler, IRInst *, expr->type->vector.size);
+                for (uint32_t i = 0; i < expr->type->vector.size; ++i)
+                {
+                    values[i] = expr->value;
+                }
+                expr->value =
+                    ts__irBuildConstComposite(ir_mod, ir_type, values, expr->type->vector.size);
+            }
+            break;
+        }
+
+        case TOKEN_INT_LIT: {
+            AstType *scalar_type = ts__getScalarType(expr->type);
+            IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, expr->type);
+            IRType *ir_scalar_type = convertTypeToIR(ast_mod, ir_mod, scalar_type);
+            switch (scalar_type->kind)
+            {
+            case TYPE_FLOAT: {
+                expr->value =
+                    ts__irBuildConstFloat(ir_mod, ir_scalar_type, (double)expr->primary.token->int_);
+                break;
+            }
+
+            case TYPE_INT: {
+                expr->value =
+                    ts__irBuildConstInt(ir_mod, ir_scalar_type, (uint64_t)expr->primary.token->int_);
+                break;
+            }
+
+            default: assert(0);
+            }
+
+
+            if (expr->type->kind == TYPE_VECTOR)
+            {
+                IRInst **values = NEW_ARRAY(compiler, IRInst *, expr->type->vector.size);
+                for (uint32_t i = 0; i < expr->type->vector.size; ++i)
+                {
+                    values[i] = expr->value;
+                }
+                expr->value =
+                    ts__irBuildConstComposite(ir_mod, ir_type, values, expr->type->vector.size);
+            }
+
             break;
         }
 

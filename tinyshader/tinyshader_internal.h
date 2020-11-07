@@ -408,6 +408,7 @@ typedef enum IRInstKind {
     IR_INST_FUNC_PARAM,
     IR_INST_VARIABLE,
     IR_INST_CONSTANT,
+    IR_INST_CONSTANT_COMPOSITE,
     IR_INST_CONSTANT_BOOL,
     IR_INST_RETURN,
     IR_INST_DISCARD,
@@ -552,6 +553,12 @@ struct IRInst
             void *value;
             size_t value_size_bytes;
         } constant;
+
+        struct
+        {
+            IRInst **values;
+            uint32_t value_count;
+        } constant_composite;
 
         struct
         {
@@ -1410,6 +1417,7 @@ bool ts__irBlockHasTerminator(IRInst *block);
 
 IRInst *ts__irBuildConstFloat(IRModule *m, IRType *type, double value);
 IRInst *ts__irBuildConstInt(IRModule *m, IRType *type, uint64_t value);
+IRInst *ts__irBuildConstComposite(IRModule *m, IRType *type, IRInst **values, uint32_t value_count);
 IRInst *ts__irBuildConstBool(IRModule *m, bool value);
 IRInst *ts__irBuildAlloca(IRModule *m, IRType *type);
 void ts__irBuildStore(IRModule *m, IRInst *pointer, IRInst *value);

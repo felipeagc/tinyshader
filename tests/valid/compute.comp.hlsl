@@ -8,6 +8,10 @@ StructuredBuffer<BufType> Buffer0;
 
 groupshared uint a;
 
+float4 myfunc(float4 aa) {
+    return aa;
+}
+
 [numthreads(1, 1, 1)]
 void main(
     in uint3 dtid : SV_DispatchThreadID,
@@ -49,6 +53,8 @@ void main(
     float4 f4 = float4(c, 1);
     f4 += 4.0;
     f4.y += -4.1231f;
+    f4 = myfunc(4.0f);
+    f4 = 1;
 
     // uint2 my_data_dims;
     // Buffer0.GetDimensions(my_data_dims.x, my_data_dims.y);
