@@ -47,6 +47,8 @@ void main(
     view[1][3] = fmod(2.3, 1.2);
 
     float4 f4 = float4(c, 1);
+    f4 += 4.0;
+    f4.y += -4.1231f;
 
     // uint2 my_data_dims;
     // Buffer0.GetDimensions(my_data_dims.x, my_data_dims.y);

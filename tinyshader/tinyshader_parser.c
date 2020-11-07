@@ -779,7 +779,7 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
 
         case '+': {
             if (lexerPeek(l, 1) == '=')
-                lexerAddSimpleToken(l, TOKEN_ADDEQ, 2);
+                lexerAddSimpleToken(l, TOKEN_ADD_ASSIGN, 2);
             else if (lexerPeek(l, 1) == '+')
                 lexerAddSimpleToken(l, TOKEN_ADDADD, 2);
             else
@@ -788,7 +788,7 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
         }
         case '-': {
             if (lexerPeek(l, 1) == '=')
-                lexerAddSimpleToken(l, TOKEN_SUBEQ, 2);
+                lexerAddSimpleToken(l, TOKEN_SUB_ASSIGN, 2);
             else if (lexerPeek(l, 1) == '-')
                 lexerAddSimpleToken(l, TOKEN_SUBSUB, 2);
             else
@@ -797,7 +797,7 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
         }
         case '*': {
             if (lexerPeek(l, 1) == '=')
-                lexerAddSimpleToken(l, TOKEN_MULEQ, 2);
+                lexerAddSimpleToken(l, TOKEN_MUL_ASSIGN, 2);
             else
                 lexerAddSimpleToken(l, TOKEN_MUL, 1);
             break;
@@ -850,7 +850,7 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
             }
             else if (lexerPeek(l, 1) == '=')
             {
-                lexerAddSimpleToken(l, TOKEN_DIVEQ, 2);
+                lexerAddSimpleToken(l, TOKEN_DIV_ASSIGN, 2);
             }
             else
             {
@@ -860,7 +860,7 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
         }
         case '%': {
             if (lexerPeek(l, 1) == '=')
-                lexerAddSimpleToken(l, TOKEN_MODEQ, 2);
+                lexerAddSimpleToken(l, TOKEN_MOD_ASSIGN, 2);
             else
                 lexerAddSimpleToken(l, TOKEN_MOD, 1);
             break;
@@ -868,21 +868,21 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
 
         case '&': {
             if (lexerPeek(l, 1) == '=')
-                lexerAddSimpleToken(l, TOKEN_BITANDEQ, 2);
+                lexerAddSimpleToken(l, TOKEN_BITAND_ASSIGN, 2);
             else
                 lexerAddSimpleToken(l, TOKEN_BITAND, 1);
             break;
         }
         case '|': {
             if (lexerPeek(l, 1) == '=')
-                lexerAddSimpleToken(l, TOKEN_BITOREQ, 2);
+                lexerAddSimpleToken(l, TOKEN_BITOR_ASSIGN, 2);
             else
                 lexerAddSimpleToken(l, TOKEN_BITOR, 1);
             break;
         }
         case '^': {
             if (lexerPeek(l, 1) == '=')
-                lexerAddSimpleToken(l, TOKEN_BITXOREQ, 2);
+                lexerAddSimpleToken(l, TOKEN_BITXOR_ASSIGN, 2);
             else
                 lexerAddSimpleToken(l, TOKEN_BITXOR, 1);
             break;
@@ -1857,8 +1857,18 @@ static AstExpr *parseAssignExpr(Parser *p)
     AstExpr *expr = parseTernaryExpr(p);
     if (!expr) return NULL;
 
-    while (!parserIsAtEnd(p) && (parserPeek(p, 0)->kind == TOKEN_ASSIGN))
+    while (!parserIsAtEnd(p) && (
+               parserPeek(p, 0)->kind == TOKEN_ASSIGN
+               || parserPeek(p, 0)->kind == TOKEN_ADD_ASSIGN
+               || parserPeek(p, 0)->kind == TOKEN_SUB_ASSIGN
+               || parserPeek(p, 0)->kind == TOKEN_MUL_ASSIGN
+               || parserPeek(p, 0)->kind == TOKEN_DIV_ASSIGN
+               || parserPeek(p, 0)->kind == TOKEN_MOD_ASSIGN
+               || parserPeek(p, 0)->kind == TOKEN_BITAND_ASSIGN
+               || parserPeek(p, 0)->kind == TOKEN_BITOR_ASSIGN
+               || parserPeek(p, 0)->kind == TOKEN_BITXOR_ASSIGN))
     {
+        TokenKind op_kind = parserPeek(p, 0)->kind;
         parserNext(p, 1);
 
         AstExpr *left = expr;
@@ -1868,10 +1878,42 @@ static AstExpr *parseAssignExpr(Parser *p)
         expr = NEW(p->compiler, AstExpr);
         expr->kind = EXPR_VAR_ASSIGN;
         expr->var_assign.assigned_expr = left;
-        expr->var_assign.value_expr = right;
 
-        parserEndLoc(p, &loc);
-        expr->loc = loc;
+        if (op_kind == TOKEN_ASSIGN)
+        {
+            expr->var_assign.value_expr = right;
+
+            parserEndLoc(p, &loc);
+            expr->loc = loc;
+        }
+        else
+        {
+            AstBinaryOp binop;
+            switch (op_kind)
+            {
+            case TOKEN_ADD_ASSIGN: binop = BINOP_ADD; break;
+            case TOKEN_SUB_ASSIGN: binop = BINOP_SUB; break;
+            case TOKEN_MUL_ASSIGN: binop = BINOP_MUL; break;
+            case TOKEN_DIV_ASSIGN: binop = BINOP_DIV; break;
+            case TOKEN_MOD_ASSIGN: binop = BINOP_MOD; break;
+            case TOKEN_BITAND_ASSIGN: binop = BINOP_BITAND; break;
+            case TOKEN_BITOR_ASSIGN: binop = BINOP_BITOR; break;
+            case TOKEN_BITXOR_ASSIGN: binop = BINOP_BITXOR; break;
+            default: assert(0); break;
+            }
+
+            AstExpr *subexpr = NEW(p->compiler, AstExpr);
+            subexpr->kind = EXPR_BINARY;
+            subexpr->binary.op = binop;
+            subexpr->binary.left = left;
+            subexpr->binary.right = right;
+
+            expr->var_assign.value_expr = subexpr;
+
+            parserEndLoc(p, &loc);
+            expr->loc = loc;
+            subexpr->loc = loc;
+        }
     }
 
     return expr;

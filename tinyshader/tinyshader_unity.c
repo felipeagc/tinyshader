@@ -1,6 +1,9 @@
 /**
  * This file is part of the tinyshader library.
  * See tinyshader.h for license details.
+ *
+ * Use this file to build the entire library in one compilation unit.
+ *
  */
 #include "tinyshader.c"
 #include "tinyshader_misc.c"

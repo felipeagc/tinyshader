@@ -184,18 +184,18 @@ typedef enum TokenKind {
     TOKEN_GREATER,   // >
     TOKEN_GREATEREQ, // >=
 
-    TOKEN_ADDEQ, // +=
-    TOKEN_SUBEQ, // -=
-    TOKEN_MULEQ, // *=
-    TOKEN_DIVEQ, // /=
-    TOKEN_MODEQ, // %=
+    TOKEN_ADD_ASSIGN, // +=
+    TOKEN_SUB_ASSIGN, // -=
+    TOKEN_MUL_ASSIGN, // *=
+    TOKEN_DIV_ASSIGN, // /=
+    TOKEN_MOD_ASSIGN, // %=
 
-    TOKEN_BITANDEQ, // &=
-    TOKEN_BITOREQ,  // |=
-    TOKEN_BITXOREQ, // ^=
+    TOKEN_BITAND_ASSIGN, // &=
+    TOKEN_BITOR_ASSIGN,  // |=
+    TOKEN_BITXOR_ASSIGN, // ^=
 
-    TOKEN_LSHIFTEQ, // <<=
-    TOKEN_RSHIFTEQ, // >>=
+    TOKEN_LSHIFT_ASSIGN, // <<=
+    TOKEN_RSHIFT_ASSIGN, // >>=
 
     TOKEN_AND, // &&
     TOKEN_OR,  // ||
