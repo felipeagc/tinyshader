@@ -1,7 +1,20 @@
 # Tinyshader
 **Lightweight, easy to embed HLSL to SPIR-V compiler written in C99**
 
-## Usage
+## Using the command-line compiler
+The command-line compiler sources are located under the folder `tsc` and
+can be used as follows:
+
+```
+Usage: tsc <input file path>
+    --shader-stage | -T <vertex|fragment|compute>
+    --entry-point | -E <entry point name>
+    -o <output file path>
+```
+
+## Using the compiler as a library
+The compiler library sources are located under the folder `tinyshader` and
+can be used as follows:
 
 ```c
 #include "tinyshader.h"
@@ -29,14 +42,15 @@ uint8_t *spirv = output.spirv;
 size_t spirv_byte_size = output.spirv_byte_size;
 
 // Cleanup
-tsCompilerOutputDestroy(&output);
+tsCompilerOutputDestroy(&output); // This frees output.spirv
 tsCompilerDestroy(compiler);
 ```
 
 ## Compiling
-Compiling tinyshader is very simple, you just need to compile the `src/tinyshader_*.c`
-files (except `src/tinyshader_unity.c`), no complicated build system involved.
-Alternatively you can also compile `src/tinyshader_unity.c` to compile all of the files in one go.
+Compiling tinyshader is very simple, you just need to compile the `tinyshader/tinyshader_*.c`
+files (except `tinyshader/tinyshader_unity.c`), no complicated build system involved.
+Alternatively you can also compile `tinyshader/tinyshader_unity.c` to compile all of
+the files in one go.
 
 ## Goals and implemented features
 The goal of this compiler is to be as compatible as possible with
