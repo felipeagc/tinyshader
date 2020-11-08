@@ -1,0 +1,37 @@
+name: build
+
+on: [push]
+
+env:
+  VulkanSDKVersion: 1.2.154.0
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    env:
+      VULKAN_SDK: $GITHUB_WORKSPACE/../$VulkanSDKVersion/x86_64/
+    steps:
+    - uses: actions/checkout@v1
+    - uses: actions/setup-python@v1
+      with:
+        python-version: '3.x'
+    - name: Cache
+      id: cache
+      uses: actions/cache@v1.1.2
+      with:
+        path: ${{env.VULKAN_SDK}}
+        key: VulkanSdk${{env.VulkanSDKVersion}}ExtractedLinux
+    - name: Download & Extract Vulkan SDK
+      if: steps.cache.outputs.cache-hit != 'true'
+      run: |
+        wget --no-cookies -O ../vulkansdk-linux-x86_64-${{env.VulkanSDKVersion}}.tar.gz https://sdk.lunarg.com/sdk/download/${{env.VulkanSDKVersion}}/linux/vulkansdk-linux-x86_64-${{env.VulkanSDKVersion}}.tar.gz?u=
+        tar -zxf ../vulkansdk-linux-x86_64-${{env.VulkanSDKVersion}}.tar.gz -C $GITHUB_WORKSPACE/../
+        echo ${{env.VULKAN_SDK}}/bin >> $GITHUB_PATH
+    - name: CMake
+      run: |
+        cmake -Bbuild .
+    - name: Build
+      run: cmake --build build
+    - name: Test
+      run: |
+        echo $PATH
+        python3 ./tests/run_tests.py
