@@ -2604,6 +2604,28 @@ static AstDecl *parseTopLevel(Parser *p)
         Token *name_tok = parserConsume(p, TOKEN_IDENT);
         if (!name_tok) return NULL;
 
+        if (parserPeek(p, 0)->kind == TOKEN_COLON)
+        {
+            parserNext(p, 1);
+
+            if (!parserConsume(p, TOKEN_REGISTER)) return NULL;
+
+            if (!parserConsume(p, TOKEN_LPAREN)) return NULL;
+
+            while (!parserIsAtEnd(p) && parserPeek(p, 0)->kind != TOKEN_RPAREN)
+            {
+                AstExpr *param = parseExpr(p);
+                if (!param) return NULL;
+
+                if (parserPeek(p, 0)->kind != TOKEN_RPAREN)
+                {
+                    if (!parserConsume(p, TOKEN_COMMA)) return NULL;
+                }
+            }
+
+            if (!parserConsume(p, TOKEN_RPAREN)) return NULL;
+        }
+
         if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
 
         AstDecl *decl = NEW(compiler, AstDecl);

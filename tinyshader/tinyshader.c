@@ -74,6 +74,7 @@ TsCompiler *tsCompilerCreate()
 
     ts__hashSet(&compiler->keyword_table, "static", (void *)TOKEN_STATIC);
     ts__hashSet(&compiler->keyword_table, "groupshared", (void *)TOKEN_GROUPSHARED);
+    ts__hashSet(&compiler->keyword_table, "register", (void *)TOKEN_REGISTER);
 
     ts__hashSet(&compiler->builtin_function_table, "dot", (void *)AST_BUILTIN_FUNC_DOT);
     ts__hashSet(&compiler->builtin_function_table, "cross", (void *)AST_BUILTIN_FUNC_CROSS);

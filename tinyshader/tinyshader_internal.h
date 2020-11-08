@@ -252,6 +252,7 @@ typedef enum TokenKind {
 
     TOKEN_STATIC,
     TOKEN_GROUPSHARED,
+    TOKEN_REGISTER,
 } TokenKind;
 
 typedef struct Token

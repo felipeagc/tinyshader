@@ -4,7 +4,7 @@ struct BufType
     float f;
 };
 
-StructuredBuffer<BufType> Buffer0;
+StructuredBuffer<BufType> Buffer0 : register(t0, space0); // register is ignored
 
 groupshared uint a;
 
@@ -64,7 +64,6 @@ void main(
     if (0.0f && my_bool) {
         AllMemoryBarrier();
     }
-
 
     // uint2 my_data_dims;
     // Buffer0.GetDimensions(my_data_dims.x, my_data_dims.y);
