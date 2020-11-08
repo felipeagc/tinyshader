@@ -225,10 +225,6 @@ typedef enum TokenKind {
     TOKEN_TEXTURE_2D,
     TOKEN_TEXTURE_3D,
     TOKEN_TEXTURE_CUBE,
-    TOKEN_SAMPLED_TEXTURE_1D,
-    TOKEN_SAMPLED_TEXTURE_2D,
-    TOKEN_SAMPLED_TEXTURE_3D,
-    TOKEN_SAMPLED_TEXTURE_CUBE,
 
     TOKEN_DISCARD,
 
@@ -253,6 +249,8 @@ typedef enum TokenKind {
     TOKEN_STATIC,
     TOKEN_GROUPSHARED,
     TOKEN_REGISTER,
+
+    TOKEN_MAX,
 } TokenKind;
 
 typedef struct Token
