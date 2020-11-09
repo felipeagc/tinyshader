@@ -11,9 +11,14 @@ if not os.path.exists("./build"):
 subprocess.run(["cmake", "--build", "build"])
 
 if os.name == "nt":
-    compiler_exe = os.path.join(os.getcwd(), "build", "tsc.exe")
+    if os.path.exists("build/tsc.exe"):
+        compiler_exe = "build/tsc.exe"
+    elif os.path.exists("build/Debug/tsc.exe"):
+        compiler_exe = "build/Debug/tsc.exe"
+    elif os.path.exists("build/Release/tsc.exe"):
+        compiler_exe = "build/Release/tsc.exe"
 else:
-    compiler_exe = os.path.join(os.getcwd(), "build", "tsc")
+    compiler_exe = "./build/tsc"
 
 failed_tests = []
 

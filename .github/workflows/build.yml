@@ -2,16 +2,15 @@ name: build
 
 on: [push]
 
-env:
-  VulkanSDKVersion: 1.2.154.0
 jobs:
   linux:
     runs-on: ubuntu-latest
     env:
-      VULKAN_SDK: $GITHUB_WORKSPACE/../$VulkanSDKVersion/x86_64/
+      VULKAN_VERSION: 1.2.154.0
+      VULKAN_SDK: ${{github.workspace}}/1.2.154.0/x86_64/
     steps:
-    - uses: actions/checkout@v1
-    - uses: actions/setup-python@v1
+    - uses: actions/checkout@v2
+    - uses: actions/setup-python@v2
       with:
         python-version: '3.x'
     - name: Cache
@@ -19,12 +18,12 @@ jobs:
       uses: actions/cache@v1.1.2
       with:
         path: ${{env.VULKAN_SDK}}
-        key: VulkanSdk${{env.VulkanSDKVersion}}ExtractedLinux
+        key: VulkanSdk${{env.VULKAN_VERSION}}ExtractedLinux3
     - name: Download & Extract Vulkan SDK
       if: steps.cache.outputs.cache-hit != 'true'
       run: |
-        wget --no-cookies -O ../vulkansdk-linux-x86_64-${{env.VulkanSDKVersion}}.tar.gz https://sdk.lunarg.com/sdk/download/${{env.VulkanSDKVersion}}/linux/vulkansdk-linux-x86_64-${{env.VulkanSDKVersion}}.tar.gz?u=
-        tar -zxf ../vulkansdk-linux-x86_64-${{env.VulkanSDKVersion}}.tar.gz -C $GITHUB_WORKSPACE/../
+        wget --no-cookies -O ../vulkansdk-linux-x86_64-${{env.VULKAN_VERSION}}.tar.gz https://sdk.lunarg.com/sdk/download/${{env.VULKAN_VERSION}}/linux/vulkansdk-linux-x86_64-${{env.VULKAN_VERSION}}.tar.gz?u=
+        tar -zxf ../vulkansdk-linux-x86_64-${{env.VULKAN_VERSION}}.tar.gz -C $GITHUB_WORKSPACE/
         echo ${{env.VULKAN_SDK}}/bin >> $GITHUB_PATH
     - name: CMake
       run: |
@@ -32,6 +31,35 @@ jobs:
     - name: Build
       run: cmake --build build
     - name: Test
+      run: python3 ./tests/run_tests.py
+  windows:
+    runs-on: windows-latest
+    env:
+      VULKAN_VERSION: 1.2.154.1
+      VULKAN_SDK: C:\VulkanSDK\1.2.154.1
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.x'
+    - name: Cache
+      id: cache
+      uses: actions/cache@v1.1.2
+      with:
+        path: ${{env.VULKAN_SDK}}
+        key: VulkanSdk${{env.VULKAN_VERSION}}ExtractedWindows2
+    - name: Download & Install Vulkan SDK
+      if: steps.cache.outputs.cache-hit != 'true'
       run: |
-        echo $PATH
-        python3 ./tests/run_tests.py
+        Invoke-WebRequest -Uri https://sdk.lunarg.com/sdk/download/${{env.VULKAN_VERSION}}/windows/VulkanSDK-${{env.VULKAN_VERSION}}-Installer.exe?u= -OutFile ../vulkan-sdk-${{env.VULKAN_VERSION}}.exe
+        $installer = Start-Process -FilePath ../vulkan-sdk-${{env.VULKAN_VERSION}}.exe -Wait -PassThru -ArgumentList @("/S");
+        $installer.WaitForExit();
+        echo ${{env.VULKAN_SDK}}/bin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8
+    - name: Add msbuild to PATH
+      uses: microsoft/setup-msbuild@v1.0.2
+    - name: CMake
+      run: cmake -Bbuild -G "Visual Studio 16 2019" -A x64 .
+    - name: Build
+      run: cmake --build build
+    - name: Test
+      run: python ./tests/run_tests.py
