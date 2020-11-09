@@ -16,6 +16,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <ctype.h>
 #include "spirv.h"
 #include "GLSL.std.450.h"
 #include "tinyshader.h"
@@ -25,6 +26,8 @@
 
 void *ts__arrayGrow(
     TsCompiler *compiler, void *ptr, size_t *cap, size_t wanted_cap, size_t item_size);
+
+int ts__strcasecmp(const char *_l, const char *_r);
 
 #define ARRAY_OF(type)                                                                   \
     struct                                                                               \

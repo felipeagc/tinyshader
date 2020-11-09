@@ -992,7 +992,6 @@ static Scope *analyzerCurrentScope(Analyzer *a)
 static void analyzerTryRegisterDecl(Analyzer *a, AstDecl *decl)
 {
     if (!decl->name) return;
-    if (strcmp(decl->name, "_") == 0) return; // We don't register underscore names
 
     Scope *scope = analyzerCurrentScope(a);
 
@@ -3660,7 +3659,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                 {
                     AstAttribute *attr = &decl->attributes.ptr[i];
 
-                    if (strcmp(attr->name, "numthreads") == 0)
+                    if (ts__strcasecmp(attr->name, "numthreads") == 0)
                     {
                         got_numthreads = true;
                         if (arrLength(attr->values) != 3)
@@ -3775,7 +3774,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
 
             if (param_decl->var.semantic)
             {
-                if (strcmp(param_decl->var.semantic, "SV_Position") == 0 &&
+                if (ts__strcasecmp(param_decl->var.semantic, "SV_Position") == 0 &&
                     *decl->func.execution_model == SpvExecutionModelFragment)
                 {
                     IRDecoration dec = {0};
@@ -3784,7 +3783,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                     arrPush(compiler, &param_decl->decorations, dec);
                 }
                 else if (
-                    strcmp(param_decl->var.semantic, "SV_InstanceID") == 0 &&
+                    ts__strcasecmp(param_decl->var.semantic, "SV_InstanceID") == 0 &&
                     *decl->func.execution_model == SpvExecutionModelVertex)
                 {
                     IRDecoration dec = {0};
@@ -3793,7 +3792,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                     arrPush(compiler, &param_decl->decorations, dec);
                 }
                 else if (
-                    strcmp(param_decl->var.semantic, "SV_VertexID") == 0 &&
+                    ts__strcasecmp(param_decl->var.semantic, "SV_VertexID") == 0 &&
                     *decl->func.execution_model == SpvExecutionModelVertex)
                 {
                     IRDecoration dec = {0};
@@ -3802,7 +3801,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                     arrPush(compiler, &param_decl->decorations, dec);
                 }
                 else if (
-                    strcmp(param_decl->var.semantic, "SV_DispatchThreadID") == 0 &&
+                    ts__strcasecmp(param_decl->var.semantic, "SV_DispatchThreadID") == 0 &&
                     *decl->func.execution_model == SpvExecutionModelGLCompute)
                 {
                     IRDecoration dec = {0};
@@ -3811,7 +3810,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                     arrPush(compiler, &param_decl->decorations, dec);
                 }
                 else if (
-                    strcmp(param_decl->var.semantic, "SV_GroupID") == 0 &&
+                    ts__strcasecmp(param_decl->var.semantic, "SV_GroupID") == 0 &&
                     *decl->func.execution_model == SpvExecutionModelGLCompute)
                 {
                     IRDecoration dec = {0};
@@ -3820,7 +3819,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                     arrPush(compiler, &param_decl->decorations, dec);
                 }
                 else if (
-                    strcmp(param_decl->var.semantic, "SV_GroupIndex") == 0 &&
+                    ts__strcasecmp(param_decl->var.semantic, "SV_GroupIndex") == 0 &&
                     *decl->func.execution_model == SpvExecutionModelGLCompute)
                 {
                     IRDecoration dec = {0};
@@ -3829,7 +3828,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                     arrPush(compiler, &param_decl->decorations, dec);
                 }
                 else if (
-                    strcmp(param_decl->var.semantic, "SV_GroupThreadID") == 0 &&
+                    ts__strcasecmp(param_decl->var.semantic, "SV_GroupThreadID") == 0 &&
                     *decl->func.execution_model == SpvExecutionModelGLCompute)
                 {
                     IRDecoration dec = {0};
@@ -3856,7 +3855,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
 
             if (param_decl->var.semantic)
             {
-                if (strcmp(param_decl->var.semantic, "SV_Position") == 0 &&
+                if (ts__strcasecmp(param_decl->var.semantic, "SV_Position") == 0 &&
                     *decl->func.execution_model == SpvExecutionModelVertex)
                 {
                     IRDecoration dec = {0};
