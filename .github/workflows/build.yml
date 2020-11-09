@@ -1,7 +1,7 @@
 name: build
-
-on: [push]
-
+on:
+  push:
+  pull_request:
 jobs:
   linux:
     runs-on: ubuntu-latest
@@ -24,10 +24,11 @@ jobs:
       run: |
         wget --no-cookies -O ../vulkansdk-linux-x86_64-${{env.VULKAN_VERSION}}.tar.gz https://sdk.lunarg.com/sdk/download/${{env.VULKAN_VERSION}}/linux/vulkansdk-linux-x86_64-${{env.VULKAN_VERSION}}.tar.gz?u=
         tar -zxf ../vulkansdk-linux-x86_64-${{env.VULKAN_VERSION}}.tar.gz -C $GITHUB_WORKSPACE/
+    - name: Add vulkan SDK to PATH
+      run: |
         echo ${{env.VULKAN_SDK}}/bin >> $GITHUB_PATH
     - name: CMake
-      run: |
-        cmake -Bbuild .
+      run: cmake -Bbuild .
     - name: Build
       run: cmake --build build
     - name: Test
@@ -54,6 +55,8 @@ jobs:
         Invoke-WebRequest -Uri https://sdk.lunarg.com/sdk/download/${{env.VULKAN_VERSION}}/windows/VulkanSDK-${{env.VULKAN_VERSION}}-Installer.exe?u= -OutFile ../vulkan-sdk-${{env.VULKAN_VERSION}}.exe
         $installer = Start-Process -FilePath ../vulkan-sdk-${{env.VULKAN_VERSION}}.exe -Wait -PassThru -ArgumentList @("/S");
         $installer.WaitForExit();
+    - name: Add vulkan SDK to PATH
+      run: |
         echo ${{env.VULKAN_SDK}}/bin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8
     - name: Add msbuild to PATH
       uses: microsoft/setup-msbuild@v1.0.2
