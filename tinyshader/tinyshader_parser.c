@@ -468,7 +468,7 @@ static void preprocessFile(Preprocessor *p, File *file)
                     {
                         Location err_loc = preprocErrLoc(f);
                         ts__addErr(
-                            f->compiler, &err_loc, "#include'd file does not exist: '%s'", path);
+                            f->compiler, &err_loc, "included file does not exist: '%s'", path);
                         break;
                     }
 
@@ -493,6 +493,8 @@ static void preprocessFile(Preprocessor *p, File *file)
                         ts__createFile(f->compiler, text, text_size, full_path);
 
                     preprocessFile(p, new_file);
+
+                    f->line++; // HACK: need this to fix an off by one error in line numbers
                 }
             }
             else if (strncmp(curr, "#pragma", strlen("#pragma")) == 0)
