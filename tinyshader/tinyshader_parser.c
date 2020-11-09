@@ -2086,6 +2086,8 @@ static AstStmt *parseStmt(Parser *p)
     }
 
     case TOKEN_RETURN: {
+        Location stmt_loc = parserBeginLoc(p);
+
         parserNext(p, 1);
 
         AstStmt *stmt = NEW(compiler, AstStmt);
@@ -2101,10 +2103,15 @@ static AstStmt *parseStmt(Parser *p)
 
         if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
 
+        parserEndLoc(p, &stmt_loc);
+        stmt->loc = stmt_loc;
+
         return stmt;
     }
 
     case TOKEN_DISCARD: {
+        Location stmt_loc = parserBeginLoc(p);
+
         parserNext(p, 1);
 
         AstStmt *stmt = NEW(compiler, AstStmt);
@@ -2112,10 +2119,15 @@ static AstStmt *parseStmt(Parser *p)
 
         if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
 
+        parserEndLoc(p, &stmt_loc);
+        stmt->loc = stmt_loc;
+
         return stmt;
     }
 
     case TOKEN_CONTINUE: {
+        Location stmt_loc = parserBeginLoc(p);
+
         parserNext(p, 1);
 
         AstStmt *stmt = NEW(compiler, AstStmt);
@@ -2123,10 +2135,15 @@ static AstStmt *parseStmt(Parser *p)
 
         if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
 
+        parserEndLoc(p, &stmt_loc);
+        stmt->loc = stmt_loc;
+
         return stmt;
     }
 
     case TOKEN_BREAK: {
+        Location stmt_loc = parserBeginLoc(p);
+
         parserNext(p, 1);
 
         AstStmt *stmt = NEW(compiler, AstStmt);
@@ -2134,10 +2151,15 @@ static AstStmt *parseStmt(Parser *p)
 
         if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
 
+        parserEndLoc(p, &stmt_loc);
+        stmt->loc = stmt_loc;
+
         return stmt;
     }
 
     case TOKEN_IF: {
+        Location stmt_loc = parserBeginLoc(p);
+
         parserNext(p, 1);
         AstStmt *stmt = NEW(compiler, AstStmt);
         stmt->kind = STMT_IF;
@@ -2160,10 +2182,15 @@ static AstStmt *parseStmt(Parser *p)
             if (!stmt->if_.else_stmt) return NULL;
         }
 
+        parserEndLoc(p, &stmt_loc);
+        stmt->loc = stmt_loc;
+
         return stmt;
     }
 
     case TOKEN_WHILE: {
+        Location stmt_loc = parserBeginLoc(p);
+
         parserNext(p, 1);
         AstStmt *stmt = NEW(compiler, AstStmt);
         stmt->kind = STMT_WHILE;
@@ -2178,10 +2205,15 @@ static AstStmt *parseStmt(Parser *p)
         stmt->while_.stmt = parseStmt(p);
         if (!stmt->while_.stmt) return NULL;
 
+        parserEndLoc(p, &stmt_loc);
+        stmt->loc = stmt_loc;
+
         return stmt;
     }
 
     case TOKEN_DO: {
+        Location stmt_loc = parserBeginLoc(p);
+
         parserNext(p, 1);
         AstStmt *stmt = NEW(compiler, AstStmt);
         stmt->kind = STMT_DO_WHILE;
@@ -2200,10 +2232,15 @@ static AstStmt *parseStmt(Parser *p)
 
         if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
 
+        parserEndLoc(p, &stmt_loc);
+        stmt->loc = stmt_loc;
+
         return stmt;
     }
 
     case TOKEN_FOR: {
+        Location stmt_loc = parserBeginLoc(p);
+
         parserNext(p, 1);
         AstStmt *stmt = NEW(compiler, AstStmt);
         stmt->kind = STMT_FOR;
@@ -2242,10 +2279,15 @@ static AstStmt *parseStmt(Parser *p)
         stmt->for_.stmt = parseStmt(p);
         if (!stmt->for_.stmt) return NULL;
 
+        parserEndLoc(p, &stmt_loc);
+        stmt->loc = stmt_loc;
+
         return stmt;
     }
 
     case TOKEN_LCURLY: {
+        Location stmt_loc = parserBeginLoc(p);
+
         parserNext(p, 1);
 
         AstStmt *stmt = NEW(compiler, AstStmt);
@@ -2262,11 +2304,16 @@ static AstStmt *parseStmt(Parser *p)
 
         if (!parserConsume(p, TOKEN_RCURLY)) return NULL;
 
+        parserEndLoc(p, &stmt_loc);
+        stmt->loc = stmt_loc;
+
         return stmt;
     }
 
     case TOKEN_CONST:
     {
+        Location stmt_loc = parserBeginLoc(p);
+
         parserNext(p, 1);
 
         AstExpr *type_expr = parseExpr(p);
@@ -2298,10 +2345,16 @@ static AstStmt *parseStmt(Parser *p)
 
         if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
 
+        parserEndLoc(p, &stmt_loc);
+        stmt->loc = stmt_loc;
+        decl->loc = stmt_loc;
+
         return stmt;
     }
 
     default: {
+        Location stmt_loc = parserBeginLoc(p);
+
         AstExpr *expr = parseExpr(p);
         if (!expr) return NULL;
 
@@ -2312,6 +2365,9 @@ static AstStmt *parseStmt(Parser *p)
             AstStmt *stmt = NEW(compiler, AstStmt);
             stmt->kind = STMT_EXPR;
             stmt->expr = expr;
+
+            parserEndLoc(p, &stmt_loc);
+            stmt->loc = stmt_loc;
 
             return stmt;
         }
@@ -2340,6 +2396,10 @@ static AstStmt *parseStmt(Parser *p)
             stmt->decl = decl;
 
             if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
+
+            parserEndLoc(p, &stmt_loc);
+            decl->loc = stmt_loc;
+            stmt->loc = stmt_loc;
 
             return stmt;
         }
