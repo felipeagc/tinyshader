@@ -392,6 +392,7 @@ static uint32_t padToAlignment(uint32_t current, uint32_t align)
 
 static uint32_t typeAlignOf(Module *m, AstType *type)
 {
+    assert(type);
     if (type->align > 0) return type->align;
 
     uint32_t align = 1;
@@ -449,6 +450,7 @@ static uint32_t typeAlignOf(Module *m, AstType *type)
 
 static uint32_t typeSizeOf(Module *m, AstType *type)
 {
+    assert(type);
     if (type->size > 0) return type->size;
 
     uint32_t size = 0;
@@ -997,7 +999,7 @@ static void analyzerTryRegisterDecl(Analyzer *a, AstDecl *decl)
 
     if (scopeGetLocal(scope, decl->name))
     {
-        ts__addErr(a->compiler, &decl->loc, "duplicate declaration");
+        ts__addErr(a->compiler, &decl->loc, "duplicate declaration: '%s'", decl->name);
     }
     else
     {
@@ -1220,7 +1222,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
         AstDecl *decl = scopeGetGlobal(scope, expr->ident.name);
         if (!decl)
         {
-            ts__addErr(compiler, &expr->loc, "unknown identifier");
+            ts__addErr(compiler, &expr->loc, "unknown identifier: '%s'", expr->ident.name);
             break;
         }
 
@@ -1375,16 +1377,16 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                     case 'w': positions[j] = 3; break;
 
                     default:
-                        ts__addErr(compiler, &right->loc, "invalid vector shuffle");
+                        ts__addErr(compiler, &right->loc, "invalid vector shuffle: '%s'", selector);
                         valid = false;
                         break;
                     }
 
                     if (positions[j] >= left->type->vector.size)
                     {
-                        ts__addErr(compiler, &right->loc, "invalid vector shuffle");
-                        break;
+                        ts__addErr(compiler, &right->loc, "invalid vector shuffle: '%s'", selector);
                         valid = false;
+                        break;
                     }
 
                     if (!valid) break;
@@ -4053,7 +4055,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
             ts__addErr(
                 compiler,
                 &decl->loc,
-                "struct field type expression does not represent a type");
+                "could not resolve type of struct field '%s'", decl->name);
         }
 
         decl->type = decl->struct_field.type_expr->as_type;
@@ -4080,6 +4082,8 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
         decl->scope = NEW(compiler, Scope);
         scopeInit(compiler, decl->scope, scope, NULL);
 
+        bool got_all_field_types = true;
+
         analyzerPushScope(a, decl->scope);
         for (uint32_t i = 0; i < arrLength(decl->struct_.fields); ++i)
         {
@@ -4089,8 +4093,22 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
             analyzerAnalyzeDecl(a, field);
 
             field_types[i] = field->type;
+            if (!field_types[i])
+            {
+                got_all_field_types = false;
+            }
         }
         analyzerPopScope(a, decl->scope);
+
+        if (!got_all_field_types)
+        {
+            ts__addErr(
+                a->compiler,
+                &decl->loc,
+                "could not create a complete struct type for '%s'",
+                decl->name);
+            break;
+        }
 
         decl->type = newBasicType(m, TYPE_TYPE);
         decl->as_type = newStructType(

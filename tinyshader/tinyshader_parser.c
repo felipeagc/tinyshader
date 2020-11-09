@@ -468,7 +468,7 @@ static void preprocessFile(Preprocessor *p, File *file)
                     {
                         Location err_loc = preprocErrLoc(f);
                         ts__addErr(
-                            f->compiler, &err_loc, "#include'd file does not exist");
+                            f->compiler, &err_loc, "#include'd file does not exist: '%s'", path);
                         break;
                     }
 
@@ -476,7 +476,7 @@ static void preprocessFile(Preprocessor *p, File *file)
                     if (!cfile)
                     {
                         Location err_loc = preprocErrLoc(f);
-                        ts__addErr(f->compiler, &err_loc, "could not open included file");
+                        ts__addErr(f->compiler, &err_loc, "could not open included file: '%s'", path);
                         break;
                     }
 
@@ -2580,6 +2580,8 @@ static AstDecl *parseTopLevel(Parser *p)
 
         while (parserPeek(p, 0)->kind != TOKEN_RCURLY)
         {
+            Location field_decl_loc = parserBeginLoc(p);
+
             AstExpr *type_expr = parsePrefixedUnaryExpr(p);
             if (!type_expr) return NULL;
 
@@ -2600,6 +2602,9 @@ static AstDecl *parseTopLevel(Parser *p)
             }
 
             if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
+
+            parserEndLoc(p, &field_decl_loc);
+            field_decl->loc = field_decl_loc;
 
             arrPush(p->compiler, &decl->struct_.fields, field_decl);
         }

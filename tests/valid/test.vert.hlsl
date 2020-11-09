@@ -12,7 +12,7 @@ struct Uniform
 {
 	float4 yoo;
 	float hey;
-	/* Hello hello; */
+	Hello hello;
 	float4x4 transform;
 	float4x4 view;
 };
@@ -34,11 +34,9 @@ float rand(float2 uv)
 void main(
 	in uint vertexIndex : SV_VertexID,
 	in float3 pos : Heyy,
-	out float4 out_pos : SV_Position,
+	out float4 out_pos : SV_POSITION,
 	out float2 out_uv : AAA)
 {
-	/* uint a = (vertexIndex << 1) & 2; */
-
 	float3x3 my_matrix = float3x3(1, 2, 3, 4, 5, 6, 7, 8, 9);
 
 	out_uv = float2(float((vertexIndex << 1) & 2), float(vertexIndex & 2));
@@ -46,70 +44,62 @@ void main(
     out_pos = float4(temp.x, temp.y, 0.0, 1.0);
 
 	float noise = rand(out_uv);
-	float2 a = sin(float2(1, 1));
+	float2 a2 = sin(float2(1, 1));
 
-	/* out_uv = float2((vertexIndex << 1) & 2, vertexIndex & 2); */
-    /* out_pos = float4(out_uv * 2.0f - 1.0f, 0.0f, 1.0f); */
+    {
+        out_uv = float2(float((vertexIndex << 1) & 2), float(vertexIndex & 2));
+        out_pos = float4(out_uv * 2.0f - 1.0f, 0.0f, 1.0f);
+    }
 
-	// float aaaaaaa = HELLO;
-	// int other = 12;
-	// int hello = 777777;
-	// hello = 321;
-	// other = hello;
-	// int another = other;
+    {
+        Hello struct_var;
+        struct_var.a = 123;
+        struct_var.c.c.c = 123;
+        struct_var.c.vec.x = 123;
+    }
 
-	// float3 heyy;
-	// float4x4 mat;
+    {
+        int a = 123;
+        float b = float(a);
+        int c = int(b);
 
-	// Hello struct_var;
-	// struct_var.a = 123;
-	// struct_var.c.c.c = 123;
-	// struct_var.c.vec.x = 123;
+        float3 hey = float3(123, 123, 123);
+        float2 hey1 = float2(123, 123);
+        float4 hey2 = float4(b, b, b, b);
+        float3 vec = float3(1, 2, 3);
+        float shuffled = -vec.yz.x;
+        float yoo = dot(vec, vec);
+        float shuffled2 = float3(yoo, yoo, yoo).yz.x;
+        bool my_bool = vec.x == vec.y;
 
+        float3 new_vec = vec / float3(shuffled, shuffled, shuffled);
+        out_pos = mul(gInput.yoo, mul(gInput.view, gInput.transform)).xyzw;
+        // otherFunc(pos);
+        out_pos = float4(pos, 1.0);
+        my_bool = pos.x > 1;
+    }
 
-	// otherFunc(123);
+    {
+        pos = normalize(pos);
+        pos.x = distance(pos, pos);
 
-	// float3 a;
-	// float3 b;
-	// float c = dot(a, b);
+        while (pos.x > 0.0)
+        {
+            pos.x = pos.x - 1.0;
+        }
+    }
 
-	// float my_float = otherFunc(123.123);
+    {
+        float clamped = clamp(log2(123), 0, 1);
+        float a = smoothstep(0, 1, 213) * 123 * 3 * 2 * 2;
+        float2x3 mat;
+        float3x2 mat2 = transpose(mat);
+        float3x3 mat3;
+        float b = determinant(mat3);
+    }
 
-	// int a = 123;
-	// float b = float(a);
-	// int c = int(b);
-
-	// float3 hey = float3(123, 123, 123);
-	// float2 hey1 = float2(123, 123);
-	// float4 hey2 = float4(b, b, b, b);
-	// float4 hey3 = float4(b);
-	// float3 vec = float3(1, 2, 3);
-	// float shuffled = -vec.yz.x;
-	// float yoo = dot(vec, vec);
-	// float shuffled2 = float3(yoo, yoo, yoo).yz.x;
-	// bool hey = vec.x == vec.y;
-
-	// float3 new_vec = vec / float3(shuffled, shuffled, shuffled);
-	// otherFunc(123);
-	// out_pos = mul(gInput.yoo, mul(gInput.view, gInput.transform)).xyz;
-	// otherFunc(pos);
-	// out_pos = pos;
-	// bool hey = pos.x > 1;
-
-	// pos = normalize(pos);
-
-	// distance(pos, pos);
-	// while (pos.x > 0.0) {
-	// 	pos.x = pos.x - 1.0;
-	// }
-
-	// clamp(log2(123), 0, 1);
-	// float a = smoothstep(0, 1, 213) * 123 * 3 * 2 * 2;
-	// float2x3 mat;
-	// float3x2 mat2 = transpose(mat);
-	// float b = determinant(mat);
-
-	// if (pos.x > 0.0) {
-	// 	pos.x = sqrt(123.0);
-	// }
+	if (pos.x > 0.0)
+    {
+		pos.x = sqrt(123.0);
+	}
 }

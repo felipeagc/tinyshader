@@ -13,7 +13,7 @@ struct Uniform
 {
 	float4 yoo;
 	float hey;
-	/* Hello hello; */
+	Hello hello;
 	float4x4 transform;
 	float4x4 view;
 };

@@ -5,4 +5,21 @@ struct IncludedStruct {
 
 };
 
+struct StructB
+{
+    float c;
+};
+
+struct StructA
+{
+    StructB c;
+    float3 vec;
+};
+
+struct Hello
+{
+    uint a;
+    StructA c;
+};
+
 #endif
