@@ -2989,6 +2989,12 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
                 analyzerAnalyzeExpr(a, params.ptr[0], NULL);
 
+                if (!params.ptr[0]->type)
+                {
+                    assert(compiler->errors.len > 0);
+                    break;
+                }
+
                 if (!isTypeCastable(params.ptr[0]->type, wanted_elem_type))
                 {
                     ts__addErr(
