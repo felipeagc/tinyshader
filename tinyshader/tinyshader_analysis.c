@@ -3285,7 +3285,9 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                     ts__addErr(
                         compiler,
                         &expr->loc,
-                        "invalid types for binary arithmentic operation");
+                        "invalid types for binary arithmentic operation: '%s' and '%s'",
+                        typeToPrettyString(compiler, left_type),
+                        typeToPrettyString(compiler, right_type));
                     break;
                 }
 
@@ -3299,7 +3301,9 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                     ts__addErr(
                         compiler,
                         &expr->loc,
-                        "invalid types for binary arithmentic operation");
+                        "invalid types for binary arithmentic operation: '%s' and '%s'",
+                        typeToPrettyString(compiler, left_type),
+                        typeToPrettyString(compiler, right_type));
                     break;
                 }
 
@@ -3316,13 +3320,27 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                     vector_type = left_type;
                     scalar_type = right_type;
                 }
-                if (right_type->kind == TYPE_VECTOR)
+                else if (right_type->kind == TYPE_VECTOR)
                 {
                     assert(!vector_type);
                     vector_type = right_type;
                     scalar_type = left_type;
                 }
+                else
+                {
+                    ts__addErr(
+                        compiler,
+                        &expr->loc,
+                        "invalid types for binary arithmentic operation: '%s' and '%s'",
+                        typeToPrettyString(compiler, left_type),
+                        typeToPrettyString(compiler, right_type));
+                    break;
+                }
+
                 assert(vector_type);
+                assert(scalar_type);
+                assert(vector_type->kind == TYPE_VECTOR);
+                assert(scalar_type->kind != TYPE_VECTOR);
 
                 if (ts__getScalarType(vector_type) != scalar_type)
                 {
