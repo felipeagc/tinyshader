@@ -28,6 +28,8 @@ def test_dir(dir, expected_result):
     else:
         print("\n=== Running INVALID tests ===")
 
+    outdir = dir + '_out'
+
     for filename in os.listdir(dir):
         splitname = os.path.splitext(filename)
         if splitname[1] != ".hlsl":
@@ -35,8 +37,8 @@ def test_dir(dir, expected_result):
 
         no_ext_name = splitname[0]
         fullpath = os.path.join(dir, filename)
-        out_path = os.path.join(dir, no_ext_name + ".spv")
-        dxc_out_path = os.path.join(dir, no_ext_name + ".dxc.spv")
+        out_path = os.path.join(outdir, no_ext_name + ".spv")
+        dxc_out_path = os.path.join(outdir, no_ext_name + ".dxc.spv")
 
         stage = None
         dxc_stage = None

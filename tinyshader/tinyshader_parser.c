@@ -130,13 +130,14 @@ typedef struct PreprocessorFile
     ARRAY_OF(bool) if_stack;
 } PreprocessorFile;
 
-static inline bool preprocIsAtEnd(PreprocessorFile *f)
+static inline ptrdiff_t preprocLengthLeft(PreprocessorFile *f)
 {
-    return (f->pos >= f->file->text_size) || (f->file->text[f->pos] == '\0');
+    return (ptrdiff_t)(f->file->text_size) - (ptrdiff_t)(f->pos);
 }
 
 static inline char preprocNext(PreprocessorFile *f, size_t count)
 {
+    assert(preprocLengthLeft(f) >= (ptrdiff_t)count);
     char c = f->file->text[f->pos];
     f->pos += count;
     f->col += (uint32_t)count;
@@ -145,6 +146,7 @@ static inline char preprocNext(PreprocessorFile *f, size_t count)
 
 static inline char preprocPeek(PreprocessorFile *f, size_t offset)
 {
+    assert(preprocLengthLeft(f) > (ptrdiff_t)offset);
     return f->file->text[f->pos + offset];
 }
 
@@ -218,7 +220,7 @@ static bool preprocCanInsert(PreprocessorFile *f)
 
 static int preprocIsAtLineEnd(PreprocessorFile *f)
 {
-    if (preprocIsAtEnd(f)) return 0;
+    if (preprocLengthLeft(f) == 0) return 0;
 
     if (preprocPeek(f, 0) == '\n')
     {
@@ -244,23 +246,32 @@ static void preprocessFile(Preprocessor *p, File *file)
 
     preprocPrintLoc(p, f);
 
-    while (!preprocIsAtEnd(f))
+    while (preprocLengthLeft(f) > 0)
     {
-        char c;
-        switch ((c = preprocPeek(f, 0)))
+        char c = preprocPeek(f, 0);
+        switch (c)
         {
         case '#': {
-            const char *curr = &f->file->text[f->pos];
-            if (strncmp(curr, "#define", strlen("#define")) == 0)
+            preprocNext(f, 1);
+
+            ts__sbReset(&p->compiler->sb);
+
+            while (preprocLengthLeft(f) > 0 && isLetter(preprocPeek(f, 0))) {
+                ts__sbAppendChar(&p->compiler->sb, preprocNext(f, 1));
+            }
+
+            char *directive = ts__sbBuild(&p->compiler->sb, &p->compiler->alloc);
+            /* preprocNext(f, strlen(directive)); */
+
+            if (strcmp(directive, "define") == 0)
             {
                 if (preprocCanInsert(f))
                 {
-                    preprocNext(f, strlen("#define"));
                     if (!preprocSkipWhitespace1(f)) break;
 
                     size_t ident_start = f->pos;
 
-                    while (!preprocIsAtEnd(f) && isAlphanum(preprocPeek(f, 0)))
+                    while (preprocLengthLeft(f) >= 1 && isAlphanum(preprocPeek(f, 0)))
                     {
                         preprocNext(f, 1);
                     }
@@ -281,13 +292,13 @@ static void preprocessFile(Preprocessor *p, File *file)
 
                     char *defined_value = NULL;
 
-                    if (!preprocIsAtEnd(f) && isWhitespace(preprocPeek(f, 0)))
+                    if (preprocLengthLeft(f) >= 1 && isWhitespace(preprocPeek(f, 0)))
                     {
                         preprocSkipWhitespace1(f);
 
                         ts__sbReset(&p->compiler->sb);
 
-                        while (!preprocIsAtEnd(f) && !preprocIsAtLineEnd(f))
+                        while (preprocLengthLeft(f) >= 1 && !preprocIsAtLineEnd(f))
                         {
                             if (preprocPeek(f, 0) == '\\' && preprocIsAtLineEnd(f))
                             {
@@ -305,16 +316,15 @@ static void preprocessFile(Preprocessor *p, File *file)
                     ts__hashSet(&p->defines, ident, defined_value);
                 }
             }
-            else if (strncmp(curr, "#undef", strlen("#undef")) == 0)
+            else if (strcmp(directive, "undef") == 0)
             {
                 if (preprocCanInsert(f))
                 {
-                    preprocNext(f, strlen("#undef"));
                     if (!preprocSkipWhitespace1(f)) break;
 
                     size_t ident_start = f->pos;
 
-                    while (!preprocIsAtEnd(f) && isAlphanum(preprocPeek(f, 0)))
+                    while (preprocLengthLeft(f) >= 1 && isAlphanum(preprocPeek(f, 0)))
                     {
                         preprocNext(f, 1);
                     }
@@ -335,16 +345,15 @@ static void preprocessFile(Preprocessor *p, File *file)
                     ts__hashRemove(&p->defines, ident);
                 }
             }
-            else if (strncmp(curr, "#ifdef", strlen("#ifdef")) == 0)
+            else if (strcmp(directive, "ifdef") == 0)
             {
                 if (preprocCanInsert(f))
                 {
-                    preprocNext(f, strlen("#ifdef"));
                     if (!preprocSkipWhitespace1(f)) break;
 
                     size_t ident_start = f->pos;
 
-                    while (!preprocIsAtEnd(f) && isAlphanum(preprocPeek(f, 0)))
+                    while (preprocLengthLeft(f) >= 1 && isAlphanum(preprocPeek(f, 0)))
                     {
                         preprocNext(f, 1);
                     }
@@ -366,16 +375,15 @@ static void preprocessFile(Preprocessor *p, File *file)
                     arrPush(p->compiler, &f->if_stack, ts__hashGet(&p->defines, ident, &result));
                 }
             }
-            else if (strncmp(curr, "#ifndef", strlen("#ifndef")) == 0)
+            else if (strcmp(directive, "ifndef") == 0)
             {
                 if (preprocCanInsert(f))
                 {
-                    preprocNext(f, strlen("#ifndef"));
                     if (!preprocSkipWhitespace1(f)) break;
 
                     size_t ident_start = f->pos;
 
-                    while (!preprocIsAtEnd(f) && isAlphanum(preprocPeek(f, 0)))
+                    while (preprocLengthLeft(f) >= 1 && isAlphanum(preprocPeek(f, 0)))
                     {
                         preprocNext(f, 1);
                     }
@@ -398,10 +406,8 @@ static void preprocessFile(Preprocessor *p, File *file)
                     arrPush(p->compiler,&f->if_stack, !ts__hashGet(&p->defines, ident, &result));
                 }
             }
-            else if (strncmp(curr, "#else", strlen("#else")) == 0)
+            else if (strcmp(directive, "else") == 0)
             {
-                preprocNext(f, strlen("#else"));
-
                 if (arrLength(f->if_stack) == 0)
                 {
                     Location err_loc = preprocErrLoc(f);
@@ -412,10 +418,8 @@ static void preprocessFile(Preprocessor *p, File *file)
                 bool *insert = &f->if_stack.ptr[arrLength(f->if_stack) - 1];
                 *insert = !(*insert); // Invert the condition
             }
-            else if (strncmp(curr, "#endif", strlen("#endif")) == 0)
+            else if (strcmp(directive, "endif") == 0)
             {
-                preprocNext(f, strlen("#endif"));
-
                 if (arrLength(f->if_stack) == 0)
                 {
                     Location err_loc = preprocErrLoc(f);
@@ -424,18 +428,17 @@ static void preprocessFile(Preprocessor *p, File *file)
                 }
                 arrPop(&f->if_stack);
             }
-            else if (strncmp(curr, "#include", strlen("#include")) == 0)
+            else if (strcmp(directive, "include") == 0)
             {
                 if (preprocCanInsert(f))
                 {
-                    preprocNext(f, strlen("#include"));
                     if (!preprocSkipWhitespace1(f)) break;
 
                     if (!preprocConsume1(f, '\"')) break;
 
                     size_t path_start = f->pos;
 
-                    while (!preprocIsAtEnd(f) && (preprocPeek(f, 0) != '\"'))
+                    while (preprocLengthLeft(f) >= 1 && (preprocPeek(f, 0) != '\"'))
                     {
                         preprocNext(f, 1);
                     }
@@ -497,22 +500,22 @@ static void preprocessFile(Preprocessor *p, File *file)
                     f->line++; // HACK: need this to fix an off by one error in line numbers
                 }
             }
-            else if (strncmp(curr, "#pragma", strlen("#pragma")) == 0)
+            else if (strcmp(directive, "pragma") == 0)
             {
-                preprocNext(f, strlen("#pragma"));
+                // Pragma does nothing.
             }
             else
             {
                 Location err_loc = preprocErrLoc(f);
-                ts__addErr(p->compiler, &err_loc, "unexpected preprocessor directive");
+                ts__addErr(p->compiler, &err_loc, "unexpected preprocessor directive: '%s'", directive);
             }
 
-            while (!preprocIsAtEnd(f) && !preprocIsAtLineEnd(f))
+            while (preprocLengthLeft(f) >= 1 && !preprocIsAtLineEnd(f))
             {
                 preprocNext(f, 1);
             }
 
-            if (!preprocIsAtEnd(f) && preprocIsAtLineEnd(f))
+            if (preprocLengthLeft(f) >= 1 && preprocIsAtLineEnd(f))
             {
                 preprocNext(f, preprocIsAtLineEnd(f));
                 f->line++;
@@ -549,11 +552,11 @@ static void preprocessFile(Preprocessor *p, File *file)
 
                 preprocNext(f, preprocIsAtLineEnd(f));
             }
-            else if (isLetter(preprocPeek(f, 0)))
+            else if (preprocLengthLeft(f) >= 1 && isLetter(preprocPeek(f, 0)))
             {
                 size_t ident_start = f->pos;
 
-                while (!preprocIsAtEnd(f) && isAlphanum(preprocPeek(f, 0)))
+                while (preprocLengthLeft(f) >= 1 && isAlphanum(preprocPeek(f, 0)))
                 {
                     preprocNext(f, 1);
                 }
@@ -576,13 +579,13 @@ static void preprocessFile(Preprocessor *p, File *file)
 
                 free(ident);
             }
-            else if (preprocPeek(f, 0) == '/' && preprocPeek(f, 1) == '/')
+            else if (preprocLengthLeft(f) >= 2 && preprocPeek(f, 0) == '/' && preprocPeek(f, 1) == '/')
             {
                 size_t comment_start = f->pos;
 
                 preprocNext(f, 2);
 
-                while (!preprocIsAtEnd(f) && !preprocIsAtLineEnd(f))
+                while (preprocLengthLeft(f) >= 1 && !preprocIsAtLineEnd(f))
                 {
                     preprocNext(f, 1);
                 }
@@ -597,15 +600,15 @@ static void preprocessFile(Preprocessor *p, File *file)
 
                 free(comment);
             }
-            else if (preprocPeek(f, 0) == '/' && preprocPeek(f, 1) == '*')
+            else if (preprocLengthLeft(f) >= 2 && preprocPeek(f, 0) == '/' && preprocPeek(f, 1) == '*')
             {
                 size_t comment_start = f->pos;
 
                 // Multiline comment
                 preprocNext(f, 2);
 
-                while ((preprocPeek(f, 0) != '*' || preprocPeek(f, 1) != '/') &&
-                       !preprocIsAtEnd(f))
+                while (preprocLengthLeft(f) >= 2 &&
+                       !(preprocPeek(f, 0) == '*' && preprocPeek(f, 1) == '/') )
                 {
                     if (preprocIsAtLineEnd(f))
                     {
@@ -619,7 +622,7 @@ static void preprocessFile(Preprocessor *p, File *file)
                     }
                 }
 
-                if (!preprocIsAtEnd(f))
+                if (preprocLengthLeft(f) >= 2)
                 {
                     preprocNext(f, 2);
                 }
@@ -641,6 +644,7 @@ static void preprocessFile(Preprocessor *p, File *file)
             }
             else
             {
+                assert(preprocLengthLeft(f) >= 1);
                 preprocNext(f, 1);
 
                 if (preprocCanInsert(f))
@@ -1136,7 +1140,7 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
                 l->line++;
                 lexerNext(l, lexerIsAtLineEnd(l));
             }
-            else if (isLetter(lexerPeek(l, 0)))
+            else if (!lexerIsAtEnd(l) && isLetter(lexerPeek(l, 0)))
             {
                 while (!lexerIsAtEnd(l) && isAlphanum(lexerPeek(l, 0)))
                 {
@@ -1205,7 +1209,7 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
                     }
                 }
             }
-            else if (isNumeric(lexerPeek(l, 0)))
+            else if (!lexerIsAtEnd(l) && isNumeric(lexerPeek(l, 0)))
             {
                 if (lexerPeek(l, 0) == '0' && lexerPeek(l, 1) == 'x')
                 {
@@ -1308,7 +1312,7 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
                     }
                 }
             }
-            else
+            else if (!lexerIsAtEnd(l))
             {
                 Location err_loc = l->token.loc;
                 err_loc.length = 1;
@@ -1317,7 +1321,16 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
                 err_loc.pos = (uint32_t)l->pos;
                 err_loc.line = l->line;
                 err_loc.col = l->col;
-                ts__addErr(l->compiler, &err_loc, "unknown token");
+
+                char tok_char = lexerPeek(l, 0);
+                if (tok_char > 0)
+                {
+                    ts__addErr(l->compiler, &err_loc, "unknown token: '%c'", tok_char);
+                }
+                else
+                {
+                    ts__addErr(l->compiler, &err_loc, "unknown token: '%d'", (int)tok_char);
+                }
                 lexerNext(l, 1);
             }
 
@@ -1348,6 +1361,11 @@ void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size)
 
 static AstExpr *parseExpr(Parser *p);
 
+static inline ptrdiff_t parserLengthLeft(Parser *p)
+{
+    return (ptrdiff_t)(p->token_count) - (ptrdiff_t)(p->pos);
+}
+
 static inline bool parserIsAtEnd(Parser *p)
 {
     return p->pos >= p->token_count;
@@ -1355,7 +1373,7 @@ static inline bool parserIsAtEnd(Parser *p)
 
 static inline Token *parserPeek(Parser *p, size_t offset)
 {
-    if (p->pos + offset >= p->token_count)
+    if (parserLengthLeft(p) <= (ptrdiff_t)offset)
     {
         return &p->tokens[p->token_count - 1];
     }
@@ -1364,7 +1382,7 @@ static inline Token *parserPeek(Parser *p, size_t offset)
 
 static inline Token *parserNext(Parser *p, size_t count)
 {
-    if (parserIsAtEnd(p)) return NULL;
+    if (parserLengthLeft(p) <= 0) return NULL;
 
     Token *tok = &p->tokens[p->pos];
     p->pos += count;
@@ -1420,7 +1438,8 @@ static AstExpr *parseIdentExpr(Parser *p)
 
     default: {
         ts__addErr(
-            p->compiler, &parserNext(p, 1)->loc, "expecting identifier expression");
+            p->compiler, &parserPeek(p, 0)->loc, "expecting identifier expression");
+        parserNext(p, 1);
         break;
     }
     }
@@ -1470,7 +1489,8 @@ static AstExpr *parsePrimaryExpr(Parser *p)
     }
 
     default: {
-        ts__addErr(p->compiler, &parserNext(p, 1)->loc, "expecting primary expression");
+        ts__addErr(p->compiler, &parserPeek(p, 0)->loc, "expecting primary expression");
+        parserNext(p, 1);
         break;
     }
     }
@@ -2409,8 +2429,9 @@ static AstStmt *parseStmt(Parser *p)
         {
             ts__addErr(
                 compiler,
-                &parserNext(p, 1)->loc,
+                &parserPeek(p, 0)->loc,
                 "unexpected token, expecting ';' or identifier");
+            parserNext(p, 1);
         }
 
         break;
