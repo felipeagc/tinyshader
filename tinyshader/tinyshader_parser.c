@@ -2621,7 +2621,7 @@ static AstDecl *parseTopLevel(Parser *p)
                 parserNext(p, 1);
                 Token *semantic_tok = parserConsume(p, TOKEN_IDENT);
                 if (!semantic_tok) return NULL;
-                field_decl->struct_field.semantic = semantic_tok->str;
+                field_decl->semantic = semantic_tok->str;
             }
 
             if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
@@ -2879,7 +2879,7 @@ static AstDecl *parseTopLevel(Parser *p)
                     parserNext(p, 1);
                     Token *semantic_tok = parserConsume(p, TOKEN_IDENT);
                     if (!semantic_tok) return NULL;
-                    param_decl->var.semantic = semantic_tok->str;
+                    param_decl->semantic = semantic_tok->str;
                 }
 
                 parserEndLoc(p, &param_decl_loc);
@@ -2894,6 +2894,14 @@ static AstDecl *parseTopLevel(Parser *p)
             }
 
             if (!parserConsume(p, TOKEN_RPAREN)) return NULL;
+
+            if (parserPeek(p, 0)->kind == TOKEN_COLON)
+            {
+                parserNext(p, 1);
+                Token *semantic_tok = parserConsume(p, TOKEN_IDENT);
+                if (!semantic_tok) return NULL;
+                decl->semantic = semantic_tok->str;
+            }
 
             if (!parserConsume(p, TOKEN_LCURLY)) return NULL;
 

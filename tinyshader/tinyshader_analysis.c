@@ -1007,6 +1007,82 @@ static void analyzerTryRegisterDecl(Analyzer *a, AstDecl *decl)
     }
 }
 
+static void analyzerRecursivelyCheckForSemanticStrings(
+    Analyzer *a, AstDecl *decl)
+{
+    TsCompiler *compiler = a->compiler;
+
+    switch (decl->kind)
+    {
+    case DECL_FUNC:
+    {
+        for (uint32_t i = 0; i < decl->func.params.len; ++i)
+        {
+            AstDecl *param_decl = decl->func.params.ptr[i];
+            analyzerRecursivelyCheckForSemanticStrings(a, param_decl);
+        }
+
+        AstType *return_type = decl->func.return_type->as_type;
+        if (return_type->kind != TYPE_VOID)
+        {
+            if (return_type->kind == TYPE_STRUCT)
+            {
+                for (uint32_t i = 0; i < return_type->struct_.field_count; ++i)
+                {
+                    AstDecl *struct_field_decl = return_type->struct_.field_decls[i];
+                    analyzerRecursivelyCheckForSemanticStrings(a, struct_field_decl);
+                }
+            }
+            else if (!decl->semantic)
+            {
+                ts__addErr(
+                    compiler,
+                    &decl->loc,
+                    "function return value needs a semantic string");
+            }
+        }
+        break;
+    }
+
+    case DECL_VAR:
+    {
+        AstType *var_type = decl->type;
+        assert(var_type);
+
+        if (var_type->kind == TYPE_STRUCT)
+        {
+            for (uint32_t i = 0; i < var_type->struct_.field_count; ++i)
+            {
+                AstDecl *struct_field_decl = var_type->struct_.field_decls[i];
+                analyzerRecursivelyCheckForSemanticStrings(a, struct_field_decl);
+            }
+        }
+        else if (!decl->semantic)
+        {
+            ts__addErr(
+                compiler,
+                &decl->loc,
+                "variable declaration needs a semantic string");
+        }
+        break;
+    }
+
+    case DECL_STRUCT_FIELD:
+    {
+        if (!decl->semantic)
+        {
+            ts__addErr(
+                compiler,
+                &decl->loc,
+                "struct field declaration needs a semantic string");
+        }
+        break;
+    }
+
+    default: break;
+    }
+}
+
 static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_type)
 {
     TsCompiler *compiler = a->compiler;
@@ -3663,6 +3739,67 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
     switch (decl->kind)
     {
     case DECL_FUNC: {
+        decl->scope = NEW(compiler, Scope);
+        scopeInit(compiler, decl->scope, scope, decl);
+
+        analyzerAnalyzeExpr(a, decl->func.return_type, newBasicType(m, TYPE_TYPE));
+        AstType *return_type = decl->func.return_type->as_type;
+
+        if (!return_type)
+        {
+            ts__addErr(
+                compiler, &decl->loc, "could not resolve return type for function");
+            break;
+        }
+
+        bool param_types_valid = true;
+        AstType **param_types = NULL;
+        if (arrLength(decl->func.params) > 0)
+        {
+            param_types =
+                NEW_ARRAY(compiler, AstType *, arrLength(decl->func.params));
+        }
+
+        analyzerPushScope(a, decl->scope);
+        for (uint32_t i = 0; i < arrLength(decl->func.params); ++i)
+        {
+            AstDecl *param_decl = decl->func.params.ptr[i];
+            assert(param_decl->kind == DECL_VAR);
+
+            analyzerTryRegisterDecl(a, param_decl);
+            analyzerAnalyzeDecl(a, param_decl);
+            param_types[i] = param_decl->type;
+            if (!param_types[i])
+            {
+                ts__addErr(
+                    compiler,
+                    &param_decl->loc,
+                    "could not resolve type for function parameter");
+                param_types_valid = false;
+                continue;
+            }
+
+            if (param_decl->var.kind == VAR_OUT_PARAM)
+            {
+                // We pass a pointer when it's pass-by-reference
+                param_types[i] =
+                    newPointerType(m, SpvStorageClassFunction, param_types[i]);
+            }
+        }
+
+        if (param_types_valid)
+        {
+            decl->type = newFuncType(
+                m, return_type, param_types, arrLength(decl->func.params));
+        }
+
+        for (uint32_t i = 0; i < arrLength(decl->func.stmts); ++i)
+        {
+            AstStmt *stmt = decl->func.stmts.ptr[i];
+            analyzerAnalyzeStmt(a, stmt);
+        }
+        analyzerPopScope(a, decl->scope);
+
         if (strcmp(m->entry_point, decl->name) == 0)
         {
             decl->func.called = true;
@@ -3726,79 +3863,8 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
             }
             }
 
-            for (uint32_t i = 0; i < arrLength(decl->func.params); ++i)
-            {
-                AstDecl *param_decl = decl->func.params.ptr[i];
-                if (!param_decl->var.semantic)
-                {
-                    ts__addErr(
-                        compiler,
-                        &param_decl->loc,
-                        "entry point parameter needs a semantic string");
-                }
-            }
+            analyzerRecursivelyCheckForSemanticStrings(a, decl);
         }
-
-        decl->scope = NEW(compiler, Scope);
-        scopeInit(compiler, decl->scope, scope, decl);
-
-        analyzerAnalyzeExpr(a, decl->func.return_type, newBasicType(m, TYPE_TYPE));
-        AstType *return_type = decl->func.return_type->as_type;
-
-        if (!return_type)
-        {
-            ts__addErr(
-                compiler, &decl->loc, "could not resolve return type for function");
-            break;
-        }
-
-        bool param_types_valid = true;
-        AstType **param_types = NULL;
-        if (arrLength(decl->func.params) > 0)
-        {
-            param_types =
-                NEW_ARRAY(compiler, AstType *, arrLength(decl->func.params));
-        }
-
-        analyzerPushScope(a, decl->scope);
-        for (uint32_t i = 0; i < arrLength(decl->func.params); ++i)
-        {
-            AstDecl *param_decl = decl->func.params.ptr[i];
-            assert(param_decl->kind == DECL_VAR);
-
-            analyzerTryRegisterDecl(a, param_decl);
-            analyzerAnalyzeDecl(a, param_decl);
-            param_types[i] = param_decl->type;
-            if (!param_types[i])
-            {
-                ts__addErr(
-                    compiler,
-                    &param_decl->loc,
-                    "could not resolve type for function parameter");
-                param_types_valid = false;
-                continue;
-            }
-
-            if (param_decl->var.kind == VAR_OUT_PARAM)
-            {
-                // We pass a pointer when it's pass-by-reference
-                param_types[i] =
-                    newPointerType(m, SpvStorageClassFunction, param_types[i]);
-            }
-        }
-
-        if (param_types_valid)
-        {
-            decl->type = newFuncType(
-                m, return_type, param_types, arrLength(decl->func.params));
-        }
-
-        for (uint32_t i = 0; i < arrLength(decl->func.stmts); ++i)
-        {
-            AstStmt *stmt = decl->func.stmts.ptr[i];
-            analyzerAnalyzeStmt(a, stmt);
-        }
-        analyzerPopScope(a, decl->scope);
 
         break;
     }

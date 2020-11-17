@@ -1948,6 +1948,257 @@ static void astBuildDecl(Module *ast_mod, IRModule *ir_mod, AstDecl *decl)
     }
 }
 
+static bool astSemanticToDecoration(
+    Module *ast_mod,
+    char* semantic,
+    IRDecoration *dec)
+{
+    if (ts__strcasecmp(semantic, "SV_Position") == 0 &&
+        ast_mod->stage == TS_SHADER_STAGE_FRAGMENT)
+    {
+        dec->kind = SpvDecorationBuiltIn;
+        dec->value = SpvBuiltInFragCoord;
+    }
+    else if (ts__strcasecmp(semantic, "SV_Position") == 0 &&
+        ast_mod->stage == TS_SHADER_STAGE_VERTEX)
+    {
+        dec->kind = SpvDecorationBuiltIn;
+        dec->value = SpvBuiltInPosition;
+    }
+    else if (
+        ts__strcasecmp(semantic, "SV_InstanceID") == 0 &&
+        ast_mod->stage == TS_SHADER_STAGE_VERTEX)
+    {
+        dec->kind = SpvDecorationBuiltIn;
+        dec->value = SpvBuiltInInstanceIndex;
+    }
+    else if (
+        ts__strcasecmp(semantic, "SV_VertexID") == 0 &&
+        ast_mod->stage == TS_SHADER_STAGE_VERTEX)
+    {
+        dec->kind = SpvDecorationBuiltIn;
+        dec->value = SpvBuiltInVertexIndex;
+    }
+    else if (
+        ts__strcasecmp(semantic, "SV_DispatchThreadID") == 0 &&
+        ast_mod->stage == TS_SHADER_STAGE_COMPUTE)
+    {
+        dec->kind = SpvDecorationBuiltIn;
+        dec->value = SpvBuiltInGlobalInvocationId;
+    }
+    else if (
+        ts__strcasecmp(semantic, "SV_GroupID") == 0 &&
+        ast_mod->stage == TS_SHADER_STAGE_COMPUTE)
+    {
+        dec->kind = SpvDecorationBuiltIn;
+        dec->value = SpvBuiltInWorkgroupId;
+    }
+    else if (
+        ts__strcasecmp(semantic, "SV_GroupIndex") == 0 &&
+        ast_mod->stage == TS_SHADER_STAGE_COMPUTE)
+    {
+        dec->kind = SpvDecorationBuiltIn;
+        dec->value = SpvBuiltInLocalInvocationIndex;
+    }
+    else if (
+        ts__strcasecmp(semantic, "SV_GroupThreadID") == 0 &&
+        ast_mod->stage == TS_SHADER_STAGE_COMPUTE)
+    {
+        dec->kind = SpvDecorationBuiltIn;
+        dec->value = SpvBuiltInLocalInvocationId;
+    }
+    else
+    {
+        return false;
+    }
+
+    return true;
+}
+
+static void astRecursivelyAddOutputs(
+    Module *ast_mod,
+    IRModule *ir_mod,
+    AstDecl *decl,
+    uint32_t *current_location,
+    ArrayOfIRInstPtr *values) {
+
+    TsCompiler *compiler = ast_mod->compiler;
+
+    switch (decl->kind)
+    {
+    case DECL_FUNC:
+    {
+        AstType *return_type = decl->type->func.return_type;
+        assert(return_type);
+
+        if (return_type->kind == TYPE_STRUCT)
+        {
+            for (uint32_t i = 0; i < return_type->struct_.field_count; ++i)
+            {
+                AstDecl *struct_field_decl = return_type->struct_.field_decls[i];
+                astRecursivelyAddOutputs(
+                    ast_mod,
+                    ir_mod,
+                    struct_field_decl,
+                    current_location,
+                    values);
+            }
+        }
+        else if (return_type->kind != TYPE_VOID)
+        {
+            assert(decl->semantic);
+
+            IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, return_type);
+            IRInst *value = ts__irAddOutput(ir_mod, ir_type);
+
+            IRDecoration dec = {0};
+            if (!astSemanticToDecoration(
+                ast_mod,
+                decl->semantic,
+                &dec))
+            {
+                dec.kind = SpvDecorationLocation;
+                dec.value = (*current_location)++;
+            }
+
+            ts__irDecorateInst(ir_mod, value, &dec);
+
+            arrPush(compiler, values, value);
+        }
+
+        for (uint32_t i = 0; i < decl->func.params.len; ++i)
+        {
+            AstDecl *param_decl = decl->func.params.ptr[i];
+            if (param_decl->var.kind == VAR_OUT_PARAM)
+            {
+                astRecursivelyAddOutputs(
+                    ast_mod,
+                    ir_mod,
+                    param_decl,
+                    current_location,
+                    values);
+            }
+        }
+        break;
+    }
+
+    case DECL_STRUCT_FIELD:
+    case DECL_VAR:
+    {
+        if (decl->type->kind == TYPE_STRUCT)
+        {
+            for (uint32_t i = 0; i < decl->type->struct_.field_count; ++i)
+            {
+                AstDecl *struct_field_decl = decl->type->struct_.field_decls[i];
+                astRecursivelyAddOutputs(
+                    ast_mod,
+                    ir_mod,
+                    struct_field_decl,
+                    current_location,
+                    values);
+            }
+        }
+        else
+        {
+            IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, decl->type);
+            IRInst *value = ts__irAddOutput(ir_mod, ir_type);
+
+            assert(decl->semantic);
+
+            IRDecoration dec = {0};
+            if (!astSemanticToDecoration(
+                ast_mod,
+                decl->semantic,
+                &dec))
+            {
+                dec.kind = SpvDecorationLocation;
+                dec.value = (*current_location)++;
+            }
+
+            ts__irDecorateInst(ir_mod, value, &dec);
+
+            arrPush(compiler, values, value);
+        }
+        break;
+    }
+
+    default: break;
+    }
+}
+
+static void astRecursivelyAddInputs(
+    Module *ast_mod,
+    IRModule *ir_mod,
+    AstDecl *decl,
+    uint32_t *current_location,
+    ArrayOfIRInstPtr *values) {
+
+    TsCompiler *compiler = ast_mod->compiler;
+
+    switch (decl->kind)
+    {
+    case DECL_FUNC:
+    {
+        for (uint32_t i = 0; i < decl->func.params.len; ++i)
+        {
+            AstDecl *param_decl = decl->func.params.ptr[i];
+            if (param_decl->var.kind == VAR_IN_PARAM)
+            {
+                astRecursivelyAddInputs(
+                    ast_mod,
+                    ir_mod,
+                    param_decl,
+                    current_location,
+                    values);
+            }
+        }
+        break;
+    }
+
+    case DECL_STRUCT_FIELD:
+    case DECL_VAR:
+    {
+        if (decl->type->kind == TYPE_STRUCT)
+        {
+            for (uint32_t i = 0; i < decl->type->struct_.field_count; ++i)
+            {
+                AstDecl *struct_field_decl = decl->type->struct_.field_decls[i];
+                astRecursivelyAddInputs(
+                    ast_mod,
+                    ir_mod,
+                    struct_field_decl,
+                    current_location,
+                    values);
+            }
+        }
+        else
+        {
+            IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, decl->type);
+            IRInst *value = ts__irAddInput(ir_mod, ir_type);
+
+            assert(decl->semantic);
+
+            IRDecoration dec = {0};
+            if (!astSemanticToDecoration(
+                ast_mod,
+                decl->semantic,
+                &dec))
+            {
+                dec.kind = SpvDecorationLocation;
+                dec.value = (*current_location)++;
+            }
+
+            ts__irDecorateInst(ir_mod, value, &dec);
+
+            arrPush(compiler, values, value);
+        }
+        break;
+    }
+
+    default: break;
+    }
+}
+
 void ts__astModuleBuild(Module *ast_mod, IRModule *ir_mod)
 {
     TsCompiler *compiler = ast_mod->compiler;
@@ -2058,197 +2309,170 @@ void ts__astModuleBuild(Module *ast_mod, IRModule *ir_mod)
         ts__irPositionAtEnd(ir_mod, entry_block);
         ts__irAddBlock(ir_mod, entry_block);
 
-        uint32_t current_input_loc = 0;
-        uint32_t current_output_loc = 0;
-
         ArrayOfIRInstPtr inputs = {0};
         ArrayOfIRInstPtr outputs = {0};
 
-        // TODO: add entry point return value to 'outputs'
+        assert(func_decl->type->kind == TYPE_FUNC);
 
+        // Create the stage inputs/outputs
+        uint32_t current_input_loc = 0;
+        astRecursivelyAddInputs(
+            ast_mod,
+            ir_mod,
+            func_decl,
+            &current_input_loc,
+            &inputs);
+
+        uint32_t current_output_loc = 0;
+        astRecursivelyAddOutputs(
+            ast_mod,
+            ir_mod,
+            func_decl,
+            &current_output_loc,
+            &outputs);
+
+        // Build out param allocas
+        ArrayOfIRInstPtr out_param_allocas = {0};
         for (uint32_t i = 0; i < func_decl->func.params.len; ++i)
         {
             AstDecl *param_decl = func_decl->func.params.ptr[i];
-            assert(param_decl->value);
-
-            switch (param_decl->var.kind)
+            if (param_decl->var.kind == VAR_OUT_PARAM)
             {
-            case VAR_IN_PARAM: {
-                // Input parameters
                 IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, param_decl->type);
-                IRInst *value = ts__irAddInput(ir_mod, ir_type);
+                IRInst *alloca = ts__irBuildAlloca(ir_mod, ir_type);
+                arrPush(compiler, &out_param_allocas, alloca);
+            }
+        }
 
-                IRDecoration dec = {0};
+        // Construct input parameters
+        current_input_loc = 0;
+        ArrayOfIRInstPtr in_params = {0};
+        for (uint32_t i = 0; i < func_decl->func.params.len; ++i)
+        {
+            AstDecl *param_decl = func_decl->func.params.ptr[i];
+            if (param_decl->var.kind == VAR_IN_PARAM)
+            {
+                if (param_decl->type->kind == TYPE_STRUCT)
+                {
+                    // Parameter is a struct, so we have to build it
+                    ArrayOfIRInstPtr fields = {0};
 
-                assert(param_decl->var.semantic);
-                if (ts__strcasecmp(param_decl->var.semantic, "SV_Position") == 0 &&
-                    ast_mod->stage == TS_SHADER_STAGE_FRAGMENT)
-                {
-                    dec.kind = SpvDecorationBuiltIn;
-                    dec.value = SpvBuiltInFragCoord;
-                }
-                else if (
-                    ts__strcasecmp(param_decl->var.semantic, "SV_InstanceID") == 0 &&
-                    ast_mod->stage == TS_SHADER_STAGE_VERTEX)
-                {
-                    dec.kind = SpvDecorationBuiltIn;
-                    dec.value = SpvBuiltInInstanceIndex;
-                }
-                else if (
-                    ts__strcasecmp(param_decl->var.semantic, "SV_VertexID") == 0 &&
-                    ast_mod->stage == TS_SHADER_STAGE_VERTEX)
-                {
-                    dec.kind = SpvDecorationBuiltIn;
-                    dec.value = SpvBuiltInVertexIndex;
-                }
-                else if (
-                    ts__strcasecmp(param_decl->var.semantic, "SV_DispatchThreadID") == 0 &&
-                    ast_mod->stage == TS_SHADER_STAGE_COMPUTE)
-                {
-                    dec.kind = SpvDecorationBuiltIn;
-                    dec.value = SpvBuiltInGlobalInvocationId;
-                }
-                else if (
-                    ts__strcasecmp(param_decl->var.semantic, "SV_GroupID") == 0 &&
-                    ast_mod->stage == TS_SHADER_STAGE_COMPUTE)
-                {
-                    dec.kind = SpvDecorationBuiltIn;
-                    dec.value = SpvBuiltInWorkgroupId;
-                }
-                else if (
-                    ts__strcasecmp(param_decl->var.semantic, "SV_GroupIndex") == 0 &&
-                    ast_mod->stage == TS_SHADER_STAGE_COMPUTE)
-                {
-                    dec.kind = SpvDecorationBuiltIn;
-                    dec.value = SpvBuiltInLocalInvocationIndex;
-                }
-                else if (
-                    ts__strcasecmp(param_decl->var.semantic, "SV_GroupThreadID") == 0 &&
-                    ast_mod->stage == TS_SHADER_STAGE_COMPUTE)
-                {
-                    dec.kind = SpvDecorationBuiltIn;
-                    dec.value = SpvBuiltInLocalInvocationId;
+                    for (uint32_t j = 0; j < param_decl->type->struct_.field_count; ++j)
+                    {
+                        IRInst *loaded_input = ts__irBuildLoad(ir_mod, inputs.ptr[current_input_loc]);
+                        arrPush(compiler, &fields, loaded_input);
+                        current_input_loc++;
+                    }
+
+                    IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, param_decl->type);
+                    IRInst *composite = ts__irBuildCompositeConstruct(
+                        ir_mod, ir_type, fields.ptr, fields.len);
+
+                    arrPush(compiler, &in_params, composite);
                 }
                 else
                 {
-                    dec.kind = SpvDecorationLocation;
-                    dec.value = current_input_loc++;
+                    // Parameter is a simple value, just push it
+                    IRInst *loaded_input = ts__irBuildLoad(ir_mod, inputs.ptr[current_input_loc]);
+                    arrPush(compiler, &in_params, loaded_input);
+                    current_input_loc++;
                 }
-
-                ts__irDecorateInst(ir_mod, value, &dec);
-
-                arrPush(compiler, &inputs, value);
-                break;
-            }
-
-            case VAR_OUT_PARAM: {
-                // Output parameters
-                IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, param_decl->type);
-                IRInst *value = ts__irAddOutput(ir_mod, ir_type);
-
-                IRDecoration dec = {0};
-
-                assert(param_decl->var.semantic);
-                if (ts__strcasecmp(param_decl->var.semantic, "SV_Position") == 0 &&
-                    ast_mod->stage == TS_SHADER_STAGE_VERTEX)
-                {
-                    dec.kind = SpvDecorationBuiltIn;
-                    dec.value = SpvBuiltInPosition;
-                }
-                else
-                {
-                    dec.kind = SpvDecorationLocation;
-                    dec.value = current_output_loc++;
-                }
-
-                ts__irDecorateInst(ir_mod, value, &dec);
-
-                arrPush(compiler, &outputs, value);
-                break;
-            }
-
-            default: assert(0); break;
             }
         }
 
-        ArrayOfIRInstPtr output_allocas = {0};
-
-        // Build output allocas
-        for (uint32_t i = 0; i < outputs.len; ++i)
-        {
-            IRInst *value = outputs.ptr[i];
-            IRInst *alloca = ts__irBuildAlloca(ir_mod, value->type->ptr.sub);
-            arrPush(compiler, &output_allocas, alloca);
-        }
-
-        // Store output allocas
-        for (uint32_t i = 0; i < outputs.len; ++i)
-        {
-            IRInst *value = ts__irBuildLoad(ir_mod, outputs.ptr[i]);
-            IRInst *alloca = output_allocas.ptr[i];
-            ts__irBuildStore(ir_mod, alloca, value);
-        }
-
-        ArrayOfIRInstPtr entry_point_params = {0};
-
-        // Register inputs/outputs into entry point interface
+        // Join the in/out params in one array
+        ArrayOfIRInstPtr func_params = {0};
         current_input_loc = 0;
         current_output_loc = 0;
         for (uint32_t i = 0; i < func_decl->func.params.len; ++i)
         {
             AstDecl *param_decl = func_decl->func.params.ptr[i];
-            assert(param_decl->value);
-            switch (param_decl->var.kind)
+            if (param_decl->var.kind == VAR_IN_PARAM)
             {
-            case VAR_IN_PARAM: {
-                // Input parameters
-                IRInst *param_val = loadVal(ir_mod, inputs.ptr[current_input_loc]);
-                arrPush(compiler, &entry_point_params, param_val);
+                arrPush(compiler, &func_params, in_params.ptr[current_input_loc]);
                 current_input_loc++;
-                break;
             }
-
-            case VAR_OUT_PARAM: {
-                // Output parameters
-                IRInst *param_val = output_allocas.ptr[current_output_loc];
-                arrPush(compiler, &entry_point_params, param_val);
+            else if (param_decl->var.kind == VAR_OUT_PARAM)
+            {
+                arrPush(compiler, &func_params, out_param_allocas.ptr[current_output_loc]);
                 current_output_loc++;
-                break;
-            }
-
-            default: assert(0); break;
             }
         }
 
-        ts__irBuildFuncCall(
+        IRInst *return_value = ts__irBuildFuncCall(
             ir_mod,
             func_decl->value,
-            entry_point_params.ptr,
-            entry_point_params.len);
+            func_params.ptr,
+            func_params.len);
+
+        IRType *uint_type = ts__irNewIntType(ir_mod, 32, false);
+
+        current_output_loc = 0;
+
+        // Copy returned value to output variable
+        AstType *return_type = func_decl->type->func.return_type;
+        if (return_type->kind != TYPE_VOID)
+        {
+            if (return_type->kind == TYPE_STRUCT)
+            {
+                // Parameter is a struct, so we have to build it
+                for (uint32_t j = 0; j < return_type->struct_.field_count; ++j)
+                {
+                    IRInst *field_value = ts__irBuildCompositeExtract(
+                        ir_mod,
+                        return_value,
+                        &j,
+                        1);
+                    ts__irBuildStore(ir_mod, outputs.ptr[current_output_loc], field_value);
+                    current_output_loc++;
+                }
+            }
+            else
+            {
+                ts__irBuildStore(ir_mod, outputs.ptr[current_output_loc], return_value);
+                current_output_loc++;
+            }
+        }
 
         // Copy values from the output allocas back into the real output variables
-        current_input_loc = 0;
-        current_output_loc = 0;
+        uint32_t out_param_index = 0;
         for (uint32_t i = 0; i < func_decl->func.params.len; ++i)
         {
             AstDecl *param_decl = func_decl->func.params.ptr[i];
-            assert(param_decl->value);
-            switch (param_decl->var.kind)
+            if (param_decl->var.kind == VAR_OUT_PARAM)
             {
-            case VAR_OUT_PARAM: {
-                // Output parameters
-                IRInst *alloca_ptr = output_allocas.ptr[current_output_loc];
-                IRInst *real_ptr = outputs.ptr[current_output_loc];
+                if (param_decl->type->kind == TYPE_STRUCT)
+                {
+                    // Parameter is a struct, so we have to build it
+                    for (uint32_t j = 0; j < param_decl->type->struct_.field_count; ++j)
+                    {
+                        AstDecl *struct_field_decl = param_decl->type->struct_.field_decls[j];
+                        IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, struct_field_decl->type);
 
-                IRInst *value = ts__irBuildLoad(ir_mod, alloca_ptr);
-                ts__irBuildStore(ir_mod, real_ptr, value);
-                current_output_loc++;
-                break;
-            }
+                        IRInst *index = ts__irBuildConstInt(ir_mod, uint_type, j);
+                        IRInst *field_ptr = ts__irBuildAccessChain(
+                            ir_mod,
+                            ir_type,
+                            out_param_allocas.ptr[out_param_index],
+                            &index,
+                            1);
+                        IRInst *loaded_output = ts__irBuildLoad(ir_mod, field_ptr);
+                        ts__irBuildStore(ir_mod, outputs.ptr[current_output_loc], loaded_output);
+                        current_output_loc++;
+                    }
+                }
+                else
+                {
+                    IRInst *loaded_output = ts__irBuildLoad(
+                        ir_mod, out_param_allocas.ptr[out_param_index]);
+                    ts__irBuildStore(ir_mod, outputs.ptr[current_output_loc], loaded_output);
+                    current_output_loc++;
+                }
 
-            default: break;
+                out_param_index++;
             }
         }
+
 
         ts__irBuildReturn(ir_mod, NULL);
 

@@ -890,8 +890,13 @@ IRInst *ts__irBuildAccessChain(
     assert(base->type->kind == IR_TYPE_POINTER);
 
     inst->access_chain.base = base;
-    inst->access_chain.indices = indices;
     inst->access_chain.index_count = index_count;
+
+    inst->access_chain.indices = NEW_ARRAY(m->compiler, IRInst*, index_count);
+    memcpy(
+        inst->access_chain.indices,
+        indices,
+        sizeof(IRInst*) * index_count);
 
     IRInst *block = ts__irGetCurrentBlock(m);
     arrPush(m->compiler, &block->block.insts, inst);
@@ -941,6 +946,17 @@ IRInst *ts__irBuildCompositeExtract(
         else
         {
             inst->type = ts__irNewVectorType(m, value->type->vector.elem_type, index_count);
+        }
+    }
+    else if (value->type->kind == IR_TYPE_STRUCT)
+    {
+        if (index_count == 1)
+        {
+            inst->type = value->type->struct_.fields[indices[0]];
+        }
+        else
+        {
+            assert(0);
         }
     }
     else

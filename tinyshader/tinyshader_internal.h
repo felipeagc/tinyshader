@@ -1050,6 +1050,7 @@ struct AstDecl
     Scope *scope;
     ArrayOfAstAttribute attributes;
     int64_t *resolved_int;
+    char *semantic;
 
     union
     {
@@ -1069,7 +1070,6 @@ struct AstDecl
         {
             AstExpr *type_expr;
             AstExpr *value_expr;
-            char *semantic;
             AstVarKind kind;
             bool immutable;
 
@@ -1092,7 +1092,6 @@ struct AstDecl
         {
             AstExpr *type_expr;
             uint32_t index;
-            char *semantic;
         } struct_field;
     };
 };

@@ -22,30 +22,37 @@ ConstantBuffer<Uniform> gInput;
 Texture2D gInput2;
 SamplerState gInput3;
 
-void main(
-    in float4 pos : POSITION,
-    in float2 uv : TEXCOORD0,
-    out float4 color : SV_Target)
+struct VsOutput
 {
-    for (; pos.x > 0;) {
-        if (pos.x <= 123)
+    float4 pos : POSITION;
+    float2 uv : TEXCOORD0;
+};
+
+float4 main(in VsOutput vs_out, out float4 out_color2 : SV_Target1) : SV_Target0
+{
+    for (; vs_out.pos.x > 0;) {
+        if (vs_out.pos.x <= 123)
         {
             break;
         }
     }
 
-    float4 my_color = gInput2.Sample(gInput3, uv) * float4(ddx(1.0), 1, 1, 1) *
+    float4 my_color = gInput2.Sample(gInput3, vs_out.uv) * float4(ddx(1.0), 1, 1, 1) *
         float4(gInput.hey, gInput.hey, gInput.hey, gInput.hey);
 
-	my_color = gInput2.SampleLevel(gInput3, uv, 1);
+	my_color = gInput2.SampleLevel(gInput3, vs_out.uv, 1);
     float width;
     float height;
     float mip_levels;
     gInput2.GetDimensions(0, width, height, mip_levels);
 
-    float3 up = abs(pos.x) < 0.999 ? float3(0.0, 0.0, 1.0) : float3(1.0, 0.0, 0.0);
+    float3 up = abs(vs_out.pos.x) < 0.999 ? float3(0.0, 0.0, 1.0) : float3(1.0, 0.0, 0.0);
 
-	color = my_color;
+	float4 color = my_color;
     color.r = up.z;
     color = float4(1, 1, 1, 1);
+
+    out_color2 = color;
+
+    return color;
 }

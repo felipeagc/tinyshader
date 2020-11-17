@@ -31,24 +31,33 @@ float rand(float2 uv)
 	return frac(sin(dot(uv.xy, float2(12.9898,78.233))) * 43758.5453);
 }
 
-void main(
-	in uint vertexIndex : SV_VertexID,
-	in float3 pos : Heyy,
-	out float4 out_pos : SV_POSITION,
-	out float2 out_uv : AAA)
+struct VsInput
+{
+    uint vertexIndex : SV_VertexID;
+	float3 pos : POSITION;
+};
+
+struct VsOutput
+{
+    float4 sv_pos : SV_POSITION;
+    float4 pos : POSITION;
+    float2 uv : TEXCOORD0;
+};
+
+void main(in VsInput vs_in, out VsOutput vs_out)
 {
 	float3x3 my_matrix = float3x3(1, 2, 3, 4, 5, 6, 7, 8, 9);
 
-	out_uv = float2(float((vertexIndex << 1) & 2), float(vertexIndex & 2));
-	float2 temp = out_uv * 2.0 - 1.0;
-    out_pos = float4(temp.x, temp.y, 0.0, 1.0);
+	vs_out.uv = float2(float((vs_in.vertexIndex << 1) & 2), float(vs_in.vertexIndex & 2));
+	float2 temp = vs_out.uv * 2.0 - 1.0;
+    vs_out.sv_pos = float4(temp.x, temp.y, 0.0, 1.0);
 
-	float noise = rand(out_uv);
+	float noise = rand(vs_out.uv);
 	float2 a2 = sin(float2(1, 1));
 
     {
-        out_uv = float2(float((vertexIndex << 1) & 2), float(vertexIndex & 2));
-        out_pos = float4(out_uv * 2.0f - 1.0f, 0.0f, 1.0f);
+        vs_out.uv = float2(float((vs_in.vertexIndex << 1) & 2), float(vs_in.vertexIndex & 2));
+        vs_out.sv_pos = float4(vs_out.uv * 2.0f - 1.0f, 0.0f, 1.0f);
     }
 
     {
@@ -73,19 +82,19 @@ void main(
         bool my_bool = vec.x == vec.y;
 
         float3 new_vec = vec / float3(shuffled, shuffled, shuffled);
-        out_pos = mul(gInput.yoo, mul(gInput.view, gInput.transform)).xyzw;
+        vs_out.sv_pos = mul(gInput.yoo, mul(gInput.view, gInput.transform)).xyzw;
         // otherFunc(pos);
-        out_pos = float4(pos, 1.0);
-        my_bool = pos.x > 1;
+        vs_out.sv_pos = float4(vs_in.pos, 1.0);
+        my_bool = vs_in.pos.x > 1;
     }
 
     {
-        pos = normalize(pos);
-        pos.x = distance(pos, pos);
+        vs_in.pos = normalize(vs_in.pos);
+        vs_in.pos.x = distance(vs_in.pos, vs_in.pos);
 
-        while (pos.x > 0.0)
+        while (vs_in.pos.x > 0.0)
         {
-            pos.x = pos.x - 1.0;
+            vs_in.pos.x = vs_in.pos.x - 1.0;
         }
     }
 
@@ -98,9 +107,11 @@ void main(
         float b = determinant(mat3);
     }
 
-	if (pos.x > 0.0)
+	if (vs_in.pos.x > 0.0)
     {
-		pos.x = sqrt(123.0);
+		vs_in.pos.x = sqrt(123.0);
 	}
-    pos.x = 1.0;
+    vs_in.pos.x = 1.0;
+
+    vs_out.pos = vs_out.sv_pos;
 }
