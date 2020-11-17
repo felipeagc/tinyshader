@@ -2844,7 +2844,7 @@ static AstDecl *parseTopLevel(Parser *p)
             {
                 Location param_decl_loc = parserBeginLoc(p);
 
-                AstVarKind var_kind = VAR_PARAM;
+                AstVarKind var_kind = VAR_IN_PARAM;
 
                 if (parserPeek(p, 0)->kind == TOKEN_IN)
                 {
@@ -2859,7 +2859,7 @@ static AstDecl *parseTopLevel(Parser *p)
                 else if (parserPeek(p, 0)->kind == TOKEN_INOUT)
                 {
                     parserNext(p, 1);
-                    var_kind = VAR_INOUT_PARAM;
+                    var_kind = VAR_OUT_PARAM;
                 }
 
                 AstExpr *type_expr = parsePrefixedUnaryExpr(p);
@@ -2885,7 +2885,7 @@ static AstDecl *parseTopLevel(Parser *p)
                 parserEndLoc(p, &param_decl_loc);
                 param_decl->loc = param_decl_loc;
 
-                arrPush(p->compiler, &decl->func.all_params, param_decl);
+                arrPush(p->compiler, &decl->func.params, param_decl);
 
                 if (parserPeek(p, 0)->kind != TOKEN_RPAREN)
                 {

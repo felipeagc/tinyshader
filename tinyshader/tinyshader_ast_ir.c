@@ -90,7 +90,7 @@ static IRType *convertTypeToIR(Module *module, IRModule *ir_module, AstType *typ
         IRDecoration struct_dec = {0};
         struct_dec.kind = SpvDecorationBlock;
 
-        ts__irTypeSetDecorations(ir_module, struct_type, &struct_dec, 1);
+        ts__irDecorateType(ir_module, struct_type, &struct_dec);
 
         return struct_type;
     }
@@ -105,7 +105,7 @@ static IRType *convertTypeToIR(Module *module, IRModule *ir_module, AstType *typ
         array_dec.kind = SpvDecorationArrayStride;
         array_dec.value = type->buffer.sub->size;
 
-        ts__irTypeSetDecorations(ir_module, array_type, &array_dec, 1);
+        ts__irDecorateType(ir_module, array_type, &array_dec);
 
         ts__sbReset(&module->compiler->sb);
         ts__sbSprintf(
@@ -123,7 +123,7 @@ static IRType *convertTypeToIR(Module *module, IRModule *ir_module, AstType *typ
         IRDecoration struct_dec = {0};
         struct_dec.kind = SpvDecorationBufferBlock;
 
-        ts__irTypeSetDecorations(ir_module, struct_wrapper, &struct_dec, 1);
+        ts__irDecorateType(ir_module, struct_wrapper, &struct_dec);
 
         return struct_wrapper;
     }
@@ -138,7 +138,7 @@ static IRType *convertTypeToIR(Module *module, IRModule *ir_module, AstType *typ
         array_dec.kind = SpvDecorationArrayStride;
         array_dec.value = type->buffer.sub->size;
 
-        ts__irTypeSetDecorations(ir_module, array_type, &array_dec, 1);
+        ts__irDecorateType(ir_module, array_type, &array_dec);
 
         ts__sbReset(&module->compiler->sb);
         ts__sbSprintf(
@@ -159,7 +159,7 @@ static IRType *convertTypeToIR(Module *module, IRModule *ir_module, AstType *typ
         IRDecoration struct_dec = {0};
         struct_dec.kind = SpvDecorationBufferBlock;
 
-        ts__irTypeSetDecorations(ir_module, struct_wrapper, &struct_dec, 1);
+        ts__irDecorateType(ir_module, struct_wrapper, &struct_dec);
 
         return struct_wrapper;
     }
@@ -1852,94 +1852,56 @@ static void astBuildDecl(Module *ast_mod, IRModule *ir_mod, AstDecl *decl)
     case DECL_FUNC: {
         if (!decl->func.called) break;
 
-        if (decl->func.execution_model)
-        {
-            ArrayOfIRInstPtr globals = {0};
-
-            // Only required for spir-v 1.5:
-            //
-            // for (uint32_t i = 0; i < arrLength(m->globals); ++i)
-            // {
-            //     arrPush(m->compiler, &globals, m->globals[i]);
-            // }
-
-            for (uint32_t i = 0; i < arrLength(decl->value->func.inputs); ++i)
-            {
-                arrPush(compiler, &globals, decl->value->func.inputs.ptr[i]);
-            }
-
-            for (uint32_t i = 0; i < arrLength(decl->value->func.outputs); ++i)
-            {
-                arrPush(compiler, &globals, decl->value->func.outputs.ptr[i]);
-            }
-
-            IRInst *entry_point = ts__irAddEntryPoint(
-                ir_mod,
-                decl->name,
-                decl->value,
-                *decl->func.execution_model,
-                globals.ptr,
-                arrLength(globals));
-
-            if (*decl->func.execution_model == SpvExecutionModelGLCompute)
-            {
-                ts__irEntryPointSetComputeDims(
-                    entry_point,
-                    decl->func.compute_dims[0],
-                    decl->func.compute_dims[1],
-                    decl->func.compute_dims[2]);
-            }
-        }
-
         IRInst *entry_block = ts__irCreateBlock(ir_mod, decl->value);
         ts__irPositionAtEnd(ir_mod, entry_block);
         ts__irAddBlock(ir_mod, entry_block);
 
-        IRInst **old_inputs =
-            NEW_ARRAY(compiler, IRInst *, decl->func.inputs.len);
+        IRInst **ptr_func_params =
+            NEW_ARRAY(compiler, IRInst *, decl->func.params.len);
 
-        IRInst **old_func_params =
-            NEW_ARRAY(compiler, IRInst *, decl->func.func_params.len);
-
-        for (uint32_t i = 0; i < decl->func.inputs.len; ++i)
+        // We make allocas for input parameters
+        for (uint32_t i = 0; i < arrLength(decl->func.params); ++i)
         {
-            AstDecl *var = decl->func.inputs.ptr[i];
-            old_inputs[i] = var->value;
+            AstDecl *param_decl = decl->func.params.ptr[i];
+            ptr_func_params[i] = param_decl->value;
 
-            IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, var->type);
-            var->value = ts__irBuildAlloca(ir_mod, ir_type);
+            switch (param_decl->var.kind)
+            {
+            case VAR_IN_PARAM: {
+                IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, param_decl->type);
+                ptr_func_params[i] = ts__irBuildAlloca(ir_mod, ir_type);
+                break;
+            }
+
+            default: break;
+            }
         }
 
-        for (uint32_t i = 0; i < arrLength(decl->func.func_params); ++i)
-        {
-            AstDecl *var = decl->func.func_params.ptr[i];
-            old_func_params[i] = var->value;
-
-            IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, var->type);
-            var->value = ts__irBuildAlloca(ir_mod, ir_type);
-        }
-
+        // Make allocas for local variables
         for (uint32_t i = 0; i < arrLength(decl->func.var_decls); ++i)
         {
-            AstDecl *var = decl->func.var_decls.ptr[i];
-            IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, var->type);
-            var->value = ts__irBuildAlloca(ir_mod, ir_type);
+            AstDecl *var_decl = decl->func.var_decls.ptr[i];
+            IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, var_decl->type);
+            var_decl->value = ts__irBuildAlloca(ir_mod, ir_type);
         }
 
-        for (uint32_t i = 0; i < arrLength(decl->func.inputs); ++i)
+        // Then we copy inputs into the allocas:
+        for (uint32_t i = 0; i < arrLength(decl->func.params); ++i)
         {
-            AstDecl *var = decl->func.inputs.ptr[i];
-            IRInst *loaded = ts__irBuildLoad(ir_mod, old_inputs[i]);
-            ts__irBuildStore(ir_mod, var->value, loaded);
+            AstDecl *param_decl = decl->func.params.ptr[i];
+            switch (param_decl->var.kind)
+            {
+            case VAR_IN_PARAM: {
+                ts__irBuildStore(ir_mod, ptr_func_params[i], loadVal(ir_mod, param_decl->value));
+                param_decl->value = ptr_func_params[i];
+                break;
+            }
+
+            default: break;
+            }
         }
 
-        for (uint32_t i = 0; i < arrLength(decl->func.func_params); ++i)
-        {
-            AstDecl *var = decl->func.func_params.ptr[i];
-            assert(!isLvalue(old_func_params[i]));
-            ts__irBuildStore(ir_mod, var->value, old_func_params[i]);
-        }
-
+        // And then generate the statements:
         for (uint32_t i = 0; i < arrLength(decl->func.stmts); ++i)
         {
             AstStmt *stmt = decl->func.stmts.ptr[i];
@@ -1949,6 +1911,8 @@ static void astBuildDecl(Module *ast_mod, IRModule *ir_mod, AstDecl *decl)
                 break;
             }
         }
+
+        // TODO: copy stuff back to output parameters
 
         if (!ts__irBlockHasTerminator(ts__irGetCurrentBlock(ir_mod)))
         {
@@ -1986,6 +1950,8 @@ static void astBuildDecl(Module *ast_mod, IRModule *ir_mod, AstDecl *decl)
 
 void ts__astModuleBuild(Module *ast_mod, IRModule *ir_mod)
 {
+    TsCompiler *compiler = ast_mod->compiler;
+
     // Add functions / globals
     for (uint32_t i = 0; i < ast_mod->decl_count; ++i)
     {
@@ -1998,15 +1964,14 @@ void ts__astModuleBuild(Module *ast_mod, IRModule *ir_mod)
             if (!decl->func.called) break;
 
             IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, decl->type);
-            decl->value = ts__irAddFunction(ir_mod, ir_type);
+            decl->value = ts__irAddFunction(ir_mod, ir_type, SpvFunctionControlInlineMask);
 
-            for (uint32_t k = 0; k < arrLength(decl->func.func_params); ++k)
+            for (uint32_t k = 0; k < arrLength(decl->func.params); ++k)
             {
-                AstDecl *param = decl->func.func_params.ptr[k];
+                AstDecl *param = decl->func.params.ptr[k];
                 IRType *ir_param_type = convertTypeToIR(ast_mod, ir_mod, param->type);
                 bool by_reference = false;
-                if (param->var.kind == VAR_IN_PARAM || param->var.kind == VAR_OUT_PARAM ||
-                    param->var.kind == VAR_INOUT_PARAM)
+                if (param->var.kind == VAR_OUT_PARAM)
                 {
                     ir_param_type =
                         ts__irNewPointerType(ir_mod, SpvStorageClassFunction, ir_param_type);
@@ -2014,22 +1979,6 @@ void ts__astModuleBuild(Module *ast_mod, IRModule *ir_mod)
                 }
                 param->value =
                     ts__irAddFuncParam(ir_mod, decl->value, ir_param_type, by_reference);
-            }
-
-            for (uint32_t k = 0; k < arrLength(decl->func.inputs); ++k)
-            {
-                AstDecl *input = decl->func.inputs.ptr[k];
-                IRType *ir_param_type = convertTypeToIR(ast_mod, ir_mod, input->type);
-                input->value = ts__irAddInput(ir_mod, decl->value, ir_param_type);
-                input->value->decorations = input->decorations;
-            }
-
-            for (uint32_t k = 0; k < arrLength(decl->func.outputs); ++k)
-            {
-                AstDecl *output = decl->func.outputs.ptr[k];
-                IRType *ir_param_type = convertTypeToIR(ast_mod, ir_mod, output->type);
-                output->value = ts__irAddOutput(ir_mod, decl->value, ir_param_type);
-                output->value->decorations = output->decorations;
             }
 
             break;
@@ -2062,8 +2011,20 @@ void ts__astModuleBuild(Module *ast_mod, IRModule *ir_mod)
             default: assert(0); break;
             }
 
-            decl->value = ts__irAddGlobal(ir_mod, ir_type, storage_class);
-            decl->value->decorations = decl->decorations;
+            decl->value = ts__irAddUniformGlobal(
+                ir_mod,
+                ir_type,
+                storage_class);
+
+            IRDecoration set_dec = {0};
+            set_dec.kind = SpvDecorationDescriptorSet;
+            set_dec.value = decl->var.set;
+            ts__irDecorateInst(ir_mod, decl->value, &set_dec);
+
+            IRDecoration binding_dec = {0};
+            binding_dec.kind = SpvDecorationBinding;
+            binding_dec.value = decl->var.binding;
+            ts__irDecorateInst(ir_mod, decl->value, &binding_dec);
             break;
         }
 
@@ -2075,5 +2036,248 @@ void ts__astModuleBuild(Module *ast_mod, IRModule *ir_mod)
     {
         AstDecl *decl = ast_mod->decls[i];
         astBuildDecl(ast_mod, ir_mod, decl);
+    }
+
+    if (ast_mod->entry_point_func)
+    {
+        // Add entry point wrapper function
+        IRType *func_wrapper_type = ts__irNewFuncType(
+            ir_mod,
+            ts__irNewBasicType(ir_mod, IR_TYPE_VOID),
+            NULL,
+            0);
+
+        IRInst *entry_func_wrapper = ts__irAddFunction(
+            ir_mod,
+            func_wrapper_type,
+            SpvFunctionControlMaskNone);
+
+        AstDecl *func_decl = ast_mod->entry_point_func;
+
+        IRInst *entry_block = ts__irCreateBlock(ir_mod, entry_func_wrapper);
+        ts__irPositionAtEnd(ir_mod, entry_block);
+        ts__irAddBlock(ir_mod, entry_block);
+
+        uint32_t current_input_loc = 0;
+        uint32_t current_output_loc = 0;
+
+        ArrayOfIRInstPtr inputs = {0};
+        ArrayOfIRInstPtr outputs = {0};
+
+        // TODO: add entry point return value to 'outputs'
+
+        for (uint32_t i = 0; i < func_decl->func.params.len; ++i)
+        {
+            AstDecl *param_decl = func_decl->func.params.ptr[i];
+            assert(param_decl->value);
+
+            switch (param_decl->var.kind)
+            {
+            case VAR_IN_PARAM: {
+                // Input parameters
+                IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, param_decl->type);
+                IRInst *value = ts__irAddInput(ir_mod, ir_type);
+
+                IRDecoration dec = {0};
+
+                assert(param_decl->var.semantic);
+                if (ts__strcasecmp(param_decl->var.semantic, "SV_Position") == 0 &&
+                    ast_mod->stage == TS_SHADER_STAGE_FRAGMENT)
+                {
+                    dec.kind = SpvDecorationBuiltIn;
+                    dec.value = SpvBuiltInFragCoord;
+                }
+                else if (
+                    ts__strcasecmp(param_decl->var.semantic, "SV_InstanceID") == 0 &&
+                    ast_mod->stage == TS_SHADER_STAGE_VERTEX)
+                {
+                    dec.kind = SpvDecorationBuiltIn;
+                    dec.value = SpvBuiltInInstanceIndex;
+                }
+                else if (
+                    ts__strcasecmp(param_decl->var.semantic, "SV_VertexID") == 0 &&
+                    ast_mod->stage == TS_SHADER_STAGE_VERTEX)
+                {
+                    dec.kind = SpvDecorationBuiltIn;
+                    dec.value = SpvBuiltInVertexIndex;
+                }
+                else if (
+                    ts__strcasecmp(param_decl->var.semantic, "SV_DispatchThreadID") == 0 &&
+                    ast_mod->stage == TS_SHADER_STAGE_COMPUTE)
+                {
+                    dec.kind = SpvDecorationBuiltIn;
+                    dec.value = SpvBuiltInGlobalInvocationId;
+                }
+                else if (
+                    ts__strcasecmp(param_decl->var.semantic, "SV_GroupID") == 0 &&
+                    ast_mod->stage == TS_SHADER_STAGE_COMPUTE)
+                {
+                    dec.kind = SpvDecorationBuiltIn;
+                    dec.value = SpvBuiltInWorkgroupId;
+                }
+                else if (
+                    ts__strcasecmp(param_decl->var.semantic, "SV_GroupIndex") == 0 &&
+                    ast_mod->stage == TS_SHADER_STAGE_COMPUTE)
+                {
+                    dec.kind = SpvDecorationBuiltIn;
+                    dec.value = SpvBuiltInLocalInvocationIndex;
+                }
+                else if (
+                    ts__strcasecmp(param_decl->var.semantic, "SV_GroupThreadID") == 0 &&
+                    ast_mod->stage == TS_SHADER_STAGE_COMPUTE)
+                {
+                    dec.kind = SpvDecorationBuiltIn;
+                    dec.value = SpvBuiltInLocalInvocationId;
+                }
+                else
+                {
+                    dec.kind = SpvDecorationLocation;
+                    dec.value = current_input_loc++;
+                }
+
+                ts__irDecorateInst(ir_mod, value, &dec);
+
+                arrPush(compiler, &inputs, value);
+                break;
+            }
+
+            case VAR_OUT_PARAM: {
+                // Output parameters
+                IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, param_decl->type);
+                IRInst *value = ts__irAddOutput(ir_mod, ir_type);
+
+                IRDecoration dec = {0};
+
+                assert(param_decl->var.semantic);
+                if (ts__strcasecmp(param_decl->var.semantic, "SV_Position") == 0 &&
+                    ast_mod->stage == TS_SHADER_STAGE_VERTEX)
+                {
+                    dec.kind = SpvDecorationBuiltIn;
+                    dec.value = SpvBuiltInPosition;
+                }
+                else
+                {
+                    dec.kind = SpvDecorationLocation;
+                    dec.value = current_output_loc++;
+                }
+
+                ts__irDecorateInst(ir_mod, value, &dec);
+
+                arrPush(compiler, &outputs, value);
+                break;
+            }
+
+            default: assert(0); break;
+            }
+        }
+
+        ArrayOfIRInstPtr output_allocas = {0};
+
+        // Build output allocas
+        for (uint32_t i = 0; i < outputs.len; ++i)
+        {
+            IRInst *value = outputs.ptr[i];
+            IRInst *alloca = ts__irBuildAlloca(ir_mod, value->type->ptr.sub);
+            arrPush(compiler, &output_allocas, alloca);
+        }
+
+        // Store output allocas
+        for (uint32_t i = 0; i < outputs.len; ++i)
+        {
+            IRInst *value = ts__irBuildLoad(ir_mod, outputs.ptr[i]);
+            IRInst *alloca = output_allocas.ptr[i];
+            ts__irBuildStore(ir_mod, alloca, value);
+        }
+
+        ArrayOfIRInstPtr entry_point_params = {0};
+
+        // Register inputs/outputs into entry point interface
+        current_input_loc = 0;
+        current_output_loc = 0;
+        for (uint32_t i = 0; i < func_decl->func.params.len; ++i)
+        {
+            AstDecl *param_decl = func_decl->func.params.ptr[i];
+            assert(param_decl->value);
+            switch (param_decl->var.kind)
+            {
+            case VAR_IN_PARAM: {
+                // Input parameters
+                IRInst *param_val = loadVal(ir_mod, inputs.ptr[current_input_loc]);
+                arrPush(compiler, &entry_point_params, param_val);
+                current_input_loc++;
+                break;
+            }
+
+            case VAR_OUT_PARAM: {
+                // Output parameters
+                IRInst *param_val = output_allocas.ptr[current_output_loc];
+                arrPush(compiler, &entry_point_params, param_val);
+                current_output_loc++;
+                break;
+            }
+
+            default: assert(0); break;
+            }
+        }
+
+        ts__irBuildFuncCall(
+            ir_mod,
+            func_decl->value,
+            entry_point_params.ptr,
+            entry_point_params.len);
+
+        // Copy values from the output allocas back into the real output variables
+        current_input_loc = 0;
+        current_output_loc = 0;
+        for (uint32_t i = 0; i < func_decl->func.params.len; ++i)
+        {
+            AstDecl *param_decl = func_decl->func.params.ptr[i];
+            assert(param_decl->value);
+            switch (param_decl->var.kind)
+            {
+            case VAR_OUT_PARAM: {
+                // Output parameters
+                IRInst *alloca_ptr = output_allocas.ptr[current_output_loc];
+                IRInst *real_ptr = outputs.ptr[current_output_loc];
+
+                IRInst *value = ts__irBuildLoad(ir_mod, alloca_ptr);
+                ts__irBuildStore(ir_mod, real_ptr, value);
+                current_output_loc++;
+                break;
+            }
+
+            default: break;
+            }
+        }
+
+        ts__irBuildReturn(ir_mod, NULL);
+
+        SpvExecutionModel execution_model;
+        switch (ast_mod->stage)
+        {
+        case TS_SHADER_STAGE_COMPUTE: execution_model = SpvExecutionModelGLCompute; break;
+        case TS_SHADER_STAGE_FRAGMENT: execution_model = SpvExecutionModelFragment; break;
+        case TS_SHADER_STAGE_VERTEX: execution_model = SpvExecutionModelVertex; break;
+        }
+
+        ArrayOfIRInstPtr entry_point_globals = {0};
+
+        for (uint32_t i = 0; i < inputs.len; ++i)
+        {
+            arrPush(compiler, &entry_point_globals, inputs.ptr[i]);
+        }
+
+        for (uint32_t i = 0; i < outputs.len; ++i)
+        {
+            arrPush(compiler, &entry_point_globals, outputs.ptr[i]);
+        }
+
+        ts__irAddEntryPoint(
+            ir_mod,
+            func_decl->name,
+            entry_func_wrapper,
+            execution_model,
+            entry_point_globals.ptr,
+            entry_point_globals.len);
     }
 }

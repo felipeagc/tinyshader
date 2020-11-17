@@ -22,6 +22,10 @@ else:
 
 failed_tests = []
 
+def run_proc(cmd_line):
+    print("     Running:", cmd_line)
+    return subprocess.run(cmd_line.split(" ")).returncode == 0
+
 def test_dir(dir, expected_result):
     if expected_result:
         print("\n=== Running VALID tests ===")
@@ -59,24 +63,23 @@ def test_dir(dir, expected_result):
         failed = False
 
         # Run DXC
-        success = subprocess.run(
-            ["dxc", fullpath, "-Od", "-E", "main", "-T", dxc_stage, "-Fo", dxc_out_path,
-             "-spirv", "-fspv-target-env=vulkan1.1"]).returncode == 0
+        success = run_proc(
+            f"dxc {fullpath} -Od -E main -T {dxc_stage} -Fo {dxc_out_path} -spirv -fspv-target-env=vulkan1.1")
         if success != expected_result:
             failed = True
 
         if success:
-            success = subprocess.run(["spirv-val", dxc_out_path]).returncode == 0
+            success = run_proc(f"spirv-val {dxc_out_path}")
             if success != expected_result: failed = True
 
         # Run tinyshader
-        success = subprocess.run(
-            [compiler_exe, "-E", "main", "-T", stage, "-o", out_path, fullpath]).returncode == 0
+        success = run_proc(
+            f"{compiler_exe} -E main -T {stage} -o {out_path} {fullpath}")
         if success != expected_result:
             failed = True
 
         if success:
-            success = subprocess.run(["spirv-val", out_path]).returncode == 0
+            success = run_proc(f"spirv-val {out_path}")
             if success != expected_result: failed = True
 
 

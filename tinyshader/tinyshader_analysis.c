@@ -3665,20 +3665,14 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
     case DECL_FUNC: {
         if (strcmp(m->entry_point, decl->name) == 0)
         {
-            decl->func.execution_model = NEW(compiler, SpvExecutionModel);
             decl->func.called = true;
+            m->entry_point_func = decl;
 
             switch (m->stage)
             {
-            case TS_SHADER_STAGE_VERTEX:
-                *decl->func.execution_model = SpvExecutionModelVertex;
-                break;
-            case TS_SHADER_STAGE_FRAGMENT:
-                *decl->func.execution_model = SpvExecutionModelFragment;
-                break;
-            case TS_SHADER_STAGE_COMPUTE:
-                *decl->func.execution_model = SpvExecutionModelGLCompute;
-
+            case TS_SHADER_STAGE_VERTEX: break;
+            case TS_SHADER_STAGE_FRAGMENT: break;
+            case TS_SHADER_STAGE_COMPUTE: {
                 bool got_numthreads = false;
 
                 for (uint32_t i = 0; i < arrLength(decl->attributes); ++i)
@@ -3712,7 +3706,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                                     uint32_t dim =
                                         (uint32_t)*attr->values.ptr[j]->resolved_int;
 
-                                    decl->func.compute_dims[j] = dim;
+                                    m->compute_dims[j] = dim;
                                 }
                             }
                         }
@@ -3730,14 +3724,11 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
 
                 break;
             }
-        }
+            }
 
-        for (uint32_t i = 0; i < arrLength(decl->func.all_params); ++i)
-        {
-            AstDecl *param_decl = decl->func.all_params.ptr[i];
-
-            if (decl->func.execution_model)
+            for (uint32_t i = 0; i < arrLength(decl->func.params); ++i)
             {
+                AstDecl *param_decl = decl->func.params.ptr[i];
                 if (!param_decl->var.semantic)
                 {
                     ts__addErr(
@@ -3745,28 +3736,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                         &param_decl->loc,
                         "entry point parameter needs a semantic string");
                 }
-
-                if (param_decl->var.kind == VAR_IN_PARAM ||
-                    param_decl->var.kind == VAR_PLAIN)
-                {
-                    arrPush(compiler, &decl->func.inputs, param_decl);
-                }
-                else if (
-                    param_decl->var.kind == VAR_OUT_PARAM ||
-                    param_decl->var.kind == VAR_INOUT_PARAM)
-                {
-                    arrPush(compiler, &decl->func.outputs, param_decl);
-                }
             }
-            else
-            {
-                arrPush(compiler, &decl->func.func_params, param_decl);
-            }
-        }
-
-        if (decl->func.execution_model)
-        {
-            assert(arrLength(decl->func.func_params) == 0);
         }
 
         decl->scope = NEW(compiler, Scope);
@@ -3784,127 +3754,16 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
 
         bool param_types_valid = true;
         AstType **param_types = NULL;
-        if (arrLength(decl->func.func_params) > 0)
+        if (arrLength(decl->func.params) > 0)
         {
             param_types =
-                NEW_ARRAY(compiler, AstType *, arrLength(decl->func.func_params));
+                NEW_ARRAY(compiler, AstType *, arrLength(decl->func.params));
         }
-
-        uint32_t input_loc = 0;
-        uint32_t output_loc = 0;
 
         analyzerPushScope(a, decl->scope);
-        for (uint32_t i = 0; i < arrLength(decl->func.inputs); ++i)
+        for (uint32_t i = 0; i < arrLength(decl->func.params); ++i)
         {
-            AstDecl *param_decl = decl->func.inputs.ptr[i];
-
-            if (param_decl->var.semantic)
-            {
-                if (ts__strcasecmp(param_decl->var.semantic, "SV_Position") == 0 &&
-                    *decl->func.execution_model == SpvExecutionModelFragment)
-                {
-                    IRDecoration dec = {0};
-                    dec.kind = SpvDecorationBuiltIn;
-                    dec.value = SpvBuiltInFragCoord;
-                    arrPush(compiler, &param_decl->decorations, dec);
-                }
-                else if (
-                    ts__strcasecmp(param_decl->var.semantic, "SV_InstanceID") == 0 &&
-                    *decl->func.execution_model == SpvExecutionModelVertex)
-                {
-                    IRDecoration dec = {0};
-                    dec.kind = SpvDecorationBuiltIn;
-                    dec.value = SpvBuiltInInstanceIndex;
-                    arrPush(compiler, &param_decl->decorations, dec);
-                }
-                else if (
-                    ts__strcasecmp(param_decl->var.semantic, "SV_VertexID") == 0 &&
-                    *decl->func.execution_model == SpvExecutionModelVertex)
-                {
-                    IRDecoration dec = {0};
-                    dec.kind = SpvDecorationBuiltIn;
-                    dec.value = SpvBuiltInVertexIndex;
-                    arrPush(compiler, &param_decl->decorations, dec);
-                }
-                else if (
-                    ts__strcasecmp(param_decl->var.semantic, "SV_DispatchThreadID") == 0 &&
-                    *decl->func.execution_model == SpvExecutionModelGLCompute)
-                {
-                    IRDecoration dec = {0};
-                    dec.kind = SpvDecorationBuiltIn;
-                    dec.value = SpvBuiltInGlobalInvocationId;
-                    arrPush(compiler, &param_decl->decorations, dec);
-                }
-                else if (
-                    ts__strcasecmp(param_decl->var.semantic, "SV_GroupID") == 0 &&
-                    *decl->func.execution_model == SpvExecutionModelGLCompute)
-                {
-                    IRDecoration dec = {0};
-                    dec.kind = SpvDecorationBuiltIn;
-                    dec.value = SpvBuiltInWorkgroupId;
-                    arrPush(compiler, &param_decl->decorations, dec);
-                }
-                else if (
-                    ts__strcasecmp(param_decl->var.semantic, "SV_GroupIndex") == 0 &&
-                    *decl->func.execution_model == SpvExecutionModelGLCompute)
-                {
-                    IRDecoration dec = {0};
-                    dec.kind = SpvDecorationBuiltIn;
-                    dec.value = SpvBuiltInLocalInvocationIndex;
-                    arrPush(compiler, &param_decl->decorations, dec);
-                }
-                else if (
-                    ts__strcasecmp(param_decl->var.semantic, "SV_GroupThreadID") == 0 &&
-                    *decl->func.execution_model == SpvExecutionModelGLCompute)
-                {
-                    IRDecoration dec = {0};
-                    dec.kind = SpvDecorationBuiltIn;
-                    dec.value = SpvBuiltInLocalInvocationId;
-                    arrPush(compiler, &param_decl->decorations, dec);
-                }
-                else
-                {
-                    IRDecoration dec = {0};
-                    dec.kind = SpvDecorationLocation;
-                    dec.value = input_loc++;
-                    arrPush(compiler, &param_decl->decorations, dec);
-                }
-            }
-
-            analyzerTryRegisterDecl(a, param_decl);
-            analyzerAnalyzeDecl(a, param_decl);
-        }
-
-        for (uint32_t i = 0; i < arrLength(decl->func.outputs); ++i)
-        {
-            AstDecl *param_decl = decl->func.outputs.ptr[i];
-
-            if (param_decl->var.semantic)
-            {
-                if (ts__strcasecmp(param_decl->var.semantic, "SV_Position") == 0 &&
-                    *decl->func.execution_model == SpvExecutionModelVertex)
-                {
-                    IRDecoration dec = {0};
-                    dec.kind = SpvDecorationBuiltIn;
-                    dec.value = SpvBuiltInPosition;
-                    arrPush(compiler, &param_decl->decorations, dec);
-                }
-                else
-                {
-                    IRDecoration dec = {0};
-                    dec.kind = SpvDecorationLocation;
-                    dec.value = output_loc++;
-                    arrPush(compiler, &param_decl->decorations, dec);
-                }
-            }
-
-            analyzerTryRegisterDecl(a, param_decl);
-            analyzerAnalyzeDecl(a, param_decl);
-        }
-
-        for (uint32_t i = 0; i < arrLength(decl->func.func_params); ++i)
-        {
-            AstDecl *param_decl = decl->func.func_params.ptr[i];
+            AstDecl *param_decl = decl->func.params.ptr[i];
             assert(param_decl->kind == DECL_VAR);
 
             analyzerTryRegisterDecl(a, param_decl);
@@ -3920,10 +3779,9 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                 continue;
             }
 
-            if (param_decl->var.kind == VAR_IN_PARAM ||
-                param_decl->var.kind == VAR_OUT_PARAM ||
-                param_decl->var.kind == VAR_INOUT_PARAM)
+            if (param_decl->var.kind == VAR_OUT_PARAM)
             {
+                // We pass a pointer when it's pass-by-reference
                 param_types[i] =
                     newPointerType(m, SpvStorageClassFunction, param_types[i]);
             }
@@ -3932,7 +3790,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
         if (param_types_valid)
         {
             decl->type = newFuncType(
-                m, return_type, param_types, arrLength(decl->func.func_params));
+                m, return_type, param_types, arrLength(decl->func.params));
         }
 
         for (uint32_t i = 0; i < arrLength(decl->func.stmts); ++i)
@@ -4040,14 +3898,8 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                 a->last_uniform_binding = binding_index + 1;
             }
 
-            IRDecoration dec = {0};
-            dec.kind = SpvDecorationBinding;
-            dec.value = binding_index;
-            arrPush(compiler, &decl->decorations, dec);
-
-            dec.kind = SpvDecorationDescriptorSet;
-            dec.value = set_index;
-            arrPush(compiler, &decl->decorations, dec);
+            decl->var.binding = binding_index;
+            decl->var.set = set_index;
         }
 
         break;

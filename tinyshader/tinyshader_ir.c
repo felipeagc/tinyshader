@@ -266,15 +266,6 @@ static bool irIsTypeCastable(IRType *src_type, IRType *dst_type, SpvOp *op)
     assert(0);
 }
 
-void ts__irTypeSetDecorations(
-    IRModule *m, IRType *type, IRDecoration *decorations, uint32_t decoration_count)
-{
-    type->decoration_count = decoration_count;
-
-    type->decorations = NEW_ARRAY(m->compiler, IRDecoration, decoration_count);
-    memcpy(type->decorations, decorations, sizeof(IRDecoration) * decoration_count);
-}
-
 static IRType *irGetCachedType(IRModule *m, IRType *type)
 {
     char *type_string = irTypeToString(m->compiler, type);
@@ -426,6 +417,18 @@ static uint32_t irModuleReserveId(IRModule *m)
     return m->id_bound++;
 }
 
+void ts__irDecorateType(
+    IRModule *m, IRType *type, const IRDecoration *decoration)
+{
+    arrPush(m->compiler, &type->decorations, *decoration);
+}
+
+void
+ts__irDecorateInst(IRModule *m, IRInst *inst, const IRDecoration *decoration)
+{
+    arrPush(m->compiler, &inst->decorations, *decoration);
+}
+
 IRInst *ts__irAddEntryPoint(
     IRModule *m,
     char *name,
@@ -454,12 +457,16 @@ ts__irEntryPointSetComputeDims(IRInst *entry_point, uint32_t x, uint32_t y, uint
     entry_point->entry_point.compute_dims.z = z;
 }
 
-IRInst *ts__irAddFunction(IRModule *m, IRType *func_type)
+IRInst *ts__irAddFunction(
+    IRModule *m,
+    IRType *func_type,
+    SpvFunctionControlMask control)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->id = irModuleReserveId(m);
     inst->kind = IR_INST_FUNCTION;
     inst->type = func_type;
+    inst->func.control = control;
 
     arrPush(m->compiler, &m->functions, inst);
 
@@ -500,7 +507,10 @@ void ts__irAddBlock(IRModule *m, IRInst *block)
     arrPush(m->compiler, &block->block.func->func.blocks, block);
 }
 
-IRInst *ts__irAddGlobal(IRModule *m, IRType *type, SpvStorageClass storage_class)
+IRInst *ts__irAddUniformGlobal(
+    IRModule *m,
+    IRType *type,
+    SpvStorageClass storage_class)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->id = irModuleReserveId(m);
@@ -508,13 +518,13 @@ IRInst *ts__irAddGlobal(IRModule *m, IRType *type, SpvStorageClass storage_class
     inst->var.storage_class = storage_class;
     inst->type = ts__irNewPointerType(m, inst->var.storage_class, type);
 
+    arrPush(m->compiler, &m->uniform_globals, inst);
     arrPush(m->compiler, &m->globals, inst);
-    arrPush(m->compiler, &m->all_globals, inst);
 
     return inst;
 }
 
-IRInst *ts__irAddInput(IRModule *m, IRInst *func, IRType *type)
+IRInst *ts__irAddInput(IRModule *m, IRType *type)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->id = irModuleReserveId(m);
@@ -522,13 +532,13 @@ IRInst *ts__irAddInput(IRModule *m, IRInst *func, IRType *type)
     inst->var.storage_class = SpvStorageClassInput;
     inst->type = ts__irNewPointerType(m, inst->var.storage_class, type);
 
-    arrPush(m->compiler, &func->func.inputs, inst);
-    arrPush(m->compiler, &m->all_globals, inst);
+    arrPush(m->compiler, &m->input_globals, inst);
+    arrPush(m->compiler, &m->globals, inst);
 
     return inst;
 }
 
-IRInst *ts__irAddOutput(IRModule *m, IRInst *func, IRType *type)
+IRInst *ts__irAddOutput(IRModule *m, IRType *type)
 {
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->id = irModuleReserveId(m);
@@ -536,8 +546,8 @@ IRInst *ts__irAddOutput(IRModule *m, IRInst *func, IRType *type)
     inst->var.storage_class = SpvStorageClassOutput;
     inst->type = ts__irNewPointerType(m, inst->var.storage_class, type);
 
-    arrPush(m->compiler, &func->func.outputs, inst);
-    arrPush(m->compiler, &m->all_globals, inst);
+    arrPush(m->compiler, &m->output_globals, inst);
+    arrPush(m->compiler, &m->globals, inst);
 
     return inst;
 }
@@ -1301,13 +1311,13 @@ static void irModuleReserveTypeIds(IRModule *m)
 
 static void irModuleEncodeDecorations(IRModule *m)
 {
-    for (uint32_t i = 0; i < arrLength(m->all_globals); ++i)
+    for (uint32_t i = 0; i < m->globals.len; ++i)
     {
-        IRInst *inst = m->all_globals.ptr[i];
+        IRInst *inst = m->globals.ptr[i];
         assert(inst->kind == IR_INST_VARIABLE);
         assert(inst->id);
 
-        for (uint32_t j = 0; j < arrLength(inst->decorations); ++j)
+        for (uint32_t j = 0; j < inst->decorations.len; ++j)
         {
             IRDecoration *dec = &inst->decorations.ptr[j];
             uint32_t param_count = 3;
@@ -1321,7 +1331,7 @@ static void irModuleEncodeDecorations(IRModule *m)
         }
     }
 
-    for (uint32_t i = 0; i < arrLength(m->type_cache.values); ++i)
+    for (uint32_t i = 0; i < m->type_cache.values.len; ++i)
     {
         IRType *type = (IRType *)m->type_cache.values.ptr[i];
         assert(type->id > 0);
@@ -1351,9 +1361,9 @@ static void irModuleEncodeDecorations(IRModule *m)
             }
         }
 
-        for (uint32_t j = 0; j < type->decoration_count; ++j)
+        for (uint32_t j = 0; j < type->decorations.len; ++j)
         {
-            IRDecoration *dec = &type->decorations[j];
+            IRDecoration *dec = &type->decorations.ptr[j];
             uint32_t param_count = 3;
             uint32_t params[3] = {type->id, dec->kind, dec->value};
 
@@ -2595,9 +2605,9 @@ static void irModuleEncodeConstants(IRModule *m)
 
 static void irModuleEncodeGlobals(IRModule *m)
 {
-    for (uint32_t i = 0; i < arrLength(m->all_globals); ++i)
+    for (uint32_t i = 0; i < m->globals.len; ++i)
     {
-        IRInst *inst = m->all_globals.ptr[i];
+        IRInst *inst = m->globals.ptr[i];
         assert(inst->kind == IR_INST_VARIABLE);
 
         uint32_t params[3] = {inst->type->id, inst->id, inst->var.storage_class};
@@ -2617,7 +2627,7 @@ static void irModuleEncodeFunctions(IRModule *m)
             uint32_t params[4] = {
                 inst->type->func.return_type->id,
                 inst->id,
-                SpvFunctionControlInlineMask,
+                inst->func.control,
                 inst->type->id,
             };
             irModuleEncodeInst(m, SpvOpFunction, params, 4);

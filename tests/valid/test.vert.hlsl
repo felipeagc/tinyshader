@@ -102,4 +102,5 @@ void main(
     {
 		pos.x = sqrt(123.0);
 	}
+    pos.x = 1.0;
 }

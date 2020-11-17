@@ -47,4 +47,5 @@ void main(
 
 	color = my_color;
     color.r = up.z;
+    color = float4(1, 1, 1, 1);
 }

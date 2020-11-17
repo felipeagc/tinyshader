@@ -332,8 +332,7 @@ typedef struct IRType
     char *string;
     uint32_t id;
 
-    IRDecoration *decorations;
-    uint32_t decoration_count;
+    ArrayOfIRDecoration decorations;
 
     union
     {
@@ -374,6 +373,7 @@ typedef struct IRType
 
             struct IRType **fields;
             uint32_t field_count;
+
             IRMemberDecoration *field_decorations;
             uint32_t field_decoration_count;
         } struct_;
@@ -532,6 +532,7 @@ struct IRInst
 
         struct
         {
+            SpvFunctionControlMask control;
             ArrayOfIRInstPtr params;
             ArrayOfIRInstPtr blocks;
             ArrayOfIRInstPtr inputs;
@@ -712,9 +713,11 @@ struct IRModule
     ArrayOfIRInstPtr entry_points;
     ArrayOfIRInstPtr constants;
     ArrayOfIRInstPtr functions;
-    ArrayOfIRInstPtr globals;     /* This only counts uniforms/storage variables */
-    ArrayOfIRInstPtr all_globals; /* This counts uniforms/storage variables and all
-                                       inputs/outputs of every stage */
+    ArrayOfIRInstPtr input_globals; /* This only counts input variables */
+    ArrayOfIRInstPtr output_globals; /* This only counts output variables */
+    ArrayOfIRInstPtr uniform_globals; /* This only counts uniforms/storage variables */
+    ArrayOfIRInstPtr globals;         /* This counts uniforms/storage variables and all
+                                         inputs/outputs of every stage */
 
     uint32_t glsl_ext_inst; // ID of the imported GLSL instruction set
     bool uses_image_query;
@@ -942,10 +945,8 @@ typedef enum AstVarKind {
     VAR_PLAIN = 0,
     VAR_UNIFORM,
     VAR_GROUPSHARED,
-    VAR_PARAM,
     VAR_IN_PARAM,
     VAR_OUT_PARAM,
-    VAR_INOUT_PARAM,
 } AstVarKind;
 
 typedef enum AstStmtKind {
@@ -1048,28 +1049,20 @@ struct AstDecl
     IRInst *value;
     Scope *scope;
     ArrayOfAstAttribute attributes;
-    ArrayOfIRDecoration decorations;
     int64_t *resolved_int;
 
     union
     {
         struct
         {
-            SpvExecutionModel *execution_model;
-
             ArrayOfAstStmtPtr stmts;
-            ArrayOfAstDeclPtr all_params;
+            ArrayOfAstDeclPtr params;
             AstExpr *return_type;
 
             // To be filled later:
             ArrayOfAstDeclPtr var_decls;
-            ArrayOfAstDeclPtr func_params;
-            ArrayOfAstDeclPtr inputs;
-            ArrayOfAstDeclPtr outputs;
 
             bool called; // if this function was called or if it's an entry point
-
-            uint32_t compute_dims[3];
         } func;
 
         struct
@@ -1079,6 +1072,9 @@ struct AstDecl
             char *semantic;
             AstVarKind kind;
             bool immutable;
+
+            uint32_t binding;
+            uint32_t set;
         } var;
 
         struct
@@ -1098,12 +1094,6 @@ struct AstDecl
             uint32_t index;
             char *semantic;
         } struct_field;
-
-        struct
-        {
-            uint32_t set_index;
-            ArrayOfAstDeclPtr params;
-        } parameter_block;
     };
 };
 
@@ -1250,6 +1240,11 @@ struct Module
 
     AstDecl **decls;
     size_t decl_count;
+
+    // Entry point information:
+    AstDecl *entry_point_func;
+    // only used for compute shaders
+    uint32_t compute_dims[3];
 };
 
 //
@@ -1377,9 +1372,6 @@ void ts__astModuleBuild(Module *ast_mod, IRModule *ir_mod);
 IRModule *ts__irModuleCreate(TsCompiler *compiler);
 void ts__irModuleDestroy(IRModule *m);
 
-void ts__irTypeSetDecorations(
-    IRModule *m, IRType *type, IRDecoration *decorations, uint32_t decoration_count);
-
 IRType *ts__irNewBasicType(IRModule *m, IRTypeKind kind);
 IRType *ts__irNewPointerType(IRModule *m, SpvStorageClass storage_class, IRType *sub);
 IRType *ts__irNewVectorType(IRModule *m, IRType *elem_type, uint32_t size);
@@ -1399,6 +1391,11 @@ IRType *ts__irNewStructType(
 IRType *ts__irNewImageType(IRModule *m, IRType *sampled_type, SpvDim dim);
 IRType *ts__irNewSampledImageType(IRModule *m, IRType *image_type);
 
+void ts__irDecorateType(
+    IRModule *m, IRType *type, const IRDecoration *decoration);
+void
+ts__irDecorateInst(IRModule *m, IRInst *inst, const IRDecoration *decoration);
+
 IRInst *ts__irAddEntryPoint(
     IRModule *m,
     char *name,
@@ -1408,14 +1405,17 @@ IRInst *ts__irAddEntryPoint(
     uint32_t global_count);
 void
 ts__irEntryPointSetComputeDims(IRInst *entry_point, uint32_t x, uint32_t y, uint32_t z);
-IRInst *ts__irAddFunction(IRModule *m, IRType *func_type);
+IRInst *ts__irAddFunction(IRModule *m, IRType *func_type, SpvFunctionControlMask control);
 IRInst *
 ts__irAddFuncParam(IRModule *m, IRInst *func, IRType *type, bool is_by_reference);
 IRInst *ts__irCreateBlock(IRModule *m, IRInst *func);
 void ts__irAddBlock(IRModule *m, IRInst *block);
-IRInst *ts__irAddGlobal(IRModule *m, IRType *type, SpvStorageClass storage_class);
-IRInst *ts__irAddInput(IRModule *m, IRInst *func, IRType *type);
-IRInst *ts__irAddOutput(IRModule *m, IRInst *func, IRType *type);
+IRInst *ts__irAddUniformGlobal(
+    IRModule *m,
+    IRType *type,
+    SpvStorageClass storage_class);
+IRInst *ts__irAddInput(IRModule *m, IRType *type);
+IRInst *ts__irAddOutput(IRModule *m, IRType *type);
 IRInst *ts__irGetCurrentBlock(IRModule *m);
 void ts__irPositionAtEnd(IRModule *m, IRInst *block);
 bool ts__irBlockHasTerminator(IRInst *block);
