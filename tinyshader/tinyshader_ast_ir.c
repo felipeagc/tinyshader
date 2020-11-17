@@ -2272,12 +2272,25 @@ void ts__astModuleBuild(Module *ast_mod, IRModule *ir_mod)
             arrPush(compiler, &entry_point_globals, outputs.ptr[i]);
         }
 
-        ts__irAddEntryPoint(
+        IRInst *entry_point = ts__irAddEntryPoint(
             ir_mod,
             func_decl->name,
             entry_func_wrapper,
             execution_model,
             entry_point_globals.ptr,
             entry_point_globals.len);
+
+        if (ast_mod->stage == TS_SHADER_STAGE_COMPUTE)
+        {
+            assert(ast_mod->compute_dims[0] >= 1);
+            assert(ast_mod->compute_dims[1] >= 1);
+            assert(ast_mod->compute_dims[2] >= 1);
+
+            ts__irEntryPointSetComputeDims(
+                entry_point,
+                ast_mod->compute_dims[0],
+                ast_mod->compute_dims[1],
+                ast_mod->compute_dims[2]);
+        }
     }
 }
