@@ -987,6 +987,7 @@ typedef enum AstExprKind {
     EXPR_UNARY,
     EXPR_BINARY,
     EXPR_TERNARY,
+    EXPR_AUTO_CAST,
 } AstExprKind;
 
 struct AstStmt
@@ -1179,6 +1180,11 @@ struct AstExpr
             AstExpr *true_expr;
             AstExpr *false_expr;
         } ternary;
+
+        struct
+        {
+            AstExpr *sub;
+        } auto_cast;
     };
 };
 
@@ -1360,6 +1366,7 @@ void ts__analyzerAnalyze(
     size_t decl_count);
 
 AstType *ts__getScalarType(AstType *type);
+AstType *ts__getScalarTypeNoVec(AstType *type);
 AstType *ts__getComparableType(AstType *type);
 AstType *ts__getLogicalType(AstType *type);
 uint32_t ts__getTypeElemCount(AstType *type);

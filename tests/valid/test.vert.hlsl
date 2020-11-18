@@ -113,5 +113,12 @@ void main(in VsInput vs_in, out VsOutput vs_out)
 	}
     vs_in.pos.x = 1.0;
 
+    {
+        int4 a_int_vec = 1.0;
+        float4 a_vector = a_int_vec;
+        a_vector = 1.0;
+        a_vector = int(1.0);
+    }
+
     vs_out.pos = vs_out.sv_pos;
 }

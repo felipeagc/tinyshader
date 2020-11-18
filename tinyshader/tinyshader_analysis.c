@@ -1203,13 +1203,6 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 {
                     expr->type = expected_type;
                 }
-                else if (expected_type->kind == TYPE_VECTOR)
-                {
-                    if (expected_type->vector.elem_type->kind == TYPE_FLOAT)
-                    {
-                        expr->type = expected_type;
-                    }
-                }
             }
             
             if (!expr->type)
@@ -1227,14 +1220,6 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                     (expected_type->kind == TYPE_BOOL))
                 {
                     expr->type = expected_type;
-                }
-                else if (expected_type->kind == TYPE_VECTOR)
-                {
-                    if ((expected_type->vector.elem_type->kind == TYPE_INT)
-                        || (expected_type->vector.elem_type->kind == TYPE_FLOAT))
-                    {
-                        expr->type = expected_type;
-                    }
                 }
             }
 
@@ -3543,6 +3528,13 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
         expr->type = expr->ternary.true_expr->type;
         break;
     }
+
+    case EXPR_AUTO_CAST:
+    {
+        assert(expr->auto_cast.sub);
+        assert(expr->auto_cast.sub->type);
+        break;
+    }
     }
 
     if (expected_type)
@@ -3553,10 +3545,37 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
         }
         else if (expr->type != expected_type)
         {
-            ts__addErr(compiler, &expr->loc,
-                       "unmatched types, expected '%s', instead got '%s'",
-                       typeToPrettyString(compiler, expected_type),
-                       typeToPrettyString(compiler, expr->type));
+            bool is_auto_castable = false;
+
+            // Cast scalar to vector
+            is_auto_castable |= (expected_type->kind == TYPE_VECTOR &&
+                                 ts__getScalarTypeNoVec(expr->type));
+
+            // Cast scalar to scalar
+            is_auto_castable |= (ts__getScalarTypeNoVec(expected_type) &&
+                                 ts__getScalarTypeNoVec(expr->type));
+
+            // Cast vector to vector
+            is_auto_castable |= (expected_type->kind == TYPE_VECTOR &&
+                                 expr->type->kind == TYPE_VECTOR &&
+                                 expected_type->vector.size == expr->type->vector.size);
+
+            if (is_auto_castable)
+            {
+                AstExpr *sub_expr = NEW(compiler, AstExpr);
+                *sub_expr = *expr;
+
+                expr->kind = EXPR_AUTO_CAST;
+                expr->auto_cast.sub = sub_expr;
+                expr->type = expected_type;
+            }
+            else
+            {
+                ts__addErr(compiler, &expr->loc,
+                        "unmatched types, expected '%s', instead got '%s'",
+                        typeToPrettyString(compiler, expected_type),
+                        typeToPrettyString(compiler, expr->type));
+            }
         }
     }
 }

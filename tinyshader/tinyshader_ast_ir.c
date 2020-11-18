@@ -236,7 +236,6 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
         {
         case TOKEN_FLOAT_LIT: {
             AstType *elem_type = ts__getElemType(expr->type);
-            IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, expr->type);
             IRType *ir_elem_type = convertTypeToIR(ast_mod, ir_mod, elem_type);
             switch (elem_type->kind)
             {
@@ -255,22 +254,11 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
             default: assert(0); break;
             }
 
-            if (expr->type->kind == TYPE_VECTOR)
-            {
-                IRInst **values = NEW_ARRAY(compiler, IRInst *, expr->type->vector.size);
-                for (uint32_t i = 0; i < expr->type->vector.size; ++i)
-                {
-                    values[i] = expr->value;
-                }
-                expr->value =
-                    ts__irBuildConstComposite(ir_mod, ir_type, values, expr->type->vector.size);
-            }
             break;
         }
 
         case TOKEN_INT_LIT: {
             AstType *elem_type = ts__getElemType(expr->type);
-            IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, expr->type);
             IRType *ir_elem_type = convertTypeToIR(ast_mod, ir_mod, elem_type);
             switch (elem_type->kind)
             {
@@ -293,18 +281,6 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
             }
 
             default: assert(0); break;
-            }
-
-
-            if (expr->type->kind == TYPE_VECTOR)
-            {
-                IRInst **values = NEW_ARRAY(compiler, IRInst *, expr->type->vector.size);
-                for (uint32_t i = 0; i < expr->type->vector.size; ++i)
-                {
-                    values[i] = expr->value;
-                }
-                expr->value =
-                    ts__irBuildConstComposite(ir_mod, ir_type, values, expr->type->vector.size);
             }
 
             break;
@@ -1521,6 +1497,63 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
         }
 
         expr->value = ts__irBuildSelect(ir_mod, ir_type, cond, true_value, false_value);
+        break;
+    }
+
+    case EXPR_AUTO_CAST:
+    {
+        if (expr->type->kind == TYPE_VECTOR &&
+            ts__getScalarTypeNoVec(expr->auto_cast.sub->type))
+        {
+            astBuildExpr(ast_mod, ir_mod, expr->auto_cast.sub);
+            IRInst *value = loadVal(ir_mod, expr->auto_cast.sub->value);
+            if (expr->auto_cast.sub->type != expr->type->vector.elem_type)
+            {
+                IRType *dst_type =
+                    convertTypeToIR(ast_mod, ir_mod, expr->type->vector.elem_type);
+                value = ts__irBuildCast(ir_mod, dst_type, value);
+            }
+
+            // Construct vector from element
+            uint32_t field_count = expr->type->vector.size;
+            IRInst **fields = NEW_ARRAY(compiler, IRInst*, field_count);
+            for (uint32_t i = 0; i < field_count; ++i)
+            {
+                fields[i] = value;
+            }
+
+            IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, expr->type);
+            expr->value = ts__irBuildCompositeConstruct(
+                ir_mod,
+                ir_type,
+                fields,
+                field_count);
+        }
+        else if (ts__getScalarTypeNoVec(expr->type) &&
+                 ts__getScalarTypeNoVec(expr->auto_cast.sub->type))
+        {
+            // Cast scalar
+            astBuildExpr(ast_mod, ir_mod, expr->auto_cast.sub);
+            IRInst *value = loadVal(ir_mod, expr->auto_cast.sub->value);
+
+            IRType *dst_type = convertTypeToIR(ast_mod, ir_mod, expr->type);
+            expr->value = ts__irBuildCast(ir_mod, dst_type, value);
+        }
+        else if (expr->type->kind == TYPE_VECTOR &&
+                 expr->auto_cast.sub->type->kind == TYPE_VECTOR &&
+                 expr->auto_cast.sub->type->vector.size == expr->type->vector.size)
+        {
+            // Cast vector to vector
+            astBuildExpr(ast_mod, ir_mod, expr->auto_cast.sub);
+            IRInst *value = loadVal(ir_mod, expr->auto_cast.sub->value);
+
+            IRType *dst_type = convertTypeToIR(ast_mod, ir_mod, expr->type);
+            expr->value = ts__irBuildCast(ir_mod, dst_type, value);
+        }
+        else
+        {
+            assert(0);
+        }
         break;
     }
 

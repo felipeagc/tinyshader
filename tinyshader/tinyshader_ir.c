@@ -176,6 +176,14 @@ static bool irIsTypeCastable(IRType *src_type, IRType *dst_type, SpvOp *op)
         *op = SpvOpNop;
         return true;
     }
+    else if (src_type->kind == IR_TYPE_VECTOR &&
+             dst_type->kind == IR_TYPE_VECTOR)
+    {
+        return irIsTypeCastable(
+            src_type->vector.elem_type,
+            dst_type->vector.elem_type,
+            op);
+    }
     else if (src_type->kind == IR_TYPE_INT)
     {
         if (src_type->int_.is_signed)
