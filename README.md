@@ -93,10 +93,12 @@ SamplerState gInput3; // Binding: 2, Set: 0
 [[vk::binding(2, 1)]] SamplerState gInput3; // Binding: 2, Set: 1
 ```
 
-### Entry point inputs/outputs
-As of now, you cannot pass the inputs of shader entry points as a struct.
-You also cannot pass the outputs as return values.
-You need to use in/out parameters for that instead, for example:
+### Stage inputs/outputs
+You can either pass the stage inputs/outputs as individual parameters or put them in a struct, where
+each struct member occupies a location.
+You can also use the returned value of a function as the stage output.
+
+Examples of stage inputs/outputs:
 
 ```hlsl
 void main(
@@ -105,6 +107,19 @@ void main(
     out float4 out_color : SV_Target // Output location: 0
 ) {
     out_color = 1.0f;
+}
+```
+
+```hlsl
+struct PSInput
+{
+    float4 pos : POSITION; // Input location: 0
+    float4 sv_pos : SV_Position; // Same as gl_FragCoord from GLSL, doesn't count as an input location
+    float2 uv : TEXCOORD0; // Input location: 1
+};
+
+float4 main(in PSInput ps_in) : SV_Target {
+    return float4(ps_in.uv, 0.0, 1.0); // Outputs to location 0
 }
 ```
 
