@@ -113,7 +113,6 @@ static const char *preprocessorGetIdentifier(
 
     if (!isLetter(*curr))
     {
-        *out_length = 0;
         return NULL;
     }
 
@@ -126,13 +125,63 @@ static const char *preprocessorGetIdentifier(
     char *result = NEW_ARRAY_UNINIT(p->compiler, char, (*out_length)+1);
     memcpy(result, text, *out_length);
     result[*out_length] = '\0';
-    return  result;
+    return result;
+}
+
+static const char *preprocessorExpandMacro(
+    Preprocessor *p,
+    const char *ident,
+    size_t ident_size,
+    const char *from_define, /* can be null */
+    size_t *out_length)
+{
+    size_t expanded_subtext_size = 0;
+    const char *expanded_subtext = NULL;
+
+    if (from_define && strcmp(from_define, ident) == 0)
+    {
+        // Recursive define, don't expand the identifier
+        expanded_subtext = ident;
+        expanded_subtext_size = ident_size;
+    }
+    else
+    {
+        char *define_value = NULL;
+        if (ts__hashGet(&p->defines, ident, (void**)&define_value))
+        {
+            if (define_value)
+            {
+                expanded_subtext = preprocessorExpandMacro(
+                    p,
+                    define_value,
+                    strlen(define_value),
+                    ident, /* can be null */
+                    &expanded_subtext_size);
+            }
+        }
+        else
+        {
+            expanded_subtext = ident;
+            expanded_subtext_size = ident_size;
+        }
+    }
+
+    ts__sbReset(&p->tmp_sb);
+    if (expanded_subtext_size > 0)
+    {
+        ts__sbAppendLen(&p->tmp_sb, expanded_subtext, expanded_subtext_size);
+    }
+
+    const char *result = ts__sbBuild(&p->tmp_sb, &p->compiler->alloc);
+    *out_length = strlen(result);
+    return result;
 }
 
 static void ts__preprocessFile(Preprocessor *p, PreprocessorFile *f)
 {
     bool at_bol = true;
 
+    f->col = 1;
     f->line = 1;
 
     while (preprocessorLengthLeft(f, 0) > 0)
@@ -295,33 +344,38 @@ static void ts__preprocessFile(Preprocessor *p, PreprocessorFile *f)
 
                 ts__hashRemove(&p->defines, define_name);
             }
-            else if (strcmp(ident, "if") == 0)
-            {
-                
-            }
             else if (strcmp(ident, "ifdef") == 0)
             {
-                
+                Location loc = preprocessorGetLoc(f);
+                ts__addErr(p->compiler, &loc, "#ifdef not implemented");
             }
             else if (strcmp(ident, "ifndef") == 0)
             {
-                
+                Location loc = preprocessorGetLoc(f);
+                ts__addErr(p->compiler, &loc, "#ifndef not implemented");
+            }
+            else if (strcmp(ident, "if") == 0)
+            {
+                Location loc = preprocessorGetLoc(f);
+                ts__addErr(p->compiler, &loc, "#if not implemented");
             }
             else if (strcmp(ident, "else") == 0)
             {
-                
+                Location loc = preprocessorGetLoc(f);
+                ts__addErr(p->compiler, &loc, "#else not implemented");
             }
             else if (strcmp(ident, "endif") == 0)
             {
-                
-            }
-            else if (strcmp(ident, "pragma") == 0)
-            {
-                
+                Location loc = preprocessorGetLoc(f);
+                ts__addErr(p->compiler, &loc, "#endif not implemented");
             }
             else if (strcmp(ident, "include") == 0)
             {
-                
+                Location loc = preprocessorGetLoc(f);
+                ts__addErr(p->compiler, &loc, "#include not implemented");
+            }
+            else if (strcmp(ident, "pragma") == 0)
+            {
             }
             else
             {
@@ -335,13 +389,37 @@ static void ts__preprocessFile(Preprocessor *p, PreprocessorFile *f)
 
         default:
         {
-            char c = *preprocessorPeek(f, 0);
-            if (!isWhitespace(c) && at_bol)
+            const char *curr = preprocessorPeek(f, 0);
+            size_t curr_size = preprocessorLengthLeft(f, 0);
+
+            if (!isWhitespace(*curr) && at_bol)
             {
                 at_bol = false;
             }
-            ts__sbAppendChar(&p->sb, c);
-            preprocessorNext(f, 1);
+
+            size_t ident_size = 0;
+            const char *ident = preprocessorGetIdentifier(
+                p,
+                curr,
+                curr_size,
+                &ident_size);
+
+            if (ident)
+            {
+                assert(ident_size > 0);
+                size_t expanded_size = 0;
+                const char *expanded = preprocessorExpandMacro(
+                    p, ident, ident_size, NULL, &expanded_size);
+
+                ts__sbAppendLen(&p->sb, expanded, expanded_size);
+                preprocessorNext(f, ident_size);
+            }
+            else
+            {
+                ts__sbAppendChar(&p->sb, *curr);
+                preprocessorNext(f, 1);
+            }
+
             break;
         }
         }

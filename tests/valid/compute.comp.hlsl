@@ -1,5 +1,9 @@
+#define MACRO1 MACRO2
+#define MACRO2 int
+
 struct BufType
 {
+    MACRO1 yo;
     int i;
     float f;
 };
