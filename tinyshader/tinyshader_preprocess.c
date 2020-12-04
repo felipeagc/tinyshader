@@ -4,12 +4,22 @@
  */
 #include "tinyshader_internal.h"
 
+typedef struct PreprocessorFile
+{
+    File *file;
+    StringBuilder sb;
+
+    size_t pos;
+    size_t line;
+    size_t col;
+} PreprocessorFile;
+
 typedef struct Preprocessor
 {
     TsCompiler *compiler;
-    StringBuilder sb;
     StringBuilder tmp_sb;
     HashMap defines;
+    ARRAY_OF(PreprocessorFile*) preproc_files;
 
     const char *input;
     size_t input_size;
@@ -19,14 +29,20 @@ typedef struct Preprocessor
     size_t col;
 } Preprocessor;
 
-typedef struct PreprocessorFile
+static PreprocessorFile *preprocessorFileCreate(Preprocessor *p, File *file)
 {
-    File *file;
+    PreprocessorFile *preproc_file = NEW(p->compiler, PreprocessorFile);
+    preproc_file->file = file;
+    ts__sbInit(&preproc_file->sb);
 
-    size_t pos;
-    size_t line;
-    size_t col;
-} PreprocessorFile;
+    arrPush(p->compiler, &p->preproc_files, preproc_file);
+    return preproc_file;
+}
+
+static void preprocessorFileDestroy(PreprocessorFile *preproc_file)
+{
+    ts__sbDestroy(&preproc_file->sb);
+}
 
 static inline bool isLetter(char c)
 {
@@ -65,6 +81,37 @@ static inline char preprocessorNext(PreprocessorFile *f, size_t count)
     return c;
 }
 
+static Location preprocessorGetLoc(PreprocessorFile *f)
+{
+    Location loc = {0};
+    loc.length = 1;
+    loc.line = f->line;
+    loc.col = f->col;
+    loc.pos = (uint32_t)f->pos;
+    loc.path = f->file->path;
+    loc.buffer = f->file->text;
+    return loc;
+}
+
+static inline bool preprocessorConsume(
+    Preprocessor *p, PreprocessorFile *f, const char **text, size_t *text_size, char wanted_char)
+{
+    if (text_size == 0) return false;
+    if (wanted_char == **text)
+    {
+        --(*text_size);
+        ++(*text);
+        return true;   
+    }
+
+    Location loc = preprocessorGetLoc(f);
+    ts__addErr(
+        p->compiler,
+        &loc,
+        "unexpected character '%c', expected '%c'", **text, wanted_char);
+    return false;
+}
+
 static size_t preprocessorSkipWhitespace(const char *text, size_t text_size)
 {
     const char *curr = text;
@@ -86,18 +133,6 @@ static size_t preprocessorSkipWhitespaceNewline(const char *text, size_t text_si
         curr++;
     }
     return (size_t)(curr - text);
-}
-
-static Location preprocessorGetLoc(PreprocessorFile *f)
-{
-    Location loc = {0};
-    loc.length = 1;
-    loc.line = f->line;
-    loc.col = f->col;
-    loc.pos = (uint32_t)f->pos;
-    loc.path = f->file->path;
-    loc.buffer = f->file->text;
-    return loc;
 }
 
 static const char *preprocessorGetIdentifier(
@@ -177,8 +212,28 @@ static const char *preprocessorExpandMacro(
     return result;
 }
 
-static void ts__preprocessFile(Preprocessor *p, PreprocessorFile *f)
+static const char *preprocessorLoadFileContent(
+    Preprocessor *p, const char *path, size_t *out_size)
 {
+    FILE *f = fopen(path, "rb");
+    if (!f) return false;
+
+    fseek(f, 0, SEEK_END);
+    *out_size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    char *data = NEW_ARRAY_UNINIT(p->compiler, char, *out_size);
+    fread(data, 1, *out_size, f);
+
+    fclose(f);
+
+    return data;
+}
+
+static const char *ts__preprocessFile(Preprocessor *p, PreprocessorFile *f)
+{
+    ts__sbReset(&f->sb);
+
     bool at_bol = true;
 
     f->col = 1;
@@ -192,7 +247,7 @@ static void ts__preprocessFile(Preprocessor *p, PreprocessorFile *f)
         {
             f->col = 1;
             f->line++;
-            ts__sbAppendChar(&p->sb, '\n');
+            ts__sbAppendChar(&f->sb, '\n');
             at_bol = true;
             preprocessorNext(f, 1);
             break;
@@ -204,7 +259,7 @@ static void ts__preprocessFile(Preprocessor *p, PreprocessorFile *f)
             {
                 f->col = 1;
                 f->line++;
-                ts__sbAppend(&p->sb, "\r\n");
+                ts__sbAppend(&f->sb, "\r\n");
                 at_bol = true;
                 preprocessorNext(f, 2);
             }
@@ -371,8 +426,51 @@ static void ts__preprocessFile(Preprocessor *p, PreprocessorFile *f)
             }
             else if (strcmp(ident, "include") == 0)
             {
-                Location loc = preprocessorGetLoc(f);
-                ts__addErr(p->compiler, &loc, "#include not implemented");
+                if (!preprocessorConsume(p, f, &content, &content_length, '\"')) break;
+
+                ts__sbReset(&p->tmp_sb);
+
+                while ((content_length > 0) && (*content != '\"'))
+                {
+                    ts__sbAppendChar(&p->tmp_sb, *content);
+                    content++;
+                    content_length--;
+                }
+
+                const char *file_path = ts__sbBuild(&p->tmp_sb, &p->compiler->alloc);
+
+                if (!preprocessorConsume(p, f, &content, &content_length, '\"')) break;
+
+                char *this_path = ts__getAbsolutePath(p->compiler, f->file->path);
+                char *dir_path = ts__getPathDir(p->compiler, this_path);
+                char *full_path = ts__pathConcat(p->compiler, dir_path, file_path);
+                bool exists = ts__fileExists(p->compiler, full_path);
+
+                if (!this_path || !dir_path || !full_path || !exists)
+                {
+                    Location err_loc = preprocessorGetLoc(f);
+                    ts__addErr(
+                        p->compiler, &err_loc,
+                        "included file not found in include paths: '%s'", file_path);
+                    break;
+                }
+
+                size_t file_size = 0;
+                const char *file_content = preprocessorLoadFileContent(p, full_path, &file_size);
+                if (!file_content)
+                {
+                    Location err_loc = preprocessorGetLoc(f);
+                    ts__addErr(
+                        p->compiler, &err_loc,
+                        "failed to load included file: '%s'", file_path);
+                    break;
+                }
+
+                File *file = ts__createFile(p->compiler, file_content, file_size, full_path);
+
+                PreprocessorFile *preproc_file = preprocessorFileCreate(p, file);
+                const char *preprocessed_file = ts__preprocessFile(p, preproc_file);
+                ts__sbAppend(&f->sb, preprocessed_file);
             }
             else if (strcmp(ident, "pragma") == 0)
             {
@@ -411,12 +509,12 @@ static void ts__preprocessFile(Preprocessor *p, PreprocessorFile *f)
                 const char *expanded = preprocessorExpandMacro(
                     p, ident, ident_size, NULL, &expanded_size);
 
-                ts__sbAppendLen(&p->sb, expanded, expanded_size);
+                ts__sbAppendLen(&f->sb, expanded, expanded_size);
                 preprocessorNext(f, ident_size);
             }
             else
             {
-                ts__sbAppendChar(&p->sb, *curr);
+                ts__sbAppendChar(&f->sb, *curr);
                 preprocessorNext(f, 1);
             }
 
@@ -424,6 +522,8 @@ static void ts__preprocessFile(Preprocessor *p, PreprocessorFile *f)
         }
         }
     }
+
+    return ts__sbBuild(&f->sb, &p->compiler->alloc);
 }
 
 const char *ts__preprocess(
@@ -434,18 +534,17 @@ const char *ts__preprocess(
     p->compiler = compiler;
 
     ts__hashInit(compiler, &p->defines, 0);
-    ts__sbInit(&p->sb);
     ts__sbInit(&p->tmp_sb);
 
-    ts__sbReset(&p->sb);
+    PreprocessorFile *preproc_file = preprocessorFileCreate(p, base_file);
+    const char *final_text = ts__preprocessFile(p, preproc_file);
 
-    PreprocessorFile *preproc_file = NEW(compiler, PreprocessorFile);
-    preproc_file->file = base_file;
-    ts__preprocessFile(p, preproc_file);
+    for (size_t i = 0; i < p->preproc_files.len; ++i)
+    {
+        PreprocessorFile *pf = p->preproc_files.ptr[i];
+        preprocessorFileDestroy(pf);
+    }
 
-    const char* final_text = ts__sbBuild(&p->sb, &p->compiler->alloc);
-
-    ts__sbDestroy(&p->sb);
     ts__sbDestroy(&p->tmp_sb);
     ts__hashDestroy(&p->defines);
 

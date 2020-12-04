@@ -1,6 +1,8 @@
 #define MACRO1 MACRO2
 #define MACRO2 int
 
+#include "included.hlsl"
+
 struct BufType
 {
     MACRO1 yo;
