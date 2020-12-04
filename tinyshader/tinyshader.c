@@ -4,7 +4,97 @@
  */
 #include "tinyshader_internal.h"
 
-void ts__addErr(TsCompiler *compiler, Location *loc, const char *fmt, ...)
+const char *TS__TOKEN_STRINGS[TOKEN_MAX] = {
+    [TOKEN_LPAREN] = "(",
+    [TOKEN_RPAREN] = ")",
+    [TOKEN_LBRACK] = "[",
+    [TOKEN_RBRACK] = "]",
+    [TOKEN_LCURLY] = "{",
+    [TOKEN_RCURLY] = "}",
+    [TOKEN_HASH] = "#",
+    [TOKEN_SEMICOLON] = ";",
+    [TOKEN_COLON] = ":",
+    [TOKEN_COLON_COLON] = "::",
+    [TOKEN_ADD] = "+",
+    [TOKEN_SUB] = "-",
+    [TOKEN_MUL] = "*",
+    [TOKEN_DIV] = "/",
+    [TOKEN_MOD] = "%",
+    [TOKEN_ADDADD] = "++",
+    [TOKEN_SUBSUB] = "--",
+    [TOKEN_BITOR] = "|",
+    [TOKEN_BITXOR] = "^",
+    [TOKEN_BITAND] = "&",
+    [TOKEN_BITNOT] = "~",
+    [TOKEN_LSHIFT] = "<<",
+    [TOKEN_RSHIFT] = ">>",
+    [TOKEN_PERIOD] = ".",
+    [TOKEN_COMMA] = ",",
+    [TOKEN_QUESTION] = "?",
+    [TOKEN_NOT] = "!",
+    [TOKEN_ASSIGN] = "=",
+    [TOKEN_EQUAL] = "==",
+    [TOKEN_NOTEQ] = "!=",
+    [TOKEN_LESS] = "<",
+    [TOKEN_LESSEQ] = "<=",
+    [TOKEN_GREATER] = ">",
+    [TOKEN_GREATEREQ] = ">=",
+    [TOKEN_ADD_ASSIGN] = "+=",
+    [TOKEN_SUB_ASSIGN] = "-=",
+    [TOKEN_MUL_ASSIGN] = "*=",
+    [TOKEN_DIV_ASSIGN] = "/=",
+    [TOKEN_MOD_ASSIGN] = "%=",
+    [TOKEN_BITAND_ASSIGN] = "&=",
+    [TOKEN_BITOR_ASSIGN] = "|=",
+    [TOKEN_BITXOR_ASSIGN] = "^=",
+    [TOKEN_LSHIFT_ASSIGN] = "<<=",
+    [TOKEN_RSHIFT_ASSIGN] = ">>=",
+    [TOKEN_AND] = "&&",
+    [TOKEN_OR] = "||",
+    [TOKEN_IDENT] = "<identifier>",
+    [TOKEN_IN] = "in",
+    [TOKEN_OUT] = "out",
+    [TOKEN_INOUT] = "inout",
+    [TOKEN_STRUCT] = "struct",
+    [TOKEN_FOR] = "for",
+    [TOKEN_WHILE] = "while",
+    [TOKEN_DO] = "do",
+    [TOKEN_SWITCH] = "switch",
+    [TOKEN_CASE] = "case",
+    [TOKEN_DEFAULT] = "default",
+    [TOKEN_BREAK] = "break",
+    [TOKEN_CONTINUE] = "continue",
+    [TOKEN_IF] = "if",
+    [TOKEN_ELSE] = "else",
+    [TOKEN_RETURN] = "return",
+    [TOKEN_CONST] = "const",
+    [TOKEN_CONSTANT_BUFFER] = "ConstantBuffer",
+    [TOKEN_STRUCTURED_BUFFER] = "StructuredBuffer",
+    [TOKEN_RW_STRUCTURED_BUFFER] = "RWStructuredBuffer",
+    [TOKEN_SAMPLER_STATE] = "SamplerState",
+    [TOKEN_TEXTURE_1D] = "Texture1D",
+    [TOKEN_TEXTURE_2D] = "Texture2D",
+    [TOKEN_TEXTURE_3D] = "Texture3D",
+    [TOKEN_TEXTURE_CUBE] = "TextureCube",
+    [TOKEN_DISCARD] = "discard",
+    [TOKEN_INT_LIT] = "<integer literal>",
+    [TOKEN_FLOAT_LIT] = "<float literal>",
+    [TOKEN_STRING_LIT] = "<string literal>",
+    [TOKEN_BOOL] = "bool",
+    [TOKEN_UINT] = "uint",
+    [TOKEN_INT] = "int",
+    [TOKEN_FLOAT] = "float",
+    [TOKEN_VOID] = "void",
+    [TOKEN_FALSE] = "false",
+    [TOKEN_TRUE] = "true",
+    [TOKEN_VECTOR_TYPE] = "<vector type>",
+    [TOKEN_MATRIX_TYPE] = "<matrix type>",
+    [TOKEN_STATIC] = "static",
+    [TOKEN_GROUPSHARED] = "groupshared",
+    [TOKEN_REGISTER] = "register",
+};
+
+void ts__addErr(TsCompiler *compiler, const Location *loc, const char *fmt, ...)
 {
     va_list vl;
 
@@ -273,21 +363,17 @@ void tsCompile(TsCompiler *compiler, TsCompilerInput *input, TsCompilerOutput *o
     Module *module = NEW(compiler, Module);
     moduleInit(module, compiler, input->entry_point, input->stage);
 
-    Preprocessor p = {0};
-    size_t text_size = 0;
-    char *text = ts__preprocessRootFile(&p, compiler, file, &text_size);
+    size_t preprocessed_text_size = 0;
+    const char *preprocessed_text = ts__preprocess(compiler, file, &preprocessed_text_size);
     if (handleErrors(compiler, output)) return;
 
-    Lexer lexer = {0};
-    ts__lexerLex(&lexer, compiler, text, text_size);
+    ArrayOfToken tokens =  ts__lex(compiler, file, preprocessed_text, preprocessed_text_size);
     if (handleErrors(compiler, output)) return;
 
-    Parser parser = {0};
-    ts__parserParse(&parser, compiler, lexer.tokens.ptr, arrLength(lexer.tokens));
+    ArrayOfAstDeclPtr decls = ts__parse(compiler, tokens);
     if (handleErrors(compiler, output)) return;
 
-    ts__analyzerAnalyze(
-        compiler, module, parser.decls.ptr, arrLength(parser.decls));
+    ts__analyze(compiler, module, decls.ptr, decls.len);
     if (handleErrors(compiler, output)) return;
 
     IRModule *ir_module = ts__irModuleCreate(compiler);

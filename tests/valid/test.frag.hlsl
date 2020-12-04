@@ -2,7 +2,9 @@
 #include "./included.hlsl"
 
 #define SOME_CONST 1.0123123
-#define HELLO 123 + 123
+#define \
+   HELLO 123 + 123 \
+   123 123123
 
 #ifndef ASDASD
 #else

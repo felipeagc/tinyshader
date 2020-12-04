@@ -549,6 +549,16 @@ void ts__sbAppend(StringBuilder *sb, const char *str)
     sb->len += len;
 }
 
+void ts__sbAppendLen(StringBuilder *sb, const char *str, size_t len)
+{
+    while (len + sb->len >= sb->cap)
+    {
+        sbGrow(sb);
+    }
+    strncpy(&sb->buf[sb->len], str, len);
+    sb->len += len;
+}
+
 void ts__sbAppendChar(StringBuilder *sb, char c)
 {
     while (1 + sb->len >= sb->cap)

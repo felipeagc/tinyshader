@@ -4,6 +4,20 @@
  */
 #include "tinyshader_internal.h"
 
+typedef struct Analyzer
+{
+    TsCompiler *compiler;
+    Module *module;
+
+    AstDecl *scope_func;
+    ArrayOfScopePtr scope_stack;
+
+    ArrayOfAstStmtPtr continue_stack;
+    ArrayOfAstStmtPtr break_stack;
+
+    uint32_t last_uniform_binding;
+} Analyzer;
+
 static void scopeInit(TsCompiler *compiler, Scope *scope, Scope *parent, AstDecl *owner)
 {
     memset(scope, 0, sizeof(*scope));
@@ -4100,7 +4114,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
     }
 }
 
-void ts__analyzerAnalyze(
+void ts__analyze(
     TsCompiler *compiler, Module *module, AstDecl **decls, size_t decl_count)
 {
     Analyzer *a = NEW(compiler, Analyzer);

@@ -156,6 +156,8 @@ typedef enum TokenKind {
     TOKEN_COLON,
     TOKEN_COLON_COLON,
 
+    TOKEN_HASH, // #
+
     TOKEN_ADD,
     TOKEN_SUB,
     TOKEN_MUL,
@@ -256,10 +258,13 @@ typedef enum TokenKind {
     TOKEN_MAX,
 } TokenKind;
 
+extern const char *TS__TOKEN_STRINGS[TOKEN_MAX];
+
 typedef struct Token
 {
     TokenKind kind;
     Location loc;
+    bool at_bol; // If the token is at the beginning of a line
     union
     {
         char *str;
@@ -1252,70 +1257,6 @@ struct Module
     uint32_t compute_dims[3];
 };
 
-//
-// Preprocessor
-//
-
-typedef struct Preprocessor
-{
-    TsCompiler *compiler;
-    StringBuilder sb;
-    HashMap defines;
-} Preprocessor;
-
-//
-// Lexer
-//
-
-typedef struct Lexer
-{
-    TsCompiler *compiler;
-
-    char *text;
-    size_t text_size;
-    Token token;
-
-    ArrayOfToken tokens;
-
-    char *file_path;
-    size_t pos;
-    uint32_t line;
-    uint32_t col;
-} Lexer;
-
-//
-// Parser
-//
-
-typedef struct Parser
-{
-    TsCompiler *compiler;
-    Token *tokens;
-    size_t token_count;
-
-    ArrayOfAstDeclPtr decls;
-
-    size_t pos;
-} Parser;
-
-//
-// Analyzer
-//
-
-typedef struct Analyzer
-{
-    TsCompiler *compiler;
-    Module *module;
-
-    AstDecl *scope_func;
-    ArrayOfScopePtr scope_stack;
-
-    ArrayOfAstStmtPtr continue_stack;
-    ArrayOfAstStmtPtr break_stack;
-
-    uint32_t last_uniform_binding;
-} Analyzer;
-
 ////////////////////////////////
 //
 // Functions
@@ -1344,22 +1285,23 @@ void ts__sbInit(StringBuilder *sb);
 void ts__sbDestroy(StringBuilder *sb);
 void ts__sbReset(StringBuilder *sb);
 void ts__sbAppend(StringBuilder *sb, const char *str);
+void ts__sbAppendLen(StringBuilder *sb, const char *str, size_t len);
 void ts__sbAppendChar(StringBuilder *sb, char c);
 void ts__sbSprintf(StringBuilder *sb, const char *fmt, ...);
 void ts__sbVsprintf(StringBuilder *sb, const char *fmt, va_list vl);
 char *ts__sbBuildMalloc(StringBuilder *sb);
 char *ts__sbBuild(StringBuilder *sb, BumpAlloc *bump);
 
-void ts__addErr(TsCompiler *compiler, Location *loc, const char *msg, ...);
+void ts__addErr(TsCompiler *compiler, const Location *loc, const char *msg, ...);
 
 File *ts__createFile(
     TsCompiler *compiler, const char *text, size_t text_size, const char *path);
 
-char *ts__preprocessRootFile(
-    Preprocessor *p, TsCompiler *compiler, File *file, size_t *out_length);
-void ts__lexerLex(Lexer *l, TsCompiler *compiler, char *text, size_t text_size);
-void ts__parserParse(Parser *p, TsCompiler *compiler, Token *tokens, size_t token_count);
-void ts__analyzerAnalyze(
+
+const char *ts__preprocess(TsCompiler *compiler, File *base_file, size_t *out_size);
+ArrayOfToken ts__lex(TsCompiler *compiler, File *file, const char *text, size_t text_size);
+ArrayOfAstDeclPtr ts__parse(TsCompiler *compiler, ArrayOfToken tokens);
+void ts__analyze(
     TsCompiler *compiler,
     Module *module,
     AstDecl **decls,

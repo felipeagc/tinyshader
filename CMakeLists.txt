@@ -8,6 +8,8 @@ add_library(
   tinyshader/tinyshader_internal.h
   tinyshader/tinyshader.c
   tinyshader/tinyshader_misc.c
+  tinyshader/tinyshader_lexer.c
+  tinyshader/tinyshader_preprocess.c
   tinyshader/tinyshader_parser.c
   tinyshader/tinyshader_ir.c
   tinyshader/tinyshader_ast_ir.c
