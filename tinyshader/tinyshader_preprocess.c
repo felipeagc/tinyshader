@@ -27,6 +27,8 @@ typedef struct Preprocessor
     size_t pos;
     size_t line;
     size_t col;
+
+    ARRAY_OF(bool) cond_stack;
 } Preprocessor;
 
 static PreprocessorFile *preprocessorFileCreate(Preprocessor *p, File *file)
@@ -241,6 +243,12 @@ static const char *ts__preprocessFile(Preprocessor *p, PreprocessorFile *f)
 
     while (preprocessorLengthLeft(f, 0) > 0)
     {
+        bool may_insert = true;
+        if (p->cond_stack.len > 0)
+        {
+            may_insert = p->cond_stack.ptr[p->cond_stack.len-1];
+        }
+
         switch (*preprocessorPeek(f, 0))
         {
         case '\n':
@@ -386,6 +394,8 @@ static const char *ts__preprocessFile(Preprocessor *p, PreprocessorFile *f)
             }
             else if (strcmp(ident, "undef") == 0)
             {
+                if (!may_insert) break;
+
                 size_t define_name_length = 0;
                 const char *define_name = preprocessorGetIdentifier(
                     p, content, content_length, &define_name_length);
@@ -401,45 +411,95 @@ static const char *ts__preprocessFile(Preprocessor *p, PreprocessorFile *f)
             }
             else if (strcmp(ident, "ifdef") == 0)
             {
-                Location loc = preprocessorGetLoc(f);
-                ts__addErr(p->compiler, &loc, "#ifdef not implemented");
+                if (!may_insert) break;
+
+                size_t define_name_length = 0;
+                const char *define_name = preprocessorGetIdentifier(
+                    p, content, content_length, &define_name_length);
+
+                if (define_name_length == 0)
+                {
+                    Location loc = preprocessorGetLoc(f);
+                    ts__addErr(p->compiler, &loc, "missing define name");
+                    break;
+                }
+
+                bool defined = ts__hashGet(&p->defines, define_name, NULL);
+                arrPush(p->compiler, &p->cond_stack, defined);
             }
             else if (strcmp(ident, "ifndef") == 0)
             {
-                Location loc = preprocessorGetLoc(f);
-                ts__addErr(p->compiler, &loc, "#ifndef not implemented");
+                if (!may_insert) break;
+
+                size_t define_name_length = 0;
+                const char *define_name = preprocessorGetIdentifier(
+                    p, content, content_length, &define_name_length);
+
+                if (define_name_length == 0)
+                {
+                    Location loc = preprocessorGetLoc(f);
+                    ts__addErr(p->compiler, &loc, "missing define name");
+                    break;
+                }
+
+                bool defined = ts__hashGet(&p->defines, define_name, NULL);
+                arrPush(p->compiler, &p->cond_stack, !defined);
             }
             else if (strcmp(ident, "if") == 0)
             {
+                if (!may_insert) break;
+
                 Location loc = preprocessorGetLoc(f);
                 ts__addErr(p->compiler, &loc, "#if not implemented");
             }
             else if (strcmp(ident, "else") == 0)
             {
-                Location loc = preprocessorGetLoc(f);
-                ts__addErr(p->compiler, &loc, "#else not implemented");
+                if (p->cond_stack.len == 0)
+                {
+                    Location loc = preprocessorGetLoc(f);
+                    ts__addErr(p->compiler, &loc, "unmatched #else");
+                }
+                else
+                {
+                    // Invert condition
+                    p->cond_stack.ptr[p->cond_stack.len-1] =
+                        !p->cond_stack.ptr[p->cond_stack.len-1];
+                }
             }
             else if (strcmp(ident, "endif") == 0)
             {
-                Location loc = preprocessorGetLoc(f);
-                ts__addErr(p->compiler, &loc, "#endif not implemented");
+                if (p->cond_stack.len == 0)
+                {
+                    Location loc = preprocessorGetLoc(f);
+                    ts__addErr(p->compiler, &loc, "unmatched #endif");
+                }
+                else
+                {
+                    p->cond_stack.len--;
+                }
             }
             else if (strcmp(ident, "include") == 0)
             {
-                if (!preprocessorConsume(p, f, &content, &content_length, '\"')) break;
+                if (!may_insert) break;
+
+                size_t expanded_size = 0;
+                const char *expanded = preprocessorExpandMacro(
+                    p, content, content_length, NULL, &expanded_size);
+
+                if (!preprocessorConsume(p, f, &expanded, &expanded_size, '\"')) break;
 
                 ts__sbReset(&p->tmp_sb);
 
-                while ((content_length > 0) && (*content != '\"'))
+                while ((expanded_size > 0) && (*expanded != '\"'))
                 {
-                    ts__sbAppendChar(&p->tmp_sb, *content);
-                    content++;
-                    content_length--;
+                    ts__sbAppendChar(&p->tmp_sb, *expanded);
+                    expanded++;
+                    expanded_size--;
                 }
 
                 const char *file_path = ts__sbBuild(&p->tmp_sb, &p->compiler->alloc);
 
-                if (!preprocessorConsume(p, f, &content, &content_length, '\"')) break;
+                if (!preprocessorConsume(p, f, &expanded, &expanded_size, '\"')) break;
 
                 char *this_path = ts__getAbsolutePath(p->compiler, f->file->path);
                 char *dir_path = ts__getPathDir(p->compiler, this_path);
@@ -474,6 +534,7 @@ static const char *ts__preprocessFile(Preprocessor *p, PreprocessorFile *f)
             }
             else if (strcmp(ident, "pragma") == 0)
             {
+                if (!may_insert) break;
             }
             else
             {
@@ -487,6 +548,12 @@ static const char *ts__preprocessFile(Preprocessor *p, PreprocessorFile *f)
 
         default:
         {
+            if (!may_insert)
+            {
+                preprocessorNext(f, 1);
+                break;
+            }
+
             const char *curr = preprocessorPeek(f, 0);
             size_t curr_size = preprocessorLengthLeft(f, 0);
 
@@ -539,11 +606,21 @@ const char *ts__preprocess(
     PreprocessorFile *preproc_file = preprocessorFileCreate(p, base_file);
     const char *final_text = ts__preprocessFile(p, preproc_file);
 
+    if (p->cond_stack.len > 0)
+    {
+        Location err_loc = preprocessorGetLoc(preproc_file);
+        ts__addErr(
+            p->compiler, &err_loc,
+            "unclosed conditional preprocessor directive");
+    }
+
     for (size_t i = 0; i < p->preproc_files.len; ++i)
     {
         PreprocessorFile *pf = p->preproc_files.ptr[i];
         preprocessorFileDestroy(pf);
     }
+
+    /* printf("%s\n", final_text); */
 
     ts__sbDestroy(&p->tmp_sb);
     ts__hashDestroy(&p->defines);

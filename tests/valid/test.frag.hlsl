@@ -3,21 +3,25 @@
 
 #define SOME_CONST 1.0123123
 #define \
-   HELLO 123 + 123 \
-   123 123123
+HELLO 123 + 123 \
+123 123123
 
 #ifndef ASDASD
 #else
-heyy
+dont compile this
+#endif
+
+#ifndef HELLO
+dont compile this either
 #endif
 
 struct Uniform
 {
-	float4 yoo;
-	float hey;
-	Hello hello;
-	float4x4 transform;
-	float4x4 view;
+    float4 yoo;
+    float hey;
+    Hello hello;
+    float4x4 transform;
+    float4x4 view;
 };
 
 ConstantBuffer<Uniform> gInput;
@@ -32,17 +36,20 @@ struct VsOutput
 
 float4 main(in VsOutput vs_out, out float4 out_color2 : SV_Target1) : SV_Target0
 {
-    for (; vs_out.pos.x > 0;) {
+    for (; vs_out.pos.x > 0;)
+    {
         if (vs_out.pos.x <= 123)
         {
             break;
         }
     }
 
-    float4 my_color = gInput2.Sample(gInput3, vs_out.uv) * float4(ddx(1.0), 1, 1, 1) *
+    float4 my_color =
+        gInput2.Sample(gInput3, vs_out.uv) *
+        float4(ddx(1.0), 1, 1, 1) *
         float4(gInput.hey, gInput.hey, gInput.hey, gInput.hey);
 
-	my_color = gInput2.SampleLevel(gInput3, vs_out.uv, 1);
+    my_color = gInput2.SampleLevel(gInput3, vs_out.uv, 1);
     float width;
     float height;
     float mip_levels;
@@ -50,7 +57,7 @@ float4 main(in VsOutput vs_out, out float4 out_color2 : SV_Target1) : SV_Target0
 
     float3 up = abs(vs_out.pos.x) < 0.999 ? float3(0.0, 0.0, 1.0) : float3(1.0, 0.0, 0.0);
 
-	float4 color = my_color;
+    float4 color = my_color;
     color.r = up.z;
     color = float4(1, 1, 1, 1);
 

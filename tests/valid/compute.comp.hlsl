@@ -1,7 +1,22 @@
 #define MACRO1 MACRO2
 #define MACRO2 int
 
-#include "included.hlsl"
+#define MY_INCLUDE "included.hlsl"
+
+#include MY_INCLUDE
+#include MY_INCLUDE
+#include MY_INCLUDE
+
+#ifdef MY_INCLUDE
+# ifdef MY_INCLUDE
+# endif
+#else
+aaaaaaaaaaa
+# endif
+
+#ifdef INCLUDE_THIS_FILE
+#include "file_that_does_not_exist.hlsl"
+#endif
 
 struct BufType
 {

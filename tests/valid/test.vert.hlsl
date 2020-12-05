@@ -10,11 +10,11 @@ heyy
 
 struct Uniform
 {
-	float4 yoo;
-	float hey;
-	Hello hello;
-	float4x4 transform;
-	float4x4 view;
+    float4 yoo;
+    float hey;
+    Hello hello;
+    float4x4 transform;
+    float4x4 view;
 };
 
 ConstantBuffer<Uniform> gInput;
@@ -23,18 +23,18 @@ SamplerState gInput3;
 
 void otherFunc(inout float3 pos)
 {
-	pos.x = pos.x * SOME_CONST;
+    pos.x = pos.x * SOME_CONST;
 }
 
 float rand(float2 uv)
 {
-	return frac(sin(dot(uv.xy, float2(12.9898,78.233))) * 43758.5453);
+    return frac(sin(dot(uv.xy, float2(12.9898,78.233))) * 43758.5453);
 }
 
 struct VsInput
 {
     uint vertexIndex : SV_VertexID;
-	float3 pos : POSITION;
+    float3 pos : POSITION;
 };
 
 struct VsOutput
@@ -46,14 +46,14 @@ struct VsOutput
 
 void main(in VsInput vs_in, out VsOutput vs_out)
 {
-	float3x3 my_matrix = float3x3(1, 2, 3, 4, 5, 6, 7, 8, 9);
+    float3x3 my_matrix = float3x3(1, 2, 3, 4, 5, 6, 7, 8, 9);
 
-	vs_out.uv = float2(float((vs_in.vertexIndex << 1) & 2), float(vs_in.vertexIndex & 2));
-	float2 temp = vs_out.uv * 2.0 - 1.0;
+    vs_out.uv = float2(float((vs_in.vertexIndex << 1) & 2), float(vs_in.vertexIndex & 2));
+    float2 temp = vs_out.uv * 2.0 - 1.0;
     vs_out.sv_pos = float4(temp.x, temp.y, 0.0, 1.0);
 
-	float noise = rand(vs_out.uv);
-	float2 a2 = sin(float2(1, 1));
+    float noise = rand(vs_out.uv);
+    float2 a2 = sin(float2(1, 1));
 
     {
         vs_out.uv = float2(float((vs_in.vertexIndex << 1) & 2), float(vs_in.vertexIndex & 2));
@@ -107,10 +107,10 @@ void main(in VsInput vs_in, out VsOutput vs_out)
         float b = determinant(mat3);
     }
 
-	if (vs_in.pos.x > 0.0)
+    if (vs_in.pos.x > 0.0)
     {
-		vs_in.pos.x = sqrt(123.0);
-	}
+        vs_in.pos.x = sqrt(123.0);
+    }
     vs_in.pos.x = 1.0;
 
     {
