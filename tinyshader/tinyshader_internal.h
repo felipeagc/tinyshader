@@ -278,8 +278,6 @@ typedef enum TokenKind {
     TOKEN_MAX,
 } TokenKind;
 
-extern const char *TS__TOKEN_STRINGS[TOKEN_MAX];
-
 typedef struct Token
 {
     TokenKind kind;
@@ -1282,6 +1280,8 @@ struct Module
 // Functions
 //
 ////////////////////////////////
+
+const char *ts__getTokenString(TokenKind kind);
 
 char *ts__getAbsolutePath(TsCompiler *compiler, const char *relative_path);
 char *ts__getPathDir(TsCompiler *compiler, const char *path);

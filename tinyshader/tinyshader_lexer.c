@@ -638,6 +638,22 @@ ArrayOfToken ts__lex(TsCompiler *compiler, File *file, const char *text, size_t 
         {
             arrPush(l->compiler, &l->tokens, l->token);
         }
+
+        Token *hash_tok = &l->tokens.ptr[l->tokens.len-4];
+        Token *ident_tok = &l->tokens.ptr[l->tokens.len-3];
+        Token *line_tok = &l->tokens.ptr[l->tokens.len-2];
+        Token *path_tok = &l->tokens.ptr[l->tokens.len-1];
+        if (l->tokens.len >= 4 &&
+            hash_tok->kind == TOKEN_HASH &&
+            ident_tok->kind == TOKEN_IDENT &&
+            line_tok->kind == TOKEN_INT_LIT &&
+            path_tok->kind == TOKEN_STRING_LIT &&
+            strcmp(ident_tok->str, "line") == 0)
+        {
+            l->line = line_tok->int_;
+            l->file_path = path_tok->str;
+            l->tokens.len -= 4;
+        }
     }
 
     if (l->tokens.len == 0)

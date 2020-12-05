@@ -194,6 +194,11 @@ static const char *preprocessorExpandMacro(
     return result;
 }
 
+static void preprocessorInsertLineInfo(StringBuilder *sb, PreprocessorFile *f)
+{
+    ts__sbSprintf(sb, "#line %zu \"%s\"", f->line, f->file->path);
+}
+
 static const char *preprocessorLoadFileContent(
     Preprocessor *p, const char *path, size_t *out_size)
 {
@@ -509,8 +514,14 @@ static const char *ts__preprocessFile(Preprocessor *p, PreprocessorFile *f)
                 File *file = ts__createFile(p->compiler, file_content, file_size, full_path);
 
                 PreprocessorFile *preproc_file = preprocessorFileCreate(p, file);
+
+                preprocessorInsertLineInfo(&f->sb, preproc_file);
+                ts__sbAppend(&f->sb, "\n"); // Extra line ending after first line info
+
                 const char *preprocessed_file = ts__preprocessFile(p, preproc_file);
                 ts__sbAppend(&f->sb, preprocessed_file);
+
+                preprocessorInsertLineInfo(&f->sb, f);
             }
             else if (strcmp(ident, "pragma") == 0)
             {

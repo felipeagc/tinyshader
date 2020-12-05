@@ -56,7 +56,7 @@ static inline Token *parserConsume(Parser *p, TokenKind kind)
             "unexpected token: '%.*s', expected: '%s'",
             (int)tok->loc.length,
             &tok->loc.buffer[tok->loc.pos],
-            TS__TOKEN_STRINGS[kind]);
+            ts__getTokenString(kind));
         return NULL;
     }
     parserNext(p, 1);
@@ -159,7 +159,7 @@ static AstExpr *parsePrimaryExpr(Parser *p)
             p->compiler,
             &parserPeek(p, 0)->loc,
             "expecting primary expression, instead got: '%s'",
-            TS__TOKEN_STRINGS[parserPeek(p, 0)->kind]);
+            ts__getTokenString(parserPeek(p, 0)->kind));
         parserNext(p, 1);
         break;
     }
