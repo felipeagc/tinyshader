@@ -46,26 +46,6 @@ static void preprocessorFileDestroy(PreprocessorFile *preproc_file)
     ts__sbDestroy(&preproc_file->sb);
 }
 
-static inline bool isLetter(char c)
-{
-    return (('z' >= c) && (c >= 'a')) || (('Z' >= c) && (c >= 'A')) || c == '_';
-}
-
-static inline bool isNumeric(char c)
-{
-    return ('0' <= c) && ('9' >= c);
-}
-
-static inline bool isAlphanum(char c)
-{
-    return isLetter(c) || isNumeric(c);
-}
-
-static inline bool isWhitespace(char c)
-{
-    return (c == ' ') || (c == '\t');
-}
-
 static inline ptrdiff_t preprocessorLengthLeft(PreprocessorFile *f, size_t offset)
 {
     return (ptrdiff_t)(f->file->text_size) - (ptrdiff_t)(f->pos + offset);

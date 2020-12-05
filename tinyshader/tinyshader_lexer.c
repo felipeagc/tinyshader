@@ -21,26 +21,6 @@ typedef struct Lexer
     uint32_t col;
 } Lexer;
 
-static inline bool isLetter(char c)
-{
-    return (('z' >= c) && (c >= 'a')) || (('Z' >= c) && (c >= 'A')) || c == '_';
-}
-
-static inline bool isNumeric(char c)
-{
-    return ('0' <= c) && ('9' >= c);
-}
-
-static inline bool isAlphanum(char c)
-{
-    return isLetter(c) || isNumeric(c);
-}
-
-static inline bool isWhitespace(char c)
-{
-    return (c == ' ') || (c == '\t');
-}
-
 static inline bool lexerIsAtEnd(Lexer *l)
 {
     return (l->pos >= l->text_size) || (l->text[l->pos] == '\0');

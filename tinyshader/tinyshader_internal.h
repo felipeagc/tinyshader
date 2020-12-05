@@ -68,6 +68,26 @@ int ts__strcasecmp(const char *_l, const char *_r);
 #define NEW_ARRAY_UNINIT(compiler, type, count)                                          \
     ts__bumpAlloc(&(compiler)->alloc, sizeof(type) * (count))
 
+static inline bool isLetter(char c)
+{
+    return (('z' >= c) && (c >= 'a')) || (('Z' >= c) && (c >= 'A')) || c == '_';
+}
+
+static inline bool isNumeric(char c)
+{
+    return ('0' <= c) && ('9' >= c);
+}
+
+static inline bool isAlphanum(char c)
+{
+    return isLetter(c) || isNumeric(c);
+}
+
+static inline bool isWhitespace(char c)
+{
+    return (c == ' ') || (c == '\t');
+}
+
 ////////////////////////////////
 //
 // Type definitons
