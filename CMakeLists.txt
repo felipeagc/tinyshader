@@ -21,6 +21,15 @@ add_executable(tsc tsc/tsc.c)
 target_link_libraries(tsc PRIVATE tinyshader)
 
 if (NOT MSVC)
-  target_compile_options(tinyshader PRIVATE -Wall -Wextra -Wno-unused-function)
-  target_compile_options(tsc PRIVATE -Wall -Wextra -Wno-unused-function)
+  target_compile_options(
+    tinyshader
+    PUBLIC
+    -Wall -Wextra -Wno-unused-function
+    -fsanitize=undefined
+  )
+  target_link_options(
+    tinyshader
+    PUBLIC
+    -fsanitize=undefined
+  )
 endif()
