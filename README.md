@@ -19,31 +19,44 @@ can be used as follows:
 ```c
 #include "tinyshader.h"
 
-TsCompiler *compiler = tsCompilerCreate();
+TsCompilerOptions *options = tsCompilerOptionsCreate();
 
-TsCompilerInput input = {
-    .input = hlsl_text,
-    .input_size = hlsl_text_size,
-    .path = input_path, // optional, required for #include support
-    .entry_point = "main",
-    .stage = TS_SHADER_STAGE_VERTEX,
-};
+tsCompilerOptionsSetStage(options, TS_SHADER_STAGE_VERTEX);
 
-TsCompilerOutput output = {0};
-tsCompile(compiler, &input, &output);
-if (output.error)
+const char *entry_point = "main";
+tsCompilerOptionsSetEntryPoint(options, entry_point, strlen(entry_point));
+
+tsCompilerOptionsSetSource(
+    options,
+    hlsl_source,
+    strlen(hlsl_source),
+    path, // optional, can be NULL
+    strlen(path) // if path is NULL, this should be zero
+);
+
+TsCompilerOutput *output = tsCompile(options);
+
+/*
+ * 'errors' a string containing compiler error messages.
+ * If it's NULL, compilation was successful.
+ */
+const char *errors = tsCompilerOutputGetErrors(output);
+if (errors)
 {
-    fprintf(stderr, "%s", output.error);
+    printf("%s\n", errors);
     exit(1);
 }
 
-// Now we have SPIR-V code, ready to pass to Vulkan
-uint8_t *spirv = output.spirv;
-size_t spirv_byte_size = output.spirv_byte_size;
+/*
+ * Now we have SPIR-V code, ready to pass to Vulkan.
+ * NOTE: the spirv pointer is owned by TsCompilerOutput and is freed when it's destroyed.
+ */
+size_t spirv_byte_size;
+const unsigned char *spirv = tsCompilerOutputGetSpirv(output, &spirv_byte_size);
 
 // Cleanup
-tsCompilerOutputDestroy(&output); // This frees output.spirv
-tsCompilerDestroy(compiler);
+tsCompilerOutputDestroy(output);
+tsCompilerOptionsDestroy(options);
 ```
 
 ## Compiling
