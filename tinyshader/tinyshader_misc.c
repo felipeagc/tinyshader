@@ -667,6 +667,7 @@ static const char *TOKEN_STRINGS[TOKEN_MAX] = {
     [TOKEN_CONSTANT_BUFFER] = "ConstantBuffer",
     [TOKEN_STRUCTURED_BUFFER] = "StructuredBuffer",
     [TOKEN_RW_STRUCTURED_BUFFER] = "RWStructuredBuffer",
+    [TOKEN_SAMPLER] = "sampler",
     [TOKEN_SAMPLER_STATE] = "SamplerState",
     [TOKEN_TEXTURE_1D] = "Texture1D",
     [TOKEN_TEXTURE_2D] = "Texture2D",
@@ -686,6 +687,7 @@ static const char *TOKEN_STRINGS[TOKEN_MAX] = {
     [TOKEN_VECTOR_TYPE] = "<vector type>",
     [TOKEN_MATRIX_TYPE] = "<matrix type>",
     [TOKEN_STATIC] = "static",
+    [TOKEN_UNIFORM] = "uniform",
     [TOKEN_GROUPSHARED] = "groupshared",
     [TOKEN_REGISTER] = "register",
 };

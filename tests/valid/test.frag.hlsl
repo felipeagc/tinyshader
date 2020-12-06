@@ -26,7 +26,7 @@ struct Uniform
 
 ConstantBuffer<Uniform> gInput;
 Texture2D gInput2;
-SamplerState gInput3;
+uniform sampler gInput3;
 
 struct VsOutput
 {

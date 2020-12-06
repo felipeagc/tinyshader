@@ -75,6 +75,7 @@ static TsCompiler *ts__CompilerCreate(void)
         &compiler->keyword_table,
         "RWStructuredBuffer",
         (void *)TOKEN_RW_STRUCTURED_BUFFER);
+    ts__hashSet(&compiler->keyword_table, "sampler", (void *)TOKEN_SAMPLER);
     ts__hashSet(&compiler->keyword_table, "SamplerState", (void *)TOKEN_SAMPLER_STATE);
     ts__hashSet(&compiler->keyword_table, "Texture1D", (void *)TOKEN_TEXTURE_1D);
     ts__hashSet(&compiler->keyword_table, "Texture2D", (void *)TOKEN_TEXTURE_2D);
@@ -92,6 +93,7 @@ static TsCompiler *ts__CompilerCreate(void)
     ts__hashSet(&compiler->keyword_table, "void", (void *)TOKEN_VOID);
 
     ts__hashSet(&compiler->keyword_table, "static", (void *)TOKEN_STATIC);
+    ts__hashSet(&compiler->keyword_table, "uniform", (void *)TOKEN_UNIFORM);
     ts__hashSet(&compiler->keyword_table, "groupshared", (void *)TOKEN_GROUPSHARED);
     ts__hashSet(&compiler->keyword_table, "register", (void *)TOKEN_REGISTER);
 

@@ -103,6 +103,8 @@ static AstExpr *parseIdentExpr(Parser *p)
     return NULL;
 }
 
+static AstExpr *parsePrefixedUnaryExpr(Parser *p);
+
 static AstExpr *parsePrimaryExpr(Parser *p)
 {
     TsCompiler *compiler = p->compiler;
@@ -152,6 +154,116 @@ static AstExpr *parsePrimaryExpr(Parser *p)
         AstExpr *expr = parseExpr(p);
         if (!parserConsume(p, TOKEN_RPAREN)) return NULL;
         return expr;
+    }
+
+    case TOKEN_CONSTANT_BUFFER: {
+        parserNext(p, 1);
+
+        AstExpr *type_expr = NEW(compiler, AstExpr);
+        type_expr->loc = parserPeek(p, 0)->loc;
+        type_expr->kind = EXPR_CONSTANT_BUFFER_TYPE;
+
+        if (!parserConsume(p, TOKEN_LESS)) return NULL;
+
+        type_expr->buffer.sub_expr = parsePrefixedUnaryExpr(p);
+        if (!type_expr->buffer.sub_expr) return NULL;
+
+        if (!parserConsume(p, TOKEN_GREATER)) return NULL;
+
+        return type_expr;
+    }
+
+    case TOKEN_STRUCTURED_BUFFER: {
+        parserNext(p, 1);
+
+        AstExpr *type_expr = NEW(compiler, AstExpr);
+        type_expr->loc = parserPeek(p, 0)->loc;
+        type_expr->kind = EXPR_STRUCTURED_BUFFER_TYPE;
+
+        if (!parserConsume(p, TOKEN_LESS)) return NULL;
+
+        type_expr->buffer.sub_expr = parsePrefixedUnaryExpr(p);
+        if (!type_expr->buffer.sub_expr) return NULL;
+
+        if (!parserConsume(p, TOKEN_GREATER)) return NULL;
+
+        return type_expr;
+    }
+
+    case TOKEN_RW_STRUCTURED_BUFFER: {
+        parserNext(p, 1);
+
+        AstExpr *type_expr = NEW(compiler, AstExpr);
+        type_expr->loc = parserPeek(p, 0)->loc;
+        type_expr->kind = EXPR_RW_STRUCTURED_BUFFER_TYPE;
+
+        if (!parserConsume(p, TOKEN_LESS)) return NULL;
+
+        type_expr->buffer.sub_expr = parsePrefixedUnaryExpr(p);
+        if (!type_expr->buffer.sub_expr) return NULL;
+
+        if (!parserConsume(p, TOKEN_GREATER)) return NULL;
+
+        return type_expr;
+    }
+
+    case TOKEN_TEXTURE_1D:
+    case TOKEN_TEXTURE_2D:
+    case TOKEN_TEXTURE_3D:
+    case TOKEN_TEXTURE_CUBE: {
+        Token *texture_kind_tok = parserNext(p, 1);
+
+        AstExpr *type_expr = NEW(compiler, AstExpr);
+        type_expr->loc = parserPeek(p, 0)->loc;
+
+        switch (texture_kind_tok->kind)
+        {
+        case TOKEN_TEXTURE_1D:
+            type_expr->kind = EXPR_TEXTURE_TYPE;
+            type_expr->texture.dim = SpvDim1D;
+            break;
+        case TOKEN_TEXTURE_2D:
+            type_expr->kind = EXPR_TEXTURE_TYPE;
+            type_expr->texture.dim = SpvDim2D;
+            break;
+        case TOKEN_TEXTURE_3D:
+            type_expr->kind = EXPR_TEXTURE_TYPE;
+            type_expr->texture.dim = SpvDim3D;
+            break;
+        case TOKEN_TEXTURE_CUBE:
+            type_expr->kind = EXPR_TEXTURE_TYPE;
+            type_expr->texture.dim = SpvDimCube;
+            break;
+
+        default: assert(0); break;
+        }
+
+        if (parserPeek(p, 0)->kind == TOKEN_LESS)
+        {
+            if (!parserConsume(p, TOKEN_LESS)) return NULL;
+
+            type_expr->texture.sampled_type_expr = parsePrefixedUnaryExpr(p);
+            if (!type_expr->texture.sampled_type_expr) return NULL;
+
+            if (!parserConsume(p, TOKEN_GREATER)) return NULL;
+        }
+        else
+        {
+            type_expr->texture.sampled_type_expr = NULL;
+        }
+
+        return type_expr;
+    }
+
+    case TOKEN_SAMPLER:
+    case TOKEN_SAMPLER_STATE: {
+        AstExpr *type_expr = NEW(compiler, AstExpr);
+        type_expr->kind = EXPR_SAMPLER_TYPE;
+        type_expr->loc = parserPeek(p, 0)->loc;
+
+        parserNext(p, 1);
+
+        return type_expr;
     }
 
     default: {
@@ -1257,6 +1369,32 @@ static AstDecl *parseTopLevel(Parser *p)
         return decl;
     }
 
+    case TOKEN_UNIFORM: {
+        Location decl_loc = parserBeginLoc(p);
+
+        parserNext(p, 1);
+        AstDecl *decl = NEW(compiler, AstDecl);
+        decl->kind = DECL_VAR;
+        decl->attributes = attributes;
+        decl->var.kind = VAR_UNIFORM;
+
+        AstExpr *type_expr = parsePrefixedUnaryExpr(p);
+        if (!type_expr) return NULL;
+
+        Token *name_tok = parserConsume(p, TOKEN_IDENT);
+        if (!name_tok) return NULL;
+
+        decl->name = name_tok->str;
+        decl->var.type_expr = type_expr;
+
+        if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
+
+        parserEndLoc(p, &decl_loc);
+        decl->loc = decl_loc;
+
+        return decl;
+    }
+
     case TOKEN_STRUCT: {
         Location decl_loc = parserBeginLoc(p);
 
@@ -1305,183 +1443,6 @@ static AstDecl *parseTopLevel(Parser *p)
         if (!parserConsume(p, TOKEN_RCURLY)) return NULL;
 
         if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
-
-        parserEndLoc(p, &decl_loc);
-        decl->loc = decl_loc;
-
-        return decl;
-    }
-
-    case TOKEN_CONSTANT_BUFFER:
-    case TOKEN_STRUCTURED_BUFFER:
-    case TOKEN_RW_STRUCTURED_BUFFER:
-    case TOKEN_TEXTURE_1D:
-    case TOKEN_TEXTURE_2D:
-    case TOKEN_TEXTURE_3D:
-    case TOKEN_TEXTURE_CUBE:
-    case TOKEN_SAMPLER_STATE: {
-        AstExpr *type_expr = NULL;
-        AstVarKind var_kind = {0};
-
-        Location decl_loc = parserBeginLoc(p);
-
-        switch (parserPeek(p, 0)->kind)
-        {
-        case TOKEN_CONSTANT_BUFFER: {
-            parserNext(p, 1);
-
-            var_kind = VAR_UNIFORM;
-
-            type_expr = NEW(compiler, AstExpr);
-            type_expr->loc = parserPeek(p, 0)->loc;
-            type_expr->kind = EXPR_CONSTANT_BUFFER_TYPE;
-
-            if (!parserConsume(p, TOKEN_LESS)) return NULL;
-
-            type_expr->buffer.sub_expr = parsePrefixedUnaryExpr(p);
-            if (!type_expr->buffer.sub_expr) return NULL;
-
-            if (!parserConsume(p, TOKEN_GREATER)) return NULL;
-
-            break;
-        }
-
-        case TOKEN_STRUCTURED_BUFFER: {
-            parserNext(p, 1);
-
-            var_kind = VAR_UNIFORM;
-
-            type_expr = NEW(compiler, AstExpr);
-            type_expr->loc = parserPeek(p, 0)->loc;
-            type_expr->kind = EXPR_STRUCTURED_BUFFER_TYPE;
-
-            if (!parserConsume(p, TOKEN_LESS)) return NULL;
-
-            type_expr->buffer.sub_expr = parsePrefixedUnaryExpr(p);
-            if (!type_expr->buffer.sub_expr) return NULL;
-
-            if (!parserConsume(p, TOKEN_GREATER)) return NULL;
-
-            break;
-        }
-
-        case TOKEN_RW_STRUCTURED_BUFFER: {
-            parserNext(p, 1);
-
-            var_kind = VAR_UNIFORM;
-
-            type_expr = NEW(compiler, AstExpr);
-            type_expr->loc = parserPeek(p, 0)->loc;
-            type_expr->kind = EXPR_RW_STRUCTURED_BUFFER_TYPE;
-
-            if (!parserConsume(p, TOKEN_LESS)) return NULL;
-
-            type_expr->buffer.sub_expr = parsePrefixedUnaryExpr(p);
-            if (!type_expr->buffer.sub_expr) return NULL;
-
-            if (!parserConsume(p, TOKEN_GREATER)) return NULL;
-
-            break;
-        }
-
-        case TOKEN_TEXTURE_1D:
-        case TOKEN_TEXTURE_2D:
-        case TOKEN_TEXTURE_3D:
-        case TOKEN_TEXTURE_CUBE: {
-            Token *texture_kind_tok = parserNext(p, 1);
-
-            var_kind = VAR_UNIFORM;
-
-            type_expr = NEW(compiler, AstExpr);
-            type_expr->loc = parserPeek(p, 0)->loc;
-
-            switch (texture_kind_tok->kind)
-            {
-            case TOKEN_TEXTURE_1D:
-                type_expr->kind = EXPR_TEXTURE_TYPE;
-                type_expr->texture.dim = SpvDim1D;
-                break;
-            case TOKEN_TEXTURE_2D:
-                type_expr->kind = EXPR_TEXTURE_TYPE;
-                type_expr->texture.dim = SpvDim2D;
-                break;
-            case TOKEN_TEXTURE_3D:
-                type_expr->kind = EXPR_TEXTURE_TYPE;
-                type_expr->texture.dim = SpvDim3D;
-                break;
-            case TOKEN_TEXTURE_CUBE:
-                type_expr->kind = EXPR_TEXTURE_TYPE;
-                type_expr->texture.dim = SpvDimCube;
-                break;
-
-            default: assert(0); break;
-            }
-
-            if (parserPeek(p, 0)->kind == TOKEN_LESS)
-            {
-                if (!parserConsume(p, TOKEN_LESS)) return NULL;
-
-                type_expr->texture.sampled_type_expr = parsePrefixedUnaryExpr(p);
-                if (!type_expr->texture.sampled_type_expr) return NULL;
-
-                if (!parserConsume(p, TOKEN_GREATER)) return NULL;
-            }
-            else
-            {
-                type_expr->texture.sampled_type_expr = NULL;
-            }
-
-            break;
-        }
-
-        case TOKEN_SAMPLER_STATE: {
-            type_expr = NEW(compiler, AstExpr);
-            type_expr->kind = EXPR_SAMPLER_TYPE;
-            type_expr->loc = parserPeek(p, 0)->loc;
-
-            var_kind = VAR_UNIFORM;
-
-            parserNext(p, 1);
-
-            break;
-        }
-
-        default: assert(0); break;
-        }
-
-        Token *name_tok = parserConsume(p, TOKEN_IDENT);
-        if (!name_tok) return NULL;
-
-        if (parserPeek(p, 0)->kind == TOKEN_COLON)
-        {
-            parserNext(p, 1);
-
-            if (!parserConsume(p, TOKEN_REGISTER)) return NULL;
-
-            if (!parserConsume(p, TOKEN_LPAREN)) return NULL;
-
-            while (!parserIsAtEnd(p) && parserPeek(p, 0)->kind != TOKEN_RPAREN)
-            {
-                AstExpr *param = parseExpr(p);
-                if (!param) return NULL;
-
-                if (parserPeek(p, 0)->kind != TOKEN_RPAREN)
-                {
-                    if (!parserConsume(p, TOKEN_COMMA)) return NULL;
-                }
-            }
-
-            if (!parserConsume(p, TOKEN_RPAREN)) return NULL;
-        }
-
-        if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
-
-        AstDecl *decl = NEW(compiler, AstDecl);
-        decl->kind = DECL_VAR;
-        decl->name = name_tok->str;
-        decl->var.type_expr = type_expr;
-        decl->var.kind = var_kind;
-        decl->attributes = attributes;
 
         parserEndLoc(p, &decl_loc);
         decl->loc = decl_loc;
@@ -1585,6 +1546,47 @@ static AstDecl *parseTopLevel(Parser *p)
             }
 
             if (!parserConsume(p, TOKEN_RCURLY)) return NULL;
+
+            parserEndLoc(p, &decl_loc);
+            decl->loc = decl_loc;
+
+            return decl;
+        }
+        else if (parserPeek(p, 0)->kind == TOKEN_SEMICOLON ||
+                 parserPeek(p, 0)->kind == TOKEN_COLON)
+        {
+            // Parse top level uniform variable declaration
+
+            if (parserPeek(p, 0)->kind == TOKEN_COLON)
+            {
+                parserNext(p, 1);
+
+                if (!parserConsume(p, TOKEN_REGISTER)) return NULL;
+
+                if (!parserConsume(p, TOKEN_LPAREN)) return NULL;
+
+                while (!parserIsAtEnd(p) && parserPeek(p, 0)->kind != TOKEN_RPAREN)
+                {
+                    AstExpr *param = parseExpr(p);
+                    if (!param) return NULL;
+
+                    if (parserPeek(p, 0)->kind != TOKEN_RPAREN)
+                    {
+                        if (!parserConsume(p, TOKEN_COMMA)) return NULL;
+                    }
+                }
+
+                if (!parserConsume(p, TOKEN_RPAREN)) return NULL;
+            }
+
+            if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
+
+            AstDecl *decl = NEW(compiler, AstDecl);
+            decl->kind = DECL_VAR;
+            decl->name = name_tok->str;
+            decl->var.type_expr = type_expr;
+            decl->var.kind = VAR_UNIFORM;
+            decl->attributes = attributes;
 
             parserEndLoc(p, &decl_loc);
             decl->loc = decl_loc;
