@@ -33,6 +33,12 @@ jobs:
       run: cmake --build build
     - name: Test
       run: python3 ./tests/run_tests.py
+    - name: Generate combined file
+      run: bash ./combine.sh
+    - uses: actions/upload-artifact@v2
+      with:
+        name: tinyshader_combined
+        path: ./tinyshader_combined.c
   windows:
     runs-on: windows-latest
     env:

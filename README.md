@@ -37,7 +37,7 @@ tsCompilerOptionsSetSource(
 TsCompilerOutput *output = tsCompile(options);
 
 /*
- * 'errors' a string containing compiler error messages.
+ * 'errors' is a null-terminated string containing compiler error messages.
  * If it's NULL, compilation was successful.
  */
 const char *errors = tsCompilerOutputGetErrors(output);
