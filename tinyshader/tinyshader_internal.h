@@ -244,6 +244,7 @@ typedef enum TokenKind {
     TOKEN_ELSE,
     TOKEN_RETURN,
     TOKEN_CONST,
+    TOKEN_CBUFFER,
     TOKEN_CONSTANT_BUFFER,
     TOKEN_STRUCTURED_BUFFER,
     TOKEN_RW_STRUCTURED_BUFFER,
@@ -994,6 +995,7 @@ typedef enum AstDeclKind {
     DECL_FUNC,
     DECL_VAR,
     DECL_CONST,
+    DECL_ALIAS,
 
     DECL_STRUCT,
     DECL_STRUCT_FIELD,
@@ -1121,6 +1123,14 @@ struct AstDecl
             AstExpr *type_expr;
             uint32_t index;
         } struct_field;
+
+        struct
+        {
+            AstDecl *accessed; // The variable to access
+
+            // To be filled in analysis:
+            AstDecl *field_decl; // The declration of the struct field
+        } alias;
     };
 };
 

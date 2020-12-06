@@ -1099,6 +1099,8 @@ static void analyzerRecursivelyCheckForSemanticStrings(
 
 static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_type)
 {
+    assert(expr);
+
     TsCompiler *compiler = a->compiler;
     Scope *scope = analyzerCurrentScope(a);
     Module *m = a->module;
@@ -4107,6 +4109,30 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                 member_dec.value = row_stride;
                 arrPush(compiler, &decl->as_type->struct_.field_decorations, member_dec);
             }
+        }
+
+        break;
+    }
+
+    case DECL_ALIAS: {
+        char *name = decl->name;
+
+        AstDecl *accessed = decl->alias.accessed;
+        assert(accessed->type);
+        switch (accessed->type->kind)
+        {
+        case TYPE_CONSTANT_BUFFER:
+        {
+            assert(accessed->scope);
+            AstDecl *field_decl = scopeGetLocal(accessed->scope, name);
+            assert(field_decl->type);
+            decl->type = field_decl->type;
+            decl->scope = field_decl->scope;
+            decl->alias.field_decl = field_decl;
+            break;
+        }
+
+        default: break;
         }
 
         break;

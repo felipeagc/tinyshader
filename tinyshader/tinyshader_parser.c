@@ -1340,6 +1340,7 @@ static AstDecl *parseTopLevel(Parser *p)
         parserEndLoc(p, &decl_loc);
         decl->loc = decl_loc;
 
+        arrPush(p->compiler, &p->decls, decl);
         return decl;
     }
 
@@ -1366,6 +1367,7 @@ static AstDecl *parseTopLevel(Parser *p)
         parserEndLoc(p, &decl_loc);
         decl->loc = decl_loc;
 
+        arrPush(p->compiler, &p->decls, decl);
         return decl;
     }
 
@@ -1392,6 +1394,7 @@ static AstDecl *parseTopLevel(Parser *p)
         parserEndLoc(p, &decl_loc);
         decl->loc = decl_loc;
 
+        arrPush(p->compiler, &p->decls, decl);
         return decl;
     }
 
@@ -1443,6 +1446,123 @@ static AstDecl *parseTopLevel(Parser *p)
         if (!parserConsume(p, TOKEN_RCURLY)) return NULL;
 
         if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
+
+        parserEndLoc(p, &decl_loc);
+        decl->loc = decl_loc;
+
+        arrPush(p->compiler, &p->decls, decl);
+        return decl;
+    }
+
+    case TOKEN_CBUFFER: {
+        Location decl_loc = parserBeginLoc(p);
+
+        parserNext(p, 1);
+
+        Token *name_tok = parserConsume(p, TOKEN_IDENT);
+        if (!name_tok) return NULL;
+
+        if (parserPeek(p, 0)->kind == TOKEN_COLON)
+        {
+            // Parse register
+            parserNext(p, 1);
+
+            if (!parserConsume(p, TOKEN_REGISTER)) return NULL;
+
+            if (!parserConsume(p, TOKEN_LPAREN)) return NULL;
+
+            while (!parserIsAtEnd(p) && parserPeek(p, 0)->kind != TOKEN_RPAREN)
+            {
+                AstExpr *param = parseExpr(p);
+                if (!param) return NULL;
+
+                if (parserPeek(p, 0)->kind != TOKEN_RPAREN)
+                {
+                    if (!parserConsume(p, TOKEN_COMMA)) return NULL;
+                }
+            }
+
+            if (!parserConsume(p, TOKEN_RPAREN)) return NULL;
+        }
+
+        ts__sbReset(&p->compiler->sb);
+        ts__sbAppend(&p->compiler->sb, name_tok->str);
+        ts__sbAppend(&p->compiler->sb, "#cbuffer_struct");
+        char *struct_name = ts__sbBuild(&p->compiler->sb, &p->compiler->alloc);
+
+        AstDecl *struct_decl = NEW(compiler, AstDecl);
+        struct_decl->kind = DECL_STRUCT;
+        struct_decl->attributes = attributes;
+        struct_decl->name = struct_name;
+
+        if (!parserConsume(p, TOKEN_LCURLY)) return NULL;
+
+        while (parserPeek(p, 0)->kind != TOKEN_RCURLY)
+        {
+            Location field_decl_loc = parserBeginLoc(p);
+
+            AstExpr *type_expr = parsePrefixedUnaryExpr(p);
+            if (!type_expr) return NULL;
+
+            Token *name_tok = parserConsume(p, TOKEN_IDENT);
+            if (!name_tok) return NULL;
+
+            AstDecl *field_decl = NEW(compiler, AstDecl);
+            field_decl->kind = DECL_STRUCT_FIELD;
+            field_decl->name = name_tok->str;
+            field_decl->struct_field.type_expr = type_expr;
+
+            if (parserPeek(p, 0)->kind == TOKEN_COLON)
+            {
+                parserNext(p, 1);
+                Token *semantic_tok = parserConsume(p, TOKEN_IDENT);
+                if (!semantic_tok) return NULL;
+                field_decl->semantic = semantic_tok->str;
+            }
+
+            if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
+
+            parserEndLoc(p, &field_decl_loc);
+            field_decl->loc = field_decl_loc;
+
+            arrPush(p->compiler, &struct_decl->struct_.fields, field_decl);
+        }
+
+        if (!parserConsume(p, TOKEN_RCURLY)) return NULL;
+
+        arrPush(p->compiler, &p->decls, struct_decl); // Push anonymous struct declaration
+
+        AstExpr *struct_name_expr = NEW(compiler, AstExpr);
+        struct_name_expr->kind = EXPR_IDENT;
+        struct_name_expr->ident.name = struct_name;
+
+        AstExpr *type_expr = NEW(compiler, AstExpr);
+        type_expr->loc = parserPeek(p, 0)->loc;
+        type_expr->kind = EXPR_CONSTANT_BUFFER_TYPE;
+        type_expr->buffer.sub_expr = struct_name_expr;
+
+        AstDecl *decl = NEW(compiler, AstDecl);
+        decl->kind = DECL_VAR;
+        decl->name = NULL;
+        decl->var.kind = VAR_UNIFORM;
+        decl->var.type_expr = type_expr;
+        decl->attributes = attributes;
+
+        arrPush(p->compiler, &p->decls, decl);
+
+        for (size_t i = 0; i < struct_decl->struct_.fields.len; ++i)
+        {
+            AstDecl *field = struct_decl->struct_.fields.ptr[i];
+
+            AstDecl *alias_decl = NEW(compiler, AstDecl);
+            alias_decl->kind = DECL_ALIAS;
+            alias_decl->loc = field->loc;
+            alias_decl->name = field->name;
+            alias_decl->alias.accessed = decl;
+
+            // Push field access alias declaration
+            arrPush(p->compiler, &p->decls, alias_decl);
+        }
 
         parserEndLoc(p, &decl_loc);
         decl->loc = decl_loc;
@@ -1550,6 +1670,7 @@ static AstDecl *parseTopLevel(Parser *p)
             parserEndLoc(p, &decl_loc);
             decl->loc = decl_loc;
 
+            arrPush(p->compiler, &p->decls, decl);
             return decl;
         }
         else if (parserPeek(p, 0)->kind == TOKEN_SEMICOLON ||
@@ -1591,6 +1712,7 @@ static AstDecl *parseTopLevel(Parser *p)
             parserEndLoc(p, &decl_loc);
             decl->loc = decl_loc;
 
+            arrPush(p->compiler, &p->decls, decl);
             return decl;
         }
         else
@@ -1621,11 +1743,7 @@ ArrayOfAstDeclPtr ts__parse(TsCompiler *compiler, ArrayOfToken tokens)
     while (!parserIsAtEnd(p))
     {
         AstDecl *decl = parseTopLevel(p);
-        if (decl)
-        {
-            arrPush(p->compiler, &p->decls, decl);
-        }
-        else
+        if (!decl)
         {
             // Just stop trying to parse more declarations
             // if we already found errors

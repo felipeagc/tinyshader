@@ -68,6 +68,8 @@ static TsCompiler *ts__CompilerCreate(void)
     ts__hashSet(&compiler->keyword_table, "out", (void *)TOKEN_OUT);
     ts__hashSet(&compiler->keyword_table, "inout", (void *)TOKEN_INOUT);
     ts__hashSet(
+        &compiler->keyword_table, "cbuffer", (void *)TOKEN_CBUFFER);
+    ts__hashSet(
         &compiler->keyword_table, "ConstantBuffer", (void *)TOKEN_CONSTANT_BUFFER);
     ts__hashSet(
         &compiler->keyword_table, "StructuredBuffer", (void *)TOKEN_STRUCTURED_BUFFER);

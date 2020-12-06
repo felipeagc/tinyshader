@@ -15,16 +15,14 @@ dont compile this
 dont compile this either
 #endif
 
-struct Uniform
-{
+cbuffer gInput : register(b0) {
     float4 yoo;
     float hey;
     Hello hello;
     float4x4 transform;
     float4x4 view;
-};
+}
 
-ConstantBuffer<Uniform> gInput;
 Texture2D gInput2;
 uniform sampler gInput3;
 
@@ -47,7 +45,7 @@ float4 main(in VsOutput vs_out, out float4 out_color2 : SV_Target1) : SV_Target0
     float4 my_color =
         gInput2.Sample(gInput3, vs_out.uv) *
         float4(ddx(1.0), 1, 1, 1) *
-        float4(gInput.hey, gInput.hey, gInput.hey, gInput.hey);
+        float4(hey, hey, hey, hey);
 
     my_color = gInput2.SampleLevel(gInput3, vs_out.uv, 1);
     float width;

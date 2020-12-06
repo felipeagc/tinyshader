@@ -664,6 +664,7 @@ static const char *TOKEN_STRINGS[TOKEN_MAX] = {
     [TOKEN_ELSE] = "else",
     [TOKEN_RETURN] = "return",
     [TOKEN_CONST] = "const",
+    [TOKEN_CBUFFER] = "cbuffer",
     [TOKEN_CONSTANT_BUFFER] = "ConstantBuffer",
     [TOKEN_STRUCTURED_BUFFER] = "StructuredBuffer",
     [TOKEN_RW_STRUCTURED_BUFFER] = "RWStructuredBuffer",

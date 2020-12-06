@@ -317,8 +317,48 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
 
     case EXPR_IDENT: {
         AstDecl *decl = expr->ident.decl;
-        assert(decl);
-        expr->value = decl->value;
+        switch (decl->kind)
+        {
+        case DECL_ALIAS:
+        {
+            AstDecl *accessed = decl->alias.accessed;
+            assert(accessed->type);
+            switch (accessed->type->kind)
+            {
+            case TYPE_CONSTANT_BUFFER:
+            {
+                AstDecl *field_decl = decl->alias.field_decl;
+
+                uint32_t field_index = field_decl->struct_field.index;
+                IRType *index_type = ts__irNewIntType(ir_mod, 32, false);
+                IRInst *index = ts__irBuildConstInt(ir_mod, index_type, (uint64_t)field_index);
+
+                IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, decl->type);
+
+                assert(decl->alias.accessed->value);
+                expr->value = ts__irBuildAccessChain(
+                    ir_mod,
+                    ir_type,
+                    decl->alias.accessed->value,
+                    &index,
+                    1);
+
+                break;
+            }
+
+            default: break;
+            }
+
+            break;
+        }
+
+        default:
+        {
+            assert(decl);
+            expr->value = decl->value;
+            break;
+        }
+        }
         break;
     }
 
@@ -383,7 +423,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
         assert(value);
 
         uint32_t index_count = 0;
-        IRInst **indices = NEW_ARRAY(compiler, IRInst *, arrLength(expr->access.chain));
+        IRInst **indices = NEW_ARRAY(compiler, IRInst *, expr->access.chain.len);
 
         AstType *struct_type = ts__getStructType(base->type);
 
@@ -391,7 +431,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
         {
             assert(struct_type->kind == TYPE_STRUCT);
 
-            for (uint32_t i = 0; i < arrLength(expr->access.chain); ++i)
+            for (uint32_t i = 0; i < expr->access.chain.len; ++i)
             {
                 AstExpr *field_ident = expr->access.chain.ptr[i];
                 assert(field_ident->kind == EXPR_IDENT);
@@ -413,7 +453,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
                 ts__irBuildAccessChain(ir_mod, ir_last_type, base->value, indices, index_count);
         }
 
-        for (uint32_t i = index_count; i < arrLength(expr->access.chain); ++i)
+        for (uint32_t i = index_count; i < expr->access.chain.len; ++i)
         {
             // Must be a vector swizzle
 
@@ -1976,6 +2016,7 @@ static void astBuildDecl(Module *ast_mod, IRModule *ir_mod, AstDecl *decl)
         break;
     }
 
+    case DECL_ALIAS: break;
     case DECL_STRUCT_FIELD: break;
     case DECL_STRUCT: break;
     }
