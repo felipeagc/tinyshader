@@ -21,6 +21,8 @@
 #include "GLSL.std.450.h"
 #include "tinyshader.h"
 
+typedef struct TsCompiler TsCompiler;
+
 #define TS__MAX(a, b) ((a) > (b) ? (a) : (b))
 #define TS__MIN(a, b) ((a) < (b) ? (a) : (b))
 

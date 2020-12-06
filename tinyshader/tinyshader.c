@@ -4,6 +4,25 @@
  */
 #include "tinyshader_internal.h"
 
+struct TsCompilerOptions
+{
+    char *entry_point;
+    char *source;
+    size_t source_size;
+    char *path;
+
+    ARRAY_OF(const char *) include_paths;
+    TsShaderStage stage;
+};
+
+struct TsCompilerOutput
+{
+    unsigned char *spirv;
+    size_t spirv_byte_size;
+
+    char *errors;
+};
+
 void ts__addErr(TsCompiler *compiler, const Location *loc, const char *fmt, ...)
 {
     va_list vl;
@@ -21,7 +40,7 @@ void ts__addErr(TsCompiler *compiler, const Location *loc, const char *fmt, ...)
     arrPush(compiler, &compiler->errors, err);
 }
 
-TsCompiler *tsCompilerCreate()
+static TsCompiler *ts__CompilerCreate(void)
 {
     TsCompiler *compiler = malloc(sizeof(TsCompiler));
     memset(compiler, 0, sizeof(*compiler));
@@ -195,7 +214,7 @@ TsCompiler *tsCompilerCreate()
     return compiler;
 }
 
-void tsCompilerDestroy(TsCompiler *compiler)
+static void ts__CompilerDestroy(TsCompiler *compiler)
 {
     ts__hashDestroy(&compiler->keyword_table);
     ts__hashDestroy(&compiler->builtin_function_table);
@@ -242,7 +261,7 @@ static bool handleErrors(TsCompiler *compiler, TsCompilerOutput *output)
                 err->message);
         }
 
-        output->error = ts__sbBuildMalloc(&compiler->sb);
+        output->errors = ts__sbBuildMalloc(&compiler->sb);
 
         return true;
     }
@@ -259,43 +278,135 @@ File *ts__createFile(TsCompiler *compiler, const char *text, size_t text_size, c
     return file;
 }
 
-void tsCompile(TsCompiler *compiler, TsCompilerInput *input, TsCompilerOutput *output)
+TsCompilerOptions *tsCompilerOptionsCreate(void)
 {
-    assert(compiler);
-    assert(input);
-    assert(output);
-    assert(input->entry_point);
+    TsCompilerOptions *options = malloc(sizeof(*options));
+    memset(options, 0, sizeof(*options));
+    options->entry_point = "main";
+    options->stage = TS_SHADER_STAGE_VERTEX;
+    return options;
+}
 
+void tsCompilerOptionsSetStage(TsCompilerOptions *options, TsShaderStage stage)
+{
+    options->stage = stage;
+}
+
+void tsCompilerOptionsSetEntryPoint(
+    TsCompilerOptions *options,
+    const char *entry_point,
+    size_t entry_point_length)
+{
+    options->entry_point = malloc(entry_point_length+1);
+    memcpy(options->entry_point, entry_point, entry_point_length);
+    options->entry_point[entry_point_length] = '\0';
+}
+
+void tsCompilerOptionsSetSource(
+    TsCompilerOptions *options,
+    const char* source,
+    size_t source_length,
+    const char *path,
+    size_t path_length)
+{
+    options->source = malloc(source_length+1);
+    memcpy(options->source, source, source_length);
+    options->source[source_length] = '\0';
+    options->source_size = source_length;
+
+    if (path && path_length > 0)
+    {
+        options->path = malloc(path_length+1);
+        memcpy(options->path, path, path_length);
+        options->path[path_length] = '\0';
+    }
+}
+
+void tsCompilerOptionsAddIncludePath(
+    TsCompilerOptions *options,
+    const char* path,
+    size_t path_length)
+{
+    (void)options;
+    (void)path;
+    (void)path_length;
+    // TODO: implement include paths
+}
+
+void tsCompilerOptionsDestroy(TsCompilerOptions *options)
+{
+    if (options->source)
+    {
+        free(options->source);
+    }
+    if (options->entry_point)
+    {
+        free(options->entry_point);
+    }
+    if (options->path)
+    {
+        free(options->path);
+    }
+    free(options);
+}
+
+TsCompilerOutput *tsCompile(TsCompilerOptions *options)
+{
+    TsCompiler *compiler = ts__CompilerCreate();
+    assert(options->entry_point);
+
+    TsCompilerOutput *output = malloc(sizeof(*output));
     memset(output, 0, sizeof(*output));
 
-    File *file = ts__createFile(compiler, input->input, input->input_size, input->path);
+    File *file = ts__createFile(compiler, options->source, options->source_size, options->path);
 
     Module *module = NEW(compiler, Module);
-    moduleInit(module, compiler, input->entry_point, input->stage);
+    moduleInit(module, compiler, options->entry_point, options->stage);
 
     size_t preprocessed_text_size = 0;
     const char *preprocessed_text = ts__preprocess(compiler, file, &preprocessed_text_size);
-    if (handleErrors(compiler, output)) return;
+    if (handleErrors(compiler, output))
+    {
+        ts__CompilerDestroy(compiler);
+        return output;   
+    }
 
     ArrayOfToken tokens =  ts__lex(compiler, file, preprocessed_text, preprocessed_text_size);
-    if (handleErrors(compiler, output)) return;
+    if (handleErrors(compiler, output))
+    {
+        ts__CompilerDestroy(compiler);
+        return output;   
+    }
 
     ArrayOfAstDeclPtr decls = ts__parse(compiler, tokens);
-    if (handleErrors(compiler, output)) return;
+    if (handleErrors(compiler, output))
+    {
+        ts__CompilerDestroy(compiler);
+        return output;   
+    }
 
     ts__analyze(compiler, module, decls.ptr, decls.len);
-    if (handleErrors(compiler, output)) return;
+    if (handleErrors(compiler, output))
+    {
+        ts__CompilerDestroy(compiler);
+        return output;   
+    }
 
     IRModule *ir_module = ts__irModuleCreate(compiler);
     ts__astModuleBuild(module, ir_module);
-    if (handleErrors(compiler, output)) return;
+    if (handleErrors(compiler, output))
+    {
+        ts__CompilerDestroy(compiler);
+        return output;   
+    }
 
     size_t word_count;
     uint32_t *words = ts__irModuleCodegen(ir_module, &word_count);
     if (handleErrors(compiler, output))
     {
         if (words) free(words);
-        return;
+        ts__CompilerDestroy(compiler);
+        return output;
     }
 
     output->spirv_byte_size = word_count * 4;
@@ -303,105 +414,32 @@ void tsCompile(TsCompiler *compiler, TsCompilerInput *input, TsCompilerOutput *o
 
     ts__irModuleDestroy(ir_module);
     moduleDestroy(module);
+
+    ts__CompilerDestroy(compiler);
+
+    return output;
+}
+
+const char *tsCompilerOutputGetErrors(TsCompilerOutput *output)
+{
+    return output->errors;
+}
+
+const unsigned char *tsCompilerOutputGetSpirv(TsCompilerOutput *output, size_t *spirv_byte_size)
+{
+    if (!output->spirv)
+    {
+        *spirv_byte_size = 0;
+        return NULL;
+    }
+    *spirv_byte_size = output->spirv_byte_size;
+    return output->spirv;
 }
 
 void tsCompilerOutputDestroy(TsCompilerOutput *output)
 {
     if (output->spirv) free(output->spirv);
-    if (output->error) free(output->error);
+    if (output->errors) free(output->errors);
+    free(output);
 }
 
-static const char *TOKEN_STRINGS[TOKEN_MAX] = {
-    [TOKEN_LPAREN] = "(",
-    [TOKEN_RPAREN] = ")",
-    [TOKEN_LBRACK] = "[",
-    [TOKEN_RBRACK] = "]",
-    [TOKEN_LCURLY] = "{",
-    [TOKEN_RCURLY] = "}",
-    [TOKEN_HASH] = "#",
-    [TOKEN_SEMICOLON] = ";",
-    [TOKEN_COLON] = ":",
-    [TOKEN_COLON_COLON] = "::",
-    [TOKEN_ADD] = "+",
-    [TOKEN_SUB] = "-",
-    [TOKEN_MUL] = "*",
-    [TOKEN_DIV] = "/",
-    [TOKEN_MOD] = "%",
-    [TOKEN_ADDADD] = "++",
-    [TOKEN_SUBSUB] = "--",
-    [TOKEN_BITOR] = "|",
-    [TOKEN_BITXOR] = "^",
-    [TOKEN_BITAND] = "&",
-    [TOKEN_BITNOT] = "~",
-    [TOKEN_LSHIFT] = "<<",
-    [TOKEN_RSHIFT] = ">>",
-    [TOKEN_PERIOD] = ".",
-    [TOKEN_COMMA] = ",",
-    [TOKEN_QUESTION] = "?",
-    [TOKEN_NOT] = "!",
-    [TOKEN_ASSIGN] = "=",
-    [TOKEN_EQUAL] = "==",
-    [TOKEN_NOTEQ] = "!=",
-    [TOKEN_LESS] = "<",
-    [TOKEN_LESSEQ] = "<=",
-    [TOKEN_GREATER] = ">",
-    [TOKEN_GREATEREQ] = ">=",
-    [TOKEN_ADD_ASSIGN] = "+=",
-    [TOKEN_SUB_ASSIGN] = "-=",
-    [TOKEN_MUL_ASSIGN] = "*=",
-    [TOKEN_DIV_ASSIGN] = "/=",
-    [TOKEN_MOD_ASSIGN] = "%=",
-    [TOKEN_BITAND_ASSIGN] = "&=",
-    [TOKEN_BITOR_ASSIGN] = "|=",
-    [TOKEN_BITXOR_ASSIGN] = "^=",
-    [TOKEN_LSHIFT_ASSIGN] = "<<=",
-    [TOKEN_RSHIFT_ASSIGN] = ">>=",
-    [TOKEN_AND] = "&&",
-    [TOKEN_OR] = "||",
-    [TOKEN_IDENT] = "<identifier>",
-    [TOKEN_IN] = "in",
-    [TOKEN_OUT] = "out",
-    [TOKEN_INOUT] = "inout",
-    [TOKEN_STRUCT] = "struct",
-    [TOKEN_FOR] = "for",
-    [TOKEN_WHILE] = "while",
-    [TOKEN_DO] = "do",
-    [TOKEN_SWITCH] = "switch",
-    [TOKEN_CASE] = "case",
-    [TOKEN_DEFAULT] = "default",
-    [TOKEN_BREAK] = "break",
-    [TOKEN_CONTINUE] = "continue",
-    [TOKEN_IF] = "if",
-    [TOKEN_ELSE] = "else",
-    [TOKEN_RETURN] = "return",
-    [TOKEN_CONST] = "const",
-    [TOKEN_CONSTANT_BUFFER] = "ConstantBuffer",
-    [TOKEN_STRUCTURED_BUFFER] = "StructuredBuffer",
-    [TOKEN_RW_STRUCTURED_BUFFER] = "RWStructuredBuffer",
-    [TOKEN_SAMPLER_STATE] = "SamplerState",
-    [TOKEN_TEXTURE_1D] = "Texture1D",
-    [TOKEN_TEXTURE_2D] = "Texture2D",
-    [TOKEN_TEXTURE_3D] = "Texture3D",
-    [TOKEN_TEXTURE_CUBE] = "TextureCube",
-    [TOKEN_DISCARD] = "discard",
-    [TOKEN_INT_LIT] = "<integer literal>",
-    [TOKEN_FLOAT_LIT] = "<float literal>",
-    [TOKEN_STRING_LIT] = "<string literal>",
-    [TOKEN_BOOL] = "bool",
-    [TOKEN_UINT] = "uint",
-    [TOKEN_INT] = "int",
-    [TOKEN_FLOAT] = "float",
-    [TOKEN_VOID] = "void",
-    [TOKEN_FALSE] = "false",
-    [TOKEN_TRUE] = "true",
-    [TOKEN_VECTOR_TYPE] = "<vector type>",
-    [TOKEN_MATRIX_TYPE] = "<matrix type>",
-    [TOKEN_STATIC] = "static",
-    [TOKEN_GROUPSHARED] = "groupshared",
-    [TOKEN_REGISTER] = "register",
-};
-
-const char *ts__getTokenString(TokenKind kind)
-{
-    return TOKEN_STRINGS[kind];
-}

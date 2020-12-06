@@ -5,13 +5,14 @@
 #ifndef TINY_SHADER_COMPILER_H
 #define TINY_SHADER_COMPILER_H
 
-#include <stdbool.h>
 #include <stddef.h>
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+typedef struct TsCompilerOptions TsCompilerOptions;
+typedef struct TsCompilerOutput TsCompilerOutput;
 
 typedef enum TsShaderStage {
     TS_SHADER_STAGE_VERTEX,
@@ -19,30 +20,22 @@ typedef enum TsShaderStage {
     TS_SHADER_STAGE_COMPUTE,
 } TsShaderStage;
 
-typedef struct TsCompilerInput {
-  const char *path; // optional
-  const char *input;
-  size_t input_size;
+TsCompilerOptions *tsCompilerOptionsCreate(void);
+void tsCompilerOptionsSetStage(TsCompilerOptions *options, TsShaderStage stage);
+void tsCompilerOptionsSetEntryPoint(TsCompilerOptions *options, const char *entry_point, size_t entry_point_length);
+void tsCompilerOptionsSetSource(
+    TsCompilerOptions *options,
+    const char* source,
+    size_t source_length,
+    const char *path, // can be NULL
+    size_t path_length // if path is NULL, this should be zero
+);
+void tsCompilerOptionsAddIncludePath(TsCompilerOptions *options, const char* path, size_t path_length);
+void tsCompilerOptionsDestroy(TsCompilerOptions *options);
 
-  const char *entry_point;
-  TsShaderStage stage;
-} TsCompilerInput;
-
-typedef struct TsCompilerOutput {
-  uint8_t *spirv;
-  size_t spirv_byte_size;
-
-  char *error;
-} TsCompilerOutput;
-
-typedef struct TsCompiler TsCompiler;
-
-TsCompiler *tsCompilerCreate();
-void tsCompilerDestroy(TsCompiler *compiler);
-
-void tsCompile(TsCompiler *compiler, TsCompilerInput *input,
-                TsCompilerOutput *output);
-
+TsCompilerOutput *tsCompile(TsCompilerOptions *options);
+const char *tsCompilerOutputGetErrors(TsCompilerOutput *output);
+const unsigned char *tsCompilerOutputGetSpirv(TsCompilerOutput *output, size_t *spirv_byte_size);
 void tsCompilerOutputDestroy(TsCompilerOutput *output);
 
 #ifdef __cplusplus

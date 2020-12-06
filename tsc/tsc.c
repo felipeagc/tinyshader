@@ -35,7 +35,7 @@ static char *loadFile(const char *path, size_t *out_size)
     return data;
 }
 
-static void compileStage(
+static bool compileStage(
     char *out_file_name,
     char *input_path,
     char *file_data,
@@ -43,39 +43,41 @@ static void compileStage(
     char *entry_point,
     TsShaderStage stage)
 {
-    TsCompiler *compiler = tsCompilerCreate();
+    TsCompilerOptions *options = tsCompilerOptionsCreate();
+    tsCompilerOptionsSetStage(options, stage);
+    tsCompilerOptionsSetSource(options, file_data, file_size, input_path, strlen(input_path));
+    tsCompilerOptionsSetEntryPoint(options, entry_point, strlen(entry_point));
 
-    TsCompilerInput input = {
-        .input = file_data,
-        .input_size = file_size,
-        .path = input_path,
-        .entry_point = entry_point,
-        .stage = stage,
-    };
-
-    TsCompilerOutput output = {0};
-    tsCompile(compiler, &input, &output);
-    if (output.error)
+    TsCompilerOutput *output = tsCompile(options);
+    const char *errors = tsCompilerOutputGetErrors(output);
+    if (errors)
     {
-        fprintf(stderr, "%s", output.error);
-
-        exit(1);
+        fprintf(stderr, "%s", errors);
+        tsCompilerOutputDestroy(output);
+        tsCompilerOptionsDestroy(options);
+        return false;
     }
+
+    size_t spirv_byte_size = 0;
+    const unsigned char *spirv = tsCompilerOutputGetSpirv(output, &spirv_byte_size);
 
     FILE *f = fopen(out_file_name, "wb");
     if (!f)
     {
         fprintf(stderr, "failed to open output file\n");
-        exit(1);
+        fclose(f);
+        tsCompilerOutputDestroy(output);
+        tsCompilerOptionsDestroy(options);
+        return false;
     }
 
-    fwrite(output.spirv, output.spirv_byte_size, 1, f);
+    fwrite(spirv, spirv_byte_size, 1, f);
 
     fclose(f);
 
-    tsCompilerOutputDestroy(&output);
-
-    tsCompilerDestroy(compiler);
+    tsCompilerOutputDestroy(output);
+    tsCompilerOptionsDestroy(options);
+    return true;
 }
 
 int main(int argc, char *argv[])
@@ -146,9 +148,14 @@ int main(int argc, char *argv[])
     size_t file_size = 0;
     char *file_data = loadFile(path, &file_size);
 
-    compileStage(out_path, path, file_data, file_size, entry_point, stage);
+    bool result = compileStage(out_path, path, file_data, file_size, entry_point, stage);
 
     free(file_data);
+
+    if (!result)
+    {
+        return 1;
+    }
 
     return 0;
 }
