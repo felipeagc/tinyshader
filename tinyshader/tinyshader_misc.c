@@ -53,17 +53,6 @@ void *ts__arrayGrow(
 
     *cap = desired_cap;
     return new_arr;
-
-    /* if (!ptr) */
-    /* { */
-    /*     size_t desired_cap = ((wanted_cap == 0) ? ARRAY_INITIAL_CAPACITY : wanted_cap); */
-    /*     *cap = desired_cap; */
-    /*     return malloc(item_size * desired_cap); */
-    /* } */
-
-    /* size_t desired_cap = ((wanted_cap == 0) ? ((*cap) * 2) : wanted_cap); */
-    /* *cap = desired_cap; */
-    /* return realloc(ptr, (desired_cap * item_size)); */
 }
 
 int ts__strcasecmp(const char *_l, const char *_r)
