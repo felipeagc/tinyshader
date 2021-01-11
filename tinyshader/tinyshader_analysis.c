@@ -26,11 +26,6 @@ static void scopeInit(TsCompiler *compiler, Scope *scope, Scope *parent, AstDecl
     scope->owner = owner;
 }
 
-static void scopeDestroy(Scope *scope)
-{
-    ts__hashDestroy(&scope->map);
-}
-
 static AstDecl *scopeGetLocal(Scope *scope, const char *name)
 {
     AstDecl *symbol = NULL;
@@ -59,12 +54,6 @@ static bool scopeAdd(Scope *scope, const char *name, AstDecl *decl)
     ts__hashSet(&scope->map, name, decl);
 
     return true;
-}
-
-static void scopeClone(Scope *new_scope, Scope *old_scope, AstDecl *new_owner)
-{
-    memcpy(new_scope, old_scope, sizeof(Scope));
-    new_scope->owner = new_owner;
 }
 
 static char *typeToString(TsCompiler *compiler, AstType *type)
