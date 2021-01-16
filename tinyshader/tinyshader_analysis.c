@@ -3336,12 +3336,6 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
             expr->type = right_type;
 
-            if (expr->unary.right->resolved_int)
-            {
-                expr->resolved_int = NEW(compiler, int64_t);
-                *expr->resolved_int = -(*expr->unary.right->resolved_int);
-            }
-
             break;
         }
 
@@ -3359,6 +3353,14 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                     &expr->unary.right->loc,
                     "\'increment\' expression does not work on this type");
                 break;
+            }
+
+            if (!expr->unary.right->assignable)
+            {
+                ts__addErr(
+                    compiler,
+                    &expr->unary.right->loc,
+                    "expression is not assignable");
             }
 
             expr->type = right_type;
@@ -3380,6 +3382,14 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                     &expr->unary.right->loc,
                     "\'decrement\' expression does not work on this type");
                 break;
+            }
+
+            if (!expr->unary.right->assignable)
+            {
+                ts__addErr(
+                    compiler,
+                    &expr->unary.right->loc,
+                    "expression is not assignable");
             }
 
             expr->type = right_type;
@@ -3425,6 +3435,23 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
             break;
         }
+        }
+
+        if (expr->unary.right->resolved_int)
+        {
+            int64_t right_int = *expr->unary.right->resolved_int;
+
+            expr->resolved_int = NEW(compiler, int64_t);
+            switch (expr->unary.op)
+            {
+            case UNOP_BITNOT: *expr->resolved_int = ~right_int; break;
+            case UNOP_NEG: *expr->resolved_int = -right_int; break;
+            case UNOP_NOT: *expr->resolved_int = !right_int; break;
+            case UNOP_POST_DEC: *expr->resolved_int = right_int; break;
+            case UNOP_PRE_DEC: *expr->resolved_int = right_int - 1; break;
+            case UNOP_POST_INC: *expr->resolved_int = right_int; break;
+            case UNOP_PRE_INC: *expr->resolved_int = right_int + 1; break;
+            }
         }
 
         break;

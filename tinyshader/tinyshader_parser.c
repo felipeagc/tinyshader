@@ -374,9 +374,9 @@ static AstExpr *parseAccessFuncCall(Parser *p)
 
 static AstExpr *parsePostfixedUnaryExpr(Parser *p)
 {
-    AstExpr *expr = parseAccessFuncCall(p);
-
     Location loc = parserBeginLoc(p);
+
+    AstExpr *expr = parseAccessFuncCall(p);
 
     while (parserPeek(p, 0)->kind == TOKEN_ADDADD ||
            parserPeek(p, 0)->kind == TOKEN_SUBSUB)
@@ -398,7 +398,7 @@ static AstExpr *parsePostfixedUnaryExpr(Parser *p)
         new_expr->unary.op = op;
 
         parserEndLoc(p, &loc);
-        expr->loc = loc;
+        new_expr->loc = loc;
 
         expr = new_expr;
     }
