@@ -37,6 +37,7 @@ struct VsOutput
 float4 main(in VsOutput vs_out, out float4 out_color2 : SV_Target1) : SV_Target0
 {
     float array_of_floats[4];
+    array_of_floats[0] = 1.0f;
 
     for (; vs_out.pos.x > 0;)
     {

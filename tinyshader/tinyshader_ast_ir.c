@@ -415,6 +415,15 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
             break;
         }
 
+        case TYPE_RUNTIME_ARRAY:
+        case TYPE_ARRAY:
+        {
+            index_count = 1;
+            indices = NEW_ARRAY(compiler, IRInst *, index_count);
+            indices[0] = loadVal(ir_mod, expr->subscript.right->value);
+            break;
+        }
+
         default: assert(0); break;
         }
 

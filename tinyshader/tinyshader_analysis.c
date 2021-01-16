@@ -1421,10 +1421,38 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             {
                 ts__addErr(compiler, &right->loc, "index is not an integer constant");
             }
-            else if ((*right->resolved_int) >= left->type->matrix.col_count)
+            else if ((*right->resolved_int) >= left->type->matrix.col_count || (*right->resolved_int) < 0)
             {
-                ts__addErr(compiler, &right->loc, "index is out of bounds");
+                ts__addErr(
+                    compiler,
+                    &right->loc,
+                    "index '%ld' is out of matrix bounds '%u'",
+                    *right->resolved_int,
+                    left->type->matrix.col_count);
             }
+            break;
+        }
+        case TYPE_ARRAY:
+        {
+            expr->assignable = left->assignable;
+            expr->type = left->type->array.sub;
+            if (right->resolved_int &&
+                ((*right->resolved_int) >= (int64_t)left->type->array.size ||
+                 (*right->resolved_int) < 0))
+            {
+                ts__addErr(
+                    compiler,
+                    &right->loc,
+                    "index '%ld' is out of array bounds '%zu'",
+                    *right->resolved_int,
+                    left->type->array.size);
+            }
+            break;
+        }
+        case TYPE_RUNTIME_ARRAY:
+        {
+            expr->assignable = left->assignable;
+            expr->type = left->type->array.sub;
             break;
         }
         default: {

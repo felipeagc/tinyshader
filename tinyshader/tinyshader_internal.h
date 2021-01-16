@@ -1351,11 +1351,13 @@ void ts__sbReset(StringBuilder *sb);
 void ts__sbAppend(StringBuilder *sb, const char *str);
 void ts__sbAppendLen(StringBuilder *sb, const char *str, size_t len);
 void ts__sbAppendChar(StringBuilder *sb, char c);
-TS__PRINTF_FORMATTING(2, 3) void ts__sbSprintf(StringBuilder *sb, const char *fmt, ...);
+TS__PRINTF_FORMATTING(2, 3)
+void ts__sbSprintf(StringBuilder *sb, const char *fmt, ...);
 void ts__sbVsprintf(StringBuilder *sb, const char *fmt, va_list vl);
 char *ts__sbBuildMalloc(StringBuilder *sb);
 char *ts__sbBuild(StringBuilder *sb, BumpAlloc *bump);
 
+TS__PRINTF_FORMATTING(3, 4)
 void ts__addErr(TsCompiler *compiler, const Location *loc, const char *msg, ...);
 
 File *ts__createFile(
