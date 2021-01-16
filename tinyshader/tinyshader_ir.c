@@ -4,6 +4,8 @@
  */
 #include "tinyshader_internal.h"
 
+static char *irConstToString(TsCompiler *compiler, IRInst *inst);
+
 static char *irTypeToString(TsCompiler *compiler, IRType *type)
 {
     if (type->string) return type->string;
@@ -81,6 +83,18 @@ static char *irTypeToString(TsCompiler *compiler, IRType *type)
         break;
     }
 
+    case IR_TYPE_ARRAY: {
+        const char *size_str = irConstToString(compiler, type->array.size);
+
+        ts__sbReset(&compiler->sb);
+        ts__sbSprintf(&compiler->sb, "array[%s]", size_str);
+        prefix = ts__sbBuild(&compiler->sb, &compiler->alloc);
+
+        assert(type->array.sub);
+        sub = irTypeToString(compiler, type->array.sub);
+        break;
+    }
+
     case IR_TYPE_FUNC: {
         prefix = "func";
 
@@ -108,7 +122,7 @@ static char *irTypeToString(TsCompiler *compiler, IRType *type)
     case IR_TYPE_STRUCT: {
         ts__sbReset(&compiler->sb);
         ts__sbSprintf(
-            &compiler->sb, "struct%u%s", strlen(type->struct_.name), type->struct_.name);
+            &compiler->sb, "struct%zu%s", strlen(type->struct_.name), type->struct_.name);
         prefix = ts__sbBuild(&compiler->sb, &compiler->alloc);
         break;
     }
@@ -345,9 +359,23 @@ IRType *ts__irNewIntType(IRModule *m, uint32_t bits, bool is_signed)
 
 IRType *ts__irNewRuntimeArrayType(IRModule *m, IRType *sub)
 {
+    assert(sub);
+
     IRType *ty = NEW(m->compiler, IRType);
     ty->kind = IR_TYPE_RUNTIME_ARRAY;
     ty->array.sub = sub;
+    return irGetCachedType(m, ty);
+}
+
+IRType *ts__irNewArrayType(IRModule *m, IRType *sub, IRInst *size)
+{
+    assert(sub);
+    assert(size);
+
+    IRType *ty = NEW(m->compiler, IRType);
+    ty->kind = IR_TYPE_ARRAY;
+    ty->array.sub = sub;
+    ty->array.size = size;
     return irGetCachedType(m, ty);
 }
 
@@ -404,7 +432,7 @@ IRType *ts__irNewImageType(IRModule *m, IRType *sampled_type, SpvDim dim)
     ty->kind = IR_TYPE_IMAGE;
     ty->image.sampled_type = sampled_type;
     ty->image.dim = dim;
-    ty->image.depth = 0;
+    ty->image.depth = 2; // 2 means no indication as to whether this is a depth or non-depth image
     ty->image.arrayed = 0;
     ty->image.multisampled = 0;
     ty->image.sampled = 1;
@@ -621,7 +649,7 @@ static char *irConstToString(TsCompiler *compiler, IRInst *inst)
                     break;
                 case 16:
                     ts__sbSprintf(
-                        &compiler->sb, "short%h", *((short *)inst->constant.value));
+                        &compiler->sb, "short%hd", *((short *)inst->constant.value));
                     break;
                 case 32:
                     ts__sbSprintf(&compiler->sb, "int%d", *((int *)inst->constant.value));
@@ -1329,10 +1357,19 @@ static void irModuleEncodeExtInst(
 
 static void irModuleReserveTypeIds(IRModule *m)
 {
-    for (uint32_t i = 0; i < arrLength(m->type_cache.values); ++i)
+    for (uint32_t i = 0; i < m->type_cache.values.len; ++i)
     {
         IRType *type = (IRType *)m->type_cache.values.ptr[i];
         type->id = irModuleReserveId(m);
+    }
+}
+
+static void irModuleReserveConstantIds(IRModule *m)
+{
+    for (uint32_t i = 0; i < m->constants.len; ++i)
+    {
+        IRInst *inst = m->constants.ptr[i];
+        inst->id = irModuleReserveId(m);
     }
 }
 
@@ -1405,126 +1442,139 @@ static void irModuleEncodeDecorations(IRModule *m)
     }
 }
 
+static void irModuleEncodeType(IRModule *m, IRType *type)
+{
+    if (type->encoded) return;
+    type->encoded = true;
+
+    switch (type->kind)
+    {
+    case IR_TYPE_VOID: {
+        irModuleEncodeInst(m, SpvOpTypeVoid, &type->id, 1);
+        break;
+    }
+
+    case IR_TYPE_BOOL: {
+        irModuleEncodeInst(m, SpvOpTypeBool, &type->id, 1);
+        break;
+    }
+
+    case IR_TYPE_FLOAT: {
+        uint32_t params[2] = {type->id, type->float_.bits};
+        irModuleEncodeInst(m, SpvOpTypeFloat, params, 2);
+        break;
+    }
+
+    case IR_TYPE_INT: {
+        uint32_t params[3] = {
+            type->id, type->int_.bits, (uint32_t)type->int_.is_signed};
+        irModuleEncodeInst(m, SpvOpTypeInt, params, 3);
+        break;
+    }
+
+    case IR_TYPE_POINTER: {
+        uint32_t params[3] = {type->id, type->ptr.storage_class, type->ptr.sub->id};
+        irModuleEncodeInst(m, SpvOpTypePointer, params, 3);
+        break;
+    }
+
+    case IR_TYPE_RUNTIME_ARRAY: {
+        uint32_t params[2] = {type->id, type->array.sub->id};
+        irModuleEncodeInst(m, SpvOpTypeRuntimeArray, params, 2);
+        break;
+    }
+
+    case IR_TYPE_ARRAY: {
+        uint32_t params[3] = {type->id, type->array.sub->id, type->array.size->id};
+        irModuleEncodeInst(m, SpvOpTypeArray, params, 3);
+        break;
+    }
+
+    case IR_TYPE_FUNC: {
+        uint32_t param_count = 2 + type->func.param_count;
+        uint32_t *params = NEW_ARRAY(m->compiler, uint32_t, param_count);
+
+        params[0] = type->id;
+        params[1] = type->func.return_type->id;
+
+        for (uint32_t j = 0; j < type->func.param_count; ++j)
+        {
+            IRType *param_type = type->func.params[j];
+            params[2 + j] = param_type->id;
+        }
+
+        irModuleEncodeInst(m, SpvOpTypeFunction, params, param_count);
+        break;
+    }
+
+    case IR_TYPE_VECTOR: {
+        uint32_t params[3] = {
+            type->id, type->vector.elem_type->id, type->vector.size};
+        irModuleEncodeInst(m, SpvOpTypeVector, params, 3);
+        break;
+    }
+
+    case IR_TYPE_MATRIX: {
+        uint32_t params[3] = {
+            type->id, type->matrix.col_type->id, type->matrix.col_count};
+        irModuleEncodeInst(m, SpvOpTypeMatrix, params, 3);
+        break;
+    }
+
+    case IR_TYPE_STRUCT: {
+        uint32_t word_count = 1 + type->struct_.field_count;
+        uint32_t *params = NEW_ARRAY(m->compiler, uint32_t, word_count);
+        params[0] = type->id;
+
+        for (uint32_t i = 0; i < type->struct_.field_count; ++i)
+        {
+            params[1 + i] = type->struct_.fields[i]->id;
+        }
+
+        irModuleEncodeInst(m, SpvOpTypeStruct, params, word_count);
+        break;
+    }
+
+    case IR_TYPE_SAMPLER: {
+        uint32_t params[1] = {
+            type->id,
+        };
+        irModuleEncodeInst(m, SpvOpTypeSampler, params, 1);
+        break;
+    }
+
+    case IR_TYPE_IMAGE: {
+        uint32_t params[8] = {
+            type->id,
+            type->image.sampled_type->id,
+            type->image.dim,
+            type->image.depth,
+            type->image.arrayed,
+            type->image.multisampled,
+            type->image.sampled,
+            type->image.format,
+        };
+        irModuleEncodeInst(m, SpvOpTypeImage, params, 8);
+        break;
+    }
+
+    case IR_TYPE_SAMPLED_IMAGE: {
+        uint32_t params[2] = {
+            type->id,
+            type->sampled_image.image_type->id,
+        };
+        irModuleEncodeInst(m, SpvOpTypeSampledImage, params, 2);
+        break;
+    }
+    }
+}
+
 static void irModuleEncodeTypes(IRModule *m)
 {
     for (uint32_t i = 0; i < arrLength(m->type_cache.values); ++i)
     {
         IRType *type = (IRType *)m->type_cache.values.ptr[i];
-
-        switch (type->kind)
-        {
-        case IR_TYPE_VOID: {
-            irModuleEncodeInst(m, SpvOpTypeVoid, &type->id, 1);
-            break;
-        }
-
-        case IR_TYPE_BOOL: {
-            irModuleEncodeInst(m, SpvOpTypeBool, &type->id, 1);
-            break;
-        }
-
-        case IR_TYPE_FLOAT: {
-            uint32_t params[2] = {type->id, type->float_.bits};
-            irModuleEncodeInst(m, SpvOpTypeFloat, params, 2);
-            break;
-        }
-
-        case IR_TYPE_INT: {
-            uint32_t params[3] = {
-                type->id, type->int_.bits, (uint32_t)type->int_.is_signed};
-            irModuleEncodeInst(m, SpvOpTypeInt, params, 3);
-            break;
-        }
-
-        case IR_TYPE_POINTER: {
-            uint32_t params[3] = {type->id, type->ptr.storage_class, type->ptr.sub->id};
-            irModuleEncodeInst(m, SpvOpTypePointer, params, 3);
-            break;
-        }
-
-        case IR_TYPE_RUNTIME_ARRAY: {
-            uint32_t params[2] = {type->id, type->array.sub->id};
-            irModuleEncodeInst(m, SpvOpTypeRuntimeArray, params, 2);
-            break;
-        }
-
-        case IR_TYPE_FUNC: {
-            uint32_t param_count = 2 + type->func.param_count;
-            uint32_t *params = NEW_ARRAY(m->compiler, uint32_t, param_count);
-
-            params[0] = type->id;
-            params[1] = type->func.return_type->id;
-
-            for (uint32_t j = 0; j < type->func.param_count; ++j)
-            {
-                IRType *param_type = type->func.params[j];
-                params[2 + j] = param_type->id;
-            }
-
-            irModuleEncodeInst(m, SpvOpTypeFunction, params, param_count);
-            break;
-        }
-
-        case IR_TYPE_VECTOR: {
-            uint32_t params[3] = {
-                type->id, type->vector.elem_type->id, type->vector.size};
-            irModuleEncodeInst(m, SpvOpTypeVector, params, 3);
-            break;
-        }
-
-        case IR_TYPE_MATRIX: {
-            uint32_t params[3] = {
-                type->id, type->matrix.col_type->id, type->matrix.col_count};
-            irModuleEncodeInst(m, SpvOpTypeMatrix, params, 3);
-            break;
-        }
-
-        case IR_TYPE_STRUCT: {
-            uint32_t word_count = 1 + type->struct_.field_count;
-            uint32_t *params = NEW_ARRAY(m->compiler, uint32_t, word_count);
-            params[0] = type->id;
-
-            for (uint32_t i = 0; i < type->struct_.field_count; ++i)
-            {
-                params[1 + i] = type->struct_.fields[i]->id;
-            }
-
-            irModuleEncodeInst(m, SpvOpTypeStruct, params, word_count);
-            break;
-        }
-
-        case IR_TYPE_SAMPLER: {
-            uint32_t params[1] = {
-                type->id,
-            };
-            irModuleEncodeInst(m, SpvOpTypeSampler, params, 1);
-            break;
-        }
-
-        case IR_TYPE_IMAGE: {
-            uint32_t params[8] = {
-                type->id,
-                type->image.sampled_type->id,
-                type->image.dim,
-                type->image.depth,
-                type->image.arrayed,
-                type->image.multisampled,
-                type->image.sampled,
-                type->image.format,
-            };
-            irModuleEncodeInst(m, SpvOpTypeImage, params, 8);
-            break;
-        }
-
-        case IR_TYPE_SAMPLED_IMAGE: {
-            uint32_t params[2] = {
-                type->id,
-                type->sampled_image.image_type->id,
-            };
-            irModuleEncodeInst(m, SpvOpTypeSampledImage, params, 2);
-            break;
-        }
-        }
+        irModuleEncodeType(m, type);
     }
 }
 
@@ -2577,11 +2627,12 @@ static void irModuleEncodeConstants(IRModule *m)
     for (uint32_t i = 0; i < arrLength(m->constants); ++i)
     {
         IRInst *inst = m->constants.ptr[i];
+
+        irModuleEncodeType(m, inst->type);
+
         switch (inst->kind)
         {
         case IR_INST_CONSTANT: {
-            inst->id = irModuleReserveId(m);
-
             uint32_t value_words = ROUND_TO_4(inst->constant.value_size_bytes) / 4;
             assert((value_words * 4) >= inst->constant.value_size_bytes);
             assert(value_words > 0);
@@ -2597,8 +2648,6 @@ static void irModuleEncodeConstants(IRModule *m)
         }
 
         case IR_INST_CONSTANT_COMPOSITE: {
-            inst->id = irModuleReserveId(m);
-
             IRInst **values = inst->constant_composite.values;
             uint32_t value_count = inst->constant_composite.value_count;
             uint32_t *params = NEW_ARRAY(m->compiler, uint32_t, 2 + value_count);
@@ -2614,7 +2663,6 @@ static void irModuleEncodeConstants(IRModule *m)
         }
 
         case IR_INST_CONSTANT_BOOL: {
-            inst->id = irModuleReserveId(m);
             uint32_t params[2] = {inst->type->id, inst->id};
             if (inst->constant_bool.value)
             {
@@ -2731,11 +2779,13 @@ static void irModuleEncodeModule(IRModule *m)
 
     irModuleReserveTypeIds(m);
 
+    irModuleReserveConstantIds(m);
+
     irModuleEncodeDecorations(m);
 
-    irModuleEncodeTypes(m);
-
     irModuleEncodeConstants(m);
+
+    irModuleEncodeTypes(m);
 
     irModuleEncodeGlobals(m);
 

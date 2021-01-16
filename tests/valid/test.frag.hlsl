@@ -25,6 +25,8 @@ cbuffer gInput : register(b0) {
 
 Texture2D gInput2;
 uniform sampler gInput3;
+uniform const Texture2D array_of_textures[];
+Texture2D<float3> another_array_of_textures[2];
 
 struct VsOutput
 {
@@ -34,6 +36,8 @@ struct VsOutput
 
 float4 main(in VsOutput vs_out, out float4 out_color2 : SV_Target1) : SV_Target0
 {
+    float array_of_floats[4];
+
     for (; vs_out.pos.x > 0;)
     {
         if (vs_out.pos.x <= 123)

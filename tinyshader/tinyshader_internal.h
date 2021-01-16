@@ -26,6 +26,12 @@ typedef struct TsCompiler TsCompiler;
 #define TS__MAX(a, b) ((a) > (b) ? (a) : (b))
 #define TS__MIN(a, b) ((a) < (b) ? (a) : (b))
 
+#ifdef __GNUC__
+    #define TS__PRINTF_FORMATTING(x, y) __attribute__((format(printf, x, y)))
+#else
+    #define TS__PRINTF_FORMATTING(x, y)
+#endif
+
 void *ts__arrayGrow(
     TsCompiler *compiler, void *ptr, size_t *cap, size_t wanted_cap, size_t item_size);
 
@@ -343,6 +349,7 @@ typedef enum IRTypeKind {
     IR_TYPE_VECTOR,
     IR_TYPE_MATRIX,
 
+    IR_TYPE_ARRAY,
     IR_TYPE_RUNTIME_ARRAY,
 
     IR_TYPE_POINTER,
@@ -359,6 +366,7 @@ typedef struct IRType
     IRTypeKind kind;
     char *string;
     uint32_t id;
+    bool encoded;
 
     ArrayOfIRDecoration decorations;
 
@@ -421,7 +429,7 @@ typedef struct IRType
         } sampled_image;
         struct
         {
-            size_t size;
+            struct IRInst *size;
             struct IRType *sub;
         } array;
     };
@@ -845,6 +853,9 @@ typedef enum AstTypeKind {
     TYPE_VECTOR,
     TYPE_MATRIX,
 
+    TYPE_ARRAY,
+    TYPE_RUNTIME_ARRAY,
+
     TYPE_POINTER,
     TYPE_FUNC,
     TYPE_STRUCT,
@@ -924,6 +935,11 @@ typedef struct AstType
         {
             struct AstType *sub;
         } buffer;
+        struct
+        {
+            size_t size;
+            struct AstType *sub;
+        } array;
     };
 } AstType;
 
@@ -1026,6 +1042,8 @@ typedef enum AstExprKind {
     EXPR_BINARY,
     EXPR_TERNARY,
     EXPR_AUTO_CAST,
+    EXPR_ARRAY_TYPE,
+    EXPR_RUNTIME_ARRAY_TYPE,
 } AstExprKind;
 
 struct AstStmt
@@ -1228,6 +1246,12 @@ struct AstExpr
         {
             AstExpr *sub;
         } auto_cast;
+
+        struct
+        {
+            AstExpr *sub;
+            AstExpr *size;
+        } array_type;
     };
 };
 
@@ -1327,7 +1351,7 @@ void ts__sbReset(StringBuilder *sb);
 void ts__sbAppend(StringBuilder *sb, const char *str);
 void ts__sbAppendLen(StringBuilder *sb, const char *str, size_t len);
 void ts__sbAppendChar(StringBuilder *sb, char c);
-void ts__sbSprintf(StringBuilder *sb, const char *fmt, ...);
+TS__PRINTF_FORMATTING(2, 3) void ts__sbSprintf(StringBuilder *sb, const char *fmt, ...);
 void ts__sbVsprintf(StringBuilder *sb, const char *fmt, va_list vl);
 char *ts__sbBuildMalloc(StringBuilder *sb);
 char *ts__sbBuild(StringBuilder *sb, BumpAlloc *bump);
@@ -1367,6 +1391,7 @@ IRType *ts__irNewMatrixType(IRModule *m, IRType *col_type, uint32_t col_count);
 IRType *ts__irNewFloatType(IRModule *m, uint32_t bits);
 IRType *ts__irNewIntType(IRModule *m, uint32_t bits, bool is_signed);
 IRType *ts__irNewRuntimeArrayType(IRModule *m, IRType *sub);
+IRType *ts__irNewArrayType(IRModule *m, IRType *sub, IRInst *size);
 IRType *
 ts__irNewFuncType(IRModule *m, IRType *return_type, IRType **params, uint32_t param_count);
 IRType *ts__irNewStructType(

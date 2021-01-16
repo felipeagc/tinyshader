@@ -187,6 +187,20 @@ static IRType *convertTypeToIR(Module *module, IRModule *ir_module, AstType *typ
         return ts__irNewVectorType(ir_module, elem_type, type->vector.size);
     }
 
+    case TYPE_RUNTIME_ARRAY: {
+        IRType *elem_type = convertTypeToIR(module, ir_module, type->array.sub);
+        return ts__irNewRuntimeArrayType(ir_module, elem_type);
+    }
+
+    case TYPE_ARRAY: {
+        assert(type->array.size > 0);
+
+        IRType *size_type = ts__irNewIntType(ir_module, 32, false);
+        IRInst *size = ts__irBuildConstInt(ir_module, size_type, type->array.size);
+        IRType *elem_type = convertTypeToIR(module, ir_module, type->array.sub);
+        return ts__irNewArrayType(ir_module, elem_type, size);
+    }
+
     case TYPE_IMAGE: {
         IRType *sampled_type = convertTypeToIR(
             module, ir_module, ts__getScalarType(type->image.sampled_type));
@@ -1597,6 +1611,8 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
         break;
     }
 
+    case EXPR_RUNTIME_ARRAY_TYPE:
+    case EXPR_ARRAY_TYPE:
     case EXPR_CONSTANT_BUFFER_TYPE:
     case EXPR_STRUCTURED_BUFFER_TYPE:
     case EXPR_RW_STRUCTURED_BUFFER_TYPE:
@@ -1606,7 +1622,6 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
     }
     }
 }
-
 
 static void astBuildStmt(Module *ast_mod, IRModule *ir_mod, AstStmt *stmt)
 {

@@ -141,6 +141,21 @@ static char *typeToString(TsCompiler *compiler, AstType *type)
         sub = typeToString(compiler, type->buffer.sub);
         break;
 
+    case TYPE_RUNTIME_ARRAY:
+        prefix = "r_array";
+        sub = typeToString(compiler, type->array.sub);
+        break;
+
+    case TYPE_ARRAY:
+    {
+        ts__sbReset(&compiler->sb);
+        ts__sbSprintf(&compiler->sb, "array%zu", type->array.size);
+        prefix = ts__sbBuild(&compiler->sb, &compiler->alloc);
+
+        sub = typeToString(compiler, type->array.sub);
+        break;
+    }
+
     case TYPE_FUNC: {
         prefix = "func";
 
@@ -168,7 +183,7 @@ static char *typeToString(TsCompiler *compiler, AstType *type)
     case TYPE_STRUCT: {
         ts__sbReset(&compiler->sb);
         ts__sbSprintf(
-            &compiler->sb, "struct%u%s", strlen(type->struct_.name), type->struct_.name);
+            &compiler->sb, "struct%zu%s", strlen(type->struct_.name), type->struct_.name);
         prefix = ts__sbBuild(&compiler->sb, &compiler->alloc);
         break;
     }
@@ -321,6 +336,26 @@ static char *typeToPrettyString(TsCompiler *compiler, AstType *type)
         break;
     }
 
+    case TYPE_RUNTIME_ARRAY:
+    {
+        char *sub_str = typeToPrettyString(compiler, type->array.sub);
+
+        ts__sbReset(&compiler->sb);
+        ts__sbSprintf(&compiler->sb, "%s[]", sub_str);
+        str = ts__sbBuild(&compiler->sb, &compiler->alloc);
+        break;
+    }
+
+    case TYPE_ARRAY:
+    {
+        char *sub_str = typeToPrettyString(compiler, type->array.sub);
+
+        ts__sbReset(&compiler->sb);
+        ts__sbSprintf(&compiler->sb, "%s[%zu]", sub_str, type->array.size);
+        str = ts__sbBuild(&compiler->sb, &compiler->alloc);
+        break;
+    }
+
     case TYPE_FUNC: {
         char *return_type = typeToPrettyString(compiler, type->func.return_type);
         char **params = NEW_ARRAY(compiler, char *, type->func.param_count);
@@ -408,6 +443,8 @@ static uint32_t typeAlignOf(Module *m, AstType *type)
     case TYPE_STRUCTURED_BUFFER: align = typeAlignOf(m, type->buffer.sub); break;
     case TYPE_RW_STRUCTURED_BUFFER: align = typeAlignOf(m, type->buffer.sub); break;
 
+    case TYPE_ARRAY: align = typeAlignOf(m, type->array.sub); break;
+
     case TYPE_VECTOR: {
         switch (type->vector.size)
         {
@@ -437,6 +474,7 @@ static uint32_t typeAlignOf(Module *m, AstType *type)
         break;
     }
 
+    case TYPE_RUNTIME_ARRAY:
     case TYPE_IMAGE:
     case TYPE_SAMPLER:
     case TYPE_POINTER:
@@ -466,6 +504,8 @@ static uint32_t typeSizeOf(Module *m, AstType *type)
     case TYPE_CONSTANT_BUFFER: size = typeSizeOf(m, type->buffer.sub); break;
     case TYPE_STRUCTURED_BUFFER: size = typeSizeOf(m, type->buffer.sub); break;
     case TYPE_RW_STRUCTURED_BUFFER: size = typeSizeOf(m, type->buffer.sub); break;
+
+    case TYPE_ARRAY: size = typeSizeOf(m, type->array.sub) * type->array.size; break;
 
     case TYPE_VECTOR: {
         switch (type->vector.size)
@@ -502,6 +542,7 @@ static uint32_t typeSizeOf(Module *m, AstType *type)
         break;
     }
 
+    case TYPE_RUNTIME_ARRAY:
     case TYPE_IMAGE:
     case TYPE_SAMPLER:
     case TYPE_POINTER:
@@ -548,6 +589,25 @@ static AstType *newPointerType(Module *m, SpvStorageClass storage_class, AstType
     ty->kind = TYPE_POINTER;
     ty->ptr.storage_class = storage_class;
     ty->ptr.sub = sub;
+    return getCachedType(m, ty);
+}
+
+static AstType *newArrayType(Module *m, AstType *elem_type, size_t size)
+{
+    assert(size > 0);
+
+    AstType *ty = NEW(m->compiler, AstType);
+    ty->kind = TYPE_ARRAY;
+    ty->array.sub = elem_type;
+    ty->array.size = size;
+    return getCachedType(m, ty);
+}
+
+static AstType *newRuntimeArrayType(Module *m, AstType *elem_type)
+{
+    AstType *ty = NEW(m->compiler, AstType);
+    ty->kind = TYPE_RUNTIME_ARRAY;
+    ty->array.sub = elem_type;
     return getCachedType(m, ty);
 }
 
@@ -1406,7 +1466,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
             if (!left->type)
             {
-                assert(arrLength(compiler->errors) > 0);
+                assert(compiler->errors.len > 0);
                 break;
             }
 
@@ -3118,6 +3178,56 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 "expression does not represent a function");
         }
 
+        break;
+    }
+
+    case EXPR_ARRAY_TYPE:
+    {
+        analyzerAnalyzeExpr(a, expr->array_type.sub, NULL);
+        analyzerAnalyzeExpr(a, expr->array_type.size, NULL);
+
+        AstType *subtype = expr->array_type.sub->as_type;
+        if (!subtype)
+        {
+            assert(compiler->errors.len > 0);
+            break;
+        }
+
+        if (!expr->array_type.size->resolved_int)
+        {
+            ts__addErr(
+                compiler,
+                &expr->array_type.size->loc,
+                "could not resolve integer from array size expression");
+            break;
+        }
+
+        if ((*expr->array_type.size->resolved_int) <= 0)
+        {
+            ts__addErr(
+                compiler,
+                &expr->array_type.size->loc,
+                "array size must be greater than zero");
+            break;
+        }
+
+        expr->type = newBasicType(m, TYPE_TYPE);
+        expr->as_type = newArrayType(m, subtype, *expr->array_type.size->resolved_int);
+        break;
+    }
+
+    case EXPR_RUNTIME_ARRAY_TYPE:
+    {
+        analyzerAnalyzeExpr(a, expr->array_type.sub, NULL);
+        AstType *subtype = expr->array_type.sub->as_type;
+        if (!subtype)
+        {
+            assert(compiler->errors.len > 0);
+            break;
+        }
+
+        expr->type = newBasicType(m, TYPE_TYPE);
+        expr->as_type = newRuntimeArrayType(m, subtype);
         break;
     }
 

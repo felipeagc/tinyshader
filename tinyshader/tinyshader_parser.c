@@ -939,6 +939,42 @@ static AstDecl *parseVarDecl(
     Token *name_tok = parserConsume(p, TOKEN_IDENT);
     if (!name_tok) return NULL;
 
+    while (parserLengthLeft(p) > 0 && parserPeek(p, 0)->kind == TOKEN_LBRACK)
+    {
+        // Parse array type
+        parserNext(p, 1); // Skip lbrack
+
+        if (parserPeek(p, 0)->kind == TOKEN_RBRACK)
+        {
+            // Runtime array
+            parserNext(p, 1); // Skip rbrack
+
+            parserEndLoc(p, &decl_loc);
+
+            AstExpr *array_type_expr = NEW(compiler, AstExpr);
+            array_type_expr->loc = decl_loc;
+            array_type_expr->kind = EXPR_RUNTIME_ARRAY_TYPE;
+            array_type_expr->array_type.sub = type_expr;
+
+            type_expr = array_type_expr;
+        }
+        else
+        {
+            AstExpr *size_expr = parseExpr(p);
+            if (!size_expr) return NULL;
+
+            if (!parserConsume(p, TOKEN_RBRACK)) return NULL;
+
+            AstExpr *array_type_expr = NEW(compiler, AstExpr);
+            array_type_expr->loc = decl_loc;
+            array_type_expr->kind = EXPR_ARRAY_TYPE;
+            array_type_expr->array_type.sub = type_expr;
+            array_type_expr->array_type.size = size_expr;
+            
+            type_expr = array_type_expr;
+        }
+    }
+
     AstDecl *decl = NEW(compiler, AstDecl);
     decl->kind = DECL_VAR;
     decl->name = name_tok->str;
@@ -1632,8 +1668,7 @@ static AstDecl *parseTopLevel(Parser *p)
             arrPush(p->compiler, &p->decls, decl);
             return decl;
         }
-        else if (parserPeek(p, 0)->kind == TOKEN_SEMICOLON ||
-                 parserPeek(p, 0)->kind == TOKEN_COLON)
+        else
         {
             // Parse top level uniform variable declaration
 
@@ -1673,12 +1708,6 @@ static AstDecl *parseTopLevel(Parser *p)
 
             arrPush(p->compiler, &p->decls, decl);
             return decl;
-        }
-        else
-        {
-            ts__addErr(
-                compiler, &parserPeek(p, 0)->loc, "expecting top level declaration");
-            parserNext(p, 1);
         }
 
         break;
