@@ -18,8 +18,8 @@ struct Uniform
 };
 
 ConstantBuffer<Uniform> gInput;
-Texture2D gInput2;
-SamplerState gInput3;
+uniform const Texture2D gInput2;
+const uniform SamplerState gInput3;
 
 void otherFunc(inout float3 pos)
 {

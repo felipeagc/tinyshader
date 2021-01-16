@@ -969,13 +969,23 @@ typedef enum AstBinaryOp {
     BINOP_LOGICAL_OR,
 } AstBinaryOp;
 
-typedef enum AstVarKind {
-    VAR_PLAIN = 0,
-    VAR_UNIFORM,
-    VAR_GROUPSHARED,
-    VAR_IN_PARAM,
-    VAR_OUT_PARAM,
-} AstVarKind;
+typedef enum AstParameterKind {
+    PARAM_IN = 0,
+    PARAM_OUT,
+} AstParameterKind;
+
+typedef enum AstVarStorageClass {
+    VAR_STORAGE_CLASS_NONE            = 0,
+    VAR_STORAGE_CLASS_FUNCTION        = 1,
+    VAR_STORAGE_CLASS_UNIFORM         = 2,
+    VAR_STORAGE_CLASS_GROUPSHARED     = 3,
+} AstVarStorageClass;
+
+typedef enum AstTypeModifier {
+    TYPE_MODIFIER_CONST        = 1 << 0,
+    TYPE_MODIFIER_ROW_MAJOR    = 1 << 1,
+    TYPE_MODIFIER_COLUMN_MAJOR = 1 << 2,
+} AstTypeModifier;
 
 typedef enum AstStmtKind {
     STMT_DECL,
@@ -994,7 +1004,6 @@ typedef enum AstStmtKind {
 typedef enum AstDeclKind {
     DECL_FUNC,
     DECL_VAR,
-    DECL_CONST,
     DECL_ALIAS,
 
     DECL_STRUCT,
@@ -1100,11 +1109,14 @@ struct AstDecl
         {
             AstExpr *type_expr;
             AstExpr *value_expr;
-            AstVarKind kind;
-            bool immutable;
+            AstParameterKind parameter_kind;
+            AstVarStorageClass storage_class;
+            AstTypeModifier type_modifiers;
 
             uint32_t binding;
             uint32_t set;
+
+            uint32_t field_index; // for struct fields
         } var;
 
         struct
@@ -1117,12 +1129,6 @@ struct AstDecl
         {
             ArrayOfAstDeclPtr fields;
         } struct_;
-
-        struct
-        {
-            AstExpr *type_expr;
-            uint32_t index;
-        } struct_field;
 
         struct
         {

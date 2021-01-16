@@ -878,6 +878,108 @@ static AstExpr *parseExpr(Parser *p)
     return parseAssignExpr(p);
 }
 
+static AstDecl *parseVarDecl(
+    Parser *p,
+    bool parse_default_value,
+    ArrayOfAstAttribute *attributes,
+    bool parse_type_modifiers,
+    bool parse_storage_class,
+    bool parse_semantic)
+{
+    TsCompiler *compiler = p->compiler;
+
+    Location decl_loc = parserBeginLoc(p);
+
+    AstVarStorageClass storage_class = 0;
+    AstTypeModifier type_modifiers = 0;
+
+    Token *current = parserPeek(p, 0);
+
+    while (parserLengthLeft(p) > 0 &&
+            ((parse_storage_class && (
+                current->kind == TOKEN_GROUPSHARED ||
+                current->kind == TOKEN_UNIFORM)) ||
+            (parse_type_modifiers &&
+                (current->kind == TOKEN_CONST))))
+    {
+        switch (current->kind)
+        {
+        case TOKEN_GROUPSHARED:
+        {
+            if (storage_class == VAR_STORAGE_CLASS_NONE ||
+                storage_class == VAR_STORAGE_CLASS_UNIFORM)
+            {
+                storage_class = VAR_STORAGE_CLASS_GROUPSHARED;
+            }
+            break;
+        }
+        case TOKEN_UNIFORM:
+        {
+            if (storage_class == VAR_STORAGE_CLASS_NONE)
+            {
+                storage_class = VAR_STORAGE_CLASS_UNIFORM;
+            }
+            break;
+        }
+        case TOKEN_CONST:
+        {
+            type_modifiers |= TYPE_MODIFIER_CONST;
+            break;
+        }
+        default: assert(0);
+        }
+
+        parserNext(p, 1);
+        current = parserPeek(p, 0);
+    }
+
+    AstExpr *type_expr = parsePrefixedUnaryExpr(p);
+    if (!type_expr) return NULL;
+
+    Token *name_tok = parserConsume(p, TOKEN_IDENT);
+    if (!name_tok) return NULL;
+
+    AstDecl *decl = NEW(compiler, AstDecl);
+    decl->kind = DECL_VAR;
+    decl->name = name_tok->str;
+    decl->var.type_expr = type_expr;
+    decl->var.storage_class = storage_class;
+    decl->var.type_modifiers = type_modifiers;
+    if (attributes)
+    {
+        decl->attributes = *attributes;
+    }
+
+    if (parse_semantic)
+    {
+        if (parserPeek(p, 0)->kind == TOKEN_COLON)
+        {
+            parserNext(p, 1);
+            Token *semantic_tok = parserConsume(p, TOKEN_IDENT);
+            if (!semantic_tok) return NULL;
+            decl->semantic = semantic_tok->str;
+        }
+    }
+
+    if (parse_default_value)
+    {
+        if (parserPeek(p, 0)->kind == TOKEN_ASSIGN)
+        {
+            parserNext(p, 1);
+
+            AstExpr *value_expr = parseExpr(p);
+            if (!value_expr) return NULL;
+
+            decl->var.value_expr = value_expr;
+        }
+    }
+
+    parserEndLoc(p, &decl_loc);
+    decl->loc = decl_loc;
+
+    return decl;
+}
+
 static AstStmt *parseStmt(Parser *p)
 {
     TsCompiler *compiler = p->compiler;
@@ -1118,46 +1220,28 @@ static AstStmt *parseStmt(Parser *p)
     {
         Location stmt_loc = parserBeginLoc(p);
 
-        parserNext(p, 1);
+        AstDecl *decl = parseVarDecl(p, true, NULL, true, false, false);
+        if (!decl) return NULL;
 
-        AstExpr *type_expr = parseExpr(p);
-        if (!type_expr) return NULL;
+        assert(decl->var.storage_class == VAR_STORAGE_CLASS_NONE);
+        decl->var.storage_class = VAR_STORAGE_CLASS_FUNCTION;
 
-        // Constant variable declaration
-        Token *name_tok = parserConsume(p, TOKEN_IDENT);
-        if (!name_tok) return NULL;
-
-        AstDecl *decl = NEW(compiler, AstDecl);
-        decl->kind = DECL_VAR;
-        decl->name = name_tok->str;
-        decl->var.type_expr = type_expr;
-        decl->var.immutable = true;
-
-        if (parserPeek(p, 0)->kind == TOKEN_ASSIGN)
-        {
-            parserNext(p, 1);
-
-            AstExpr *value_expr = parseExpr(p);
-            if (!value_expr) return NULL;
-
-            decl->var.value_expr = value_expr;
-        }
+        if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
 
         AstStmt *stmt = NEW(compiler, AstStmt);
         stmt->kind = STMT_DECL;
         stmt->decl = decl;
 
-        if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
-
         parserEndLoc(p, &stmt_loc);
         stmt->loc = stmt_loc;
-        decl->loc = stmt_loc;
 
         return stmt;
     }
 
     default: {
         Location stmt_loc = parserBeginLoc(p);
+
+        size_t checkpoint = p->pos;
 
         AstExpr *expr = parseExpr(p);
         if (!expr) return NULL;
@@ -1178,31 +1262,21 @@ static AstStmt *parseStmt(Parser *p)
         else if (parserPeek(p, 0)->kind == TOKEN_IDENT)
         {
             // Variable declaration
-            Token *name_tok = parserNext(p, 1);
+            p->pos = checkpoint;
 
-            AstDecl *decl = NEW(compiler, AstDecl);
-            decl->kind = DECL_VAR;
-            decl->name = name_tok->str;
-            decl->var.type_expr = expr;
+            AstDecl *decl = parseVarDecl(p, true, NULL, true, false, false);
+            if (!decl) return NULL;
 
-            if (parserPeek(p, 0)->kind == TOKEN_ASSIGN)
-            {
-                parserNext(p, 1);
+            assert(decl->var.storage_class == VAR_STORAGE_CLASS_NONE);
+            decl->var.storage_class = VAR_STORAGE_CLASS_FUNCTION;
 
-                AstExpr *value_expr = parseExpr(p);
-                if (!value_expr) return NULL;
-
-                decl->var.value_expr = value_expr;
-            }
+            if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
 
             AstStmt *stmt = NEW(compiler, AstStmt);
             stmt->kind = STMT_DECL;
             stmt->decl = decl;
 
-            if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
-
             parserEndLoc(p, &stmt_loc);
-            decl->loc = stmt_loc;
             stmt->loc = stmt_loc;
 
             return stmt;
@@ -1312,89 +1386,21 @@ static AstDecl *parseTopLevel(Parser *p)
         return NULL;
     }
 
+    case TOKEN_UNIFORM:
+    case TOKEN_GROUPSHARED:
     case TOKEN_CONST: {
-        Location decl_loc = parserBeginLoc(p);
+        AstDecl *decl = parseVarDecl(p, false, &attributes, true, true, false);
+        if (!decl) return NULL;
 
-        parserNext(p, 1);
-        AstDecl *decl = NEW(compiler, AstDecl);
-        decl->kind = DECL_CONST;
-        decl->attributes = attributes;
+        if (decl->var.storage_class == VAR_STORAGE_CLASS_NONE)
+        {
+            decl->var.storage_class = VAR_STORAGE_CLASS_UNIFORM;
+        }
 
-        AstExpr *type_expr = parsePrefixedUnaryExpr(p);
-        if (!type_expr) return NULL;
-
-        Token *name_tok = parserConsume(p, TOKEN_IDENT);
-        if (!name_tok) return NULL;
-
-        decl->name = name_tok->str;
-        decl->constant.type_expr = type_expr;
-
-        if (!parserConsume(p, TOKEN_ASSIGN)) return NULL;
-
-        AstExpr *value_expr = parseExpr(p);
-        if (!value_expr) return NULL;
-        decl->constant.value_expr = value_expr;
+        arrPush(p->compiler, &p->decls, decl);
 
         if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
 
-        parserEndLoc(p, &decl_loc);
-        decl->loc = decl_loc;
-
-        arrPush(p->compiler, &p->decls, decl);
-        return decl;
-    }
-
-    case TOKEN_GROUPSHARED: {
-        Location decl_loc = parserBeginLoc(p);
-
-        parserNext(p, 1);
-        AstDecl *decl = NEW(compiler, AstDecl);
-        decl->kind = DECL_VAR;
-        decl->attributes = attributes;
-        decl->var.kind = VAR_GROUPSHARED;
-
-        AstExpr *type_expr = parsePrefixedUnaryExpr(p);
-        if (!type_expr) return NULL;
-
-        Token *name_tok = parserConsume(p, TOKEN_IDENT);
-        if (!name_tok) return NULL;
-
-        decl->name = name_tok->str;
-        decl->var.type_expr = type_expr;
-
-        if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
-
-        parserEndLoc(p, &decl_loc);
-        decl->loc = decl_loc;
-
-        arrPush(p->compiler, &p->decls, decl);
-        return decl;
-    }
-
-    case TOKEN_UNIFORM: {
-        Location decl_loc = parserBeginLoc(p);
-
-        parserNext(p, 1);
-        AstDecl *decl = NEW(compiler, AstDecl);
-        decl->kind = DECL_VAR;
-        decl->attributes = attributes;
-        decl->var.kind = VAR_UNIFORM;
-
-        AstExpr *type_expr = parsePrefixedUnaryExpr(p);
-        if (!type_expr) return NULL;
-
-        Token *name_tok = parserConsume(p, TOKEN_IDENT);
-        if (!name_tok) return NULL;
-
-        decl->name = name_tok->str;
-        decl->var.type_expr = type_expr;
-
-        if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
-
-        parserEndLoc(p, &decl_loc);
-        decl->loc = decl_loc;
-
-        arrPush(p->compiler, &p->decls, decl);
         return decl;
     }
 
@@ -1414,31 +1420,10 @@ static AstDecl *parseTopLevel(Parser *p)
 
         while (parserPeek(p, 0)->kind != TOKEN_RCURLY)
         {
-            Location field_decl_loc = parserBeginLoc(p);
-
-            AstExpr *type_expr = parsePrefixedUnaryExpr(p);
-            if (!type_expr) return NULL;
-
-            Token *name_tok = parserConsume(p, TOKEN_IDENT);
-            if (!name_tok) return NULL;
-
-            AstDecl *field_decl = NEW(compiler, AstDecl);
+            AstDecl *field_decl = parseVarDecl(p, false, NULL, false, false, true);
             field_decl->kind = DECL_STRUCT_FIELD;
-            field_decl->name = name_tok->str;
-            field_decl->struct_field.type_expr = type_expr;
-
-            if (parserPeek(p, 0)->kind == TOKEN_COLON)
-            {
-                parserNext(p, 1);
-                Token *semantic_tok = parserConsume(p, TOKEN_IDENT);
-                if (!semantic_tok) return NULL;
-                field_decl->semantic = semantic_tok->str;
-            }
 
             if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
-
-            parserEndLoc(p, &field_decl_loc);
-            field_decl->loc = field_decl_loc;
 
             arrPush(p->compiler, &decl->struct_.fields, field_decl);
         }
@@ -1499,31 +1484,10 @@ static AstDecl *parseTopLevel(Parser *p)
 
         while (parserPeek(p, 0)->kind != TOKEN_RCURLY)
         {
-            Location field_decl_loc = parserBeginLoc(p);
-
-            AstExpr *type_expr = parsePrefixedUnaryExpr(p);
-            if (!type_expr) return NULL;
-
-            Token *name_tok = parserConsume(p, TOKEN_IDENT);
-            if (!name_tok) return NULL;
-
-            AstDecl *field_decl = NEW(compiler, AstDecl);
+            AstDecl *field_decl = parseVarDecl(p, false, NULL, false, false, true);
             field_decl->kind = DECL_STRUCT_FIELD;
-            field_decl->name = name_tok->str;
-            field_decl->struct_field.type_expr = type_expr;
-
-            if (parserPeek(p, 0)->kind == TOKEN_COLON)
-            {
-                parserNext(p, 1);
-                Token *semantic_tok = parserConsume(p, TOKEN_IDENT);
-                if (!semantic_tok) return NULL;
-                field_decl->semantic = semantic_tok->str;
-            }
 
             if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
-
-            parserEndLoc(p, &field_decl_loc);
-            field_decl->loc = field_decl_loc;
 
             arrPush(p->compiler, &struct_decl->struct_.fields, field_decl);
         }
@@ -1544,7 +1508,7 @@ static AstDecl *parseTopLevel(Parser *p)
         AstDecl *decl = NEW(compiler, AstDecl);
         decl->kind = DECL_VAR;
         decl->name = NULL;
-        decl->var.kind = VAR_UNIFORM;
+        decl->var.storage_class = VAR_STORAGE_CLASS_UNIFORM;
         decl->var.type_expr = type_expr;
         decl->attributes = attributes;
 
@@ -1573,6 +1537,8 @@ static AstDecl *parseTopLevel(Parser *p)
     default: {
         Location decl_loc = parserBeginLoc(p);
 
+        size_t checkpoint = p->pos;
+
         AstExpr *type_expr = parsePrefixedUnaryExpr(p);
         if (!type_expr) return NULL;
 
@@ -1595,35 +1561,28 @@ static AstDecl *parseTopLevel(Parser *p)
             {
                 Location param_decl_loc = parserBeginLoc(p);
 
-                AstVarKind var_kind = VAR_IN_PARAM;
+                AstParameterKind param_kind = PARAM_IN;
 
                 if (parserPeek(p, 0)->kind == TOKEN_IN)
                 {
                     parserNext(p, 1);
-                    var_kind = VAR_IN_PARAM;
+                    param_kind = PARAM_IN;
                 }
                 else if (parserPeek(p, 0)->kind == TOKEN_OUT)
                 {
                     parserNext(p, 1);
-                    var_kind = VAR_OUT_PARAM;
+                    param_kind = PARAM_OUT;
                 }
                 else if (parserPeek(p, 0)->kind == TOKEN_INOUT)
                 {
                     parserNext(p, 1);
-                    var_kind = VAR_OUT_PARAM;
+                    param_kind = PARAM_OUT;
                 }
 
-                AstExpr *type_expr = parsePrefixedUnaryExpr(p);
-                if (!type_expr) return NULL;
+                AstDecl *param_decl = parseVarDecl(p, true, NULL, true, false, true);
+                if (!param_decl) return NULL;
 
-                Token *param_name_tok = parserConsume(p, TOKEN_IDENT);
-                if (!param_name_tok) return NULL;
-
-                AstDecl *param_decl = NEW(compiler, AstDecl);
-                param_decl->kind = DECL_VAR;
-                param_decl->name = param_name_tok->str;
-                param_decl->var.type_expr = type_expr;
-                param_decl->var.kind = var_kind;
+                param_decl->var.parameter_kind = param_kind;
 
                 if (parserPeek(p, 0)->kind == TOKEN_COLON)
                 {
@@ -1678,6 +1637,16 @@ static AstDecl *parseTopLevel(Parser *p)
         {
             // Parse top level uniform variable declaration
 
+            p->pos = checkpoint;
+
+            AstDecl *decl = parseVarDecl(p, false, &attributes, true, true, false);
+            if (!decl) return NULL;
+
+            if (decl->var.storage_class == VAR_STORAGE_CLASS_NONE)
+            {
+                decl->var.storage_class = VAR_STORAGE_CLASS_UNIFORM;
+            }
+
             if (parserPeek(p, 0)->kind == TOKEN_COLON)
             {
                 parserNext(p, 1);
@@ -1701,16 +1670,6 @@ static AstDecl *parseTopLevel(Parser *p)
             }
 
             if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
-
-            AstDecl *decl = NEW(compiler, AstDecl);
-            decl->kind = DECL_VAR;
-            decl->name = name_tok->str;
-            decl->var.type_expr = type_expr;
-            decl->var.kind = VAR_UNIFORM;
-            decl->attributes = attributes;
-
-            parserEndLoc(p, &decl_loc);
-            decl->loc = decl_loc;
 
             arrPush(p->compiler, &p->decls, decl);
             return decl;

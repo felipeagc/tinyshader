@@ -329,7 +329,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
             {
                 AstDecl *field_decl = decl->alias.field_decl;
 
-                uint32_t field_index = field_decl->struct_field.index;
+                uint32_t field_index = field_decl->var.field_index;
                 IRType *index_type = ts__irNewIntType(ir_mod, 32, false);
                 IRInst *index = ts__irBuildConstInt(ir_mod, index_type, (uint64_t)field_index);
 
@@ -444,7 +444,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
                 assert(field_decl->kind == DECL_STRUCT_FIELD);
 
                 indices[i] =
-                    ts__irBuildConstInt(ir_mod, index_type, field_decl->struct_field.index);
+                    ts__irBuildConstInt(ir_mod, index_type, field_decl->var.field_index);
             }
 
             AstType *last_type = expr->access.chain.ptr[index_count - 1]->type;
@@ -1938,9 +1938,9 @@ static void astBuildDecl(Module *ast_mod, IRModule *ir_mod, AstDecl *decl)
             AstDecl *param_decl = decl->func.params.ptr[i];
             ptr_func_params[i] = param_decl->value;
 
-            switch (param_decl->var.kind)
+            switch (param_decl->var.parameter_kind)
             {
-            case VAR_IN_PARAM: {
+            case PARAM_IN: {
                 IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, param_decl->type);
                 ptr_func_params[i] = ts__irBuildAlloca(ir_mod, ir_type);
                 break;
@@ -1962,9 +1962,9 @@ static void astBuildDecl(Module *ast_mod, IRModule *ir_mod, AstDecl *decl)
         for (uint32_t i = 0; i < arrLength(decl->func.params); ++i)
         {
             AstDecl *param_decl = decl->func.params.ptr[i];
-            switch (param_decl->var.kind)
+            switch (param_decl->var.parameter_kind)
             {
-            case VAR_IN_PARAM: {
+            case PARAM_IN: {
                 ts__irBuildStore(ir_mod, ptr_func_params[i], loadVal(ir_mod, param_decl->value));
                 param_decl->value = ptr_func_params[i];
                 break;
@@ -1998,6 +1998,8 @@ static void astBuildDecl(Module *ast_mod, IRModule *ir_mod, AstDecl *decl)
     case DECL_VAR: {
         IRInst *initializer = NULL;
 
+        assert(decl->value);
+
         if (decl->var.value_expr)
         {
             astBuildExpr(ast_mod, ir_mod, decl->var.value_expr);
@@ -2007,12 +2009,6 @@ static void astBuildDecl(Module *ast_mod, IRModule *ir_mod, AstDecl *decl)
             ts__irBuildStore(ir_mod, decl->value, initializer);
         }
 
-        break;
-    }
-
-    case DECL_CONST: {
-        astBuildExpr(ast_mod, ir_mod, decl->constant.value_expr);
-        decl->value = decl->constant.value_expr->value;
         break;
     }
 
@@ -2143,7 +2139,7 @@ static void astRecursivelyAddOutputs(
         for (uint32_t i = 0; i < decl->func.params.len; ++i)
         {
             AstDecl *param_decl = decl->func.params.ptr[i];
-            if (param_decl->var.kind == VAR_OUT_PARAM)
+            if (param_decl->var.parameter_kind == PARAM_OUT)
             {
                 astRecursivelyAddOutputs(
                     ast_mod,
@@ -2216,7 +2212,7 @@ static void astRecursivelyAddInputs(
         for (uint32_t i = 0; i < decl->func.params.len; ++i)
         {
             AstDecl *param_decl = decl->func.params.ptr[i];
-            if (param_decl->var.kind == VAR_IN_PARAM)
+            if (param_decl->var.parameter_kind == PARAM_IN)
             {
                 astRecursivelyAddInputs(
                     ast_mod,
@@ -2296,7 +2292,7 @@ void ts__astModuleBuild(Module *ast_mod, IRModule *ir_mod)
                 AstDecl *param = decl->func.params.ptr[k];
                 IRType *ir_param_type = convertTypeToIR(ast_mod, ir_mod, param->type);
                 bool by_reference = false;
-                if (param->var.kind == VAR_OUT_PARAM)
+                if (param->var.parameter_kind == PARAM_OUT)
                 {
                     ir_param_type =
                         ts__irNewPointerType(ir_mod, SpvStorageClassFunction, ir_param_type);
@@ -2313,9 +2309,10 @@ void ts__astModuleBuild(Module *ast_mod, IRModule *ir_mod)
             IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, decl->type);
             SpvStorageClass storage_class;
 
-            switch (decl->var.kind)
+            switch (decl->var.storage_class)
             {
-            case VAR_UNIFORM: {
+            case VAR_STORAGE_CLASS_UNIFORM:
+            {
                 switch (ir_type->kind)
                 {
                 case IR_TYPE_SAMPLER:
@@ -2327,13 +2324,12 @@ void ts__astModuleBuild(Module *ast_mod, IRModule *ir_mod)
                 }
                 break;
             }
-
-            case VAR_GROUPSHARED: {
+            case VAR_STORAGE_CLASS_GROUPSHARED:
+            {
                 storage_class = SpvStorageClassWorkgroup;
                 break;
             }
-
-            default: assert(0); break;
+            default: break;
             }
 
             decl->value = ts__irAddUniformGlobal(
@@ -2410,7 +2406,7 @@ void ts__astModuleBuild(Module *ast_mod, IRModule *ir_mod)
         for (uint32_t i = 0; i < func_decl->func.params.len; ++i)
         {
             AstDecl *param_decl = func_decl->func.params.ptr[i];
-            if (param_decl->var.kind == VAR_OUT_PARAM)
+            if (param_decl->var.parameter_kind == PARAM_OUT)
             {
                 IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, param_decl->type);
                 IRInst *alloca = ts__irBuildAlloca(ir_mod, ir_type);
@@ -2424,7 +2420,7 @@ void ts__astModuleBuild(Module *ast_mod, IRModule *ir_mod)
         for (uint32_t i = 0; i < func_decl->func.params.len; ++i)
         {
             AstDecl *param_decl = func_decl->func.params.ptr[i];
-            if (param_decl->var.kind == VAR_IN_PARAM)
+            if (param_decl->var.parameter_kind == PARAM_IN)
             {
                 if (param_decl->type->kind == TYPE_STRUCT)
                 {
@@ -2461,12 +2457,12 @@ void ts__astModuleBuild(Module *ast_mod, IRModule *ir_mod)
         for (uint32_t i = 0; i < func_decl->func.params.len; ++i)
         {
             AstDecl *param_decl = func_decl->func.params.ptr[i];
-            if (param_decl->var.kind == VAR_IN_PARAM)
+            if (param_decl->var.parameter_kind == PARAM_IN)
             {
                 arrPush(compiler, &func_params, in_params.ptr[current_input_loc]);
                 current_input_loc++;
             }
-            else if (param_decl->var.kind == VAR_OUT_PARAM)
+            else if (param_decl->var.parameter_kind == PARAM_OUT)
             {
                 arrPush(compiler, &func_params, out_param_allocas.ptr[current_output_loc]);
                 current_output_loc++;
@@ -2513,7 +2509,7 @@ void ts__astModuleBuild(Module *ast_mod, IRModule *ir_mod)
         for (uint32_t i = 0; i < func_decl->func.params.len; ++i)
         {
             AstDecl *param_decl = func_decl->func.params.ptr[i];
-            if (param_decl->var.kind == VAR_OUT_PARAM)
+            if (param_decl->var.parameter_kind == PARAM_OUT)
             {
                 if (param_decl->type->kind == TYPE_STRUCT)
                 {

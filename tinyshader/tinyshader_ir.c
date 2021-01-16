@@ -861,6 +861,9 @@ IRInst *ts__irBuildAlloca(IRModule *m, IRType *type)
 
 void ts__irBuildStore(IRModule *m, IRInst *pointer, IRInst *value)
 {
+    assert(pointer);
+    assert(value);
+
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_STORE;
     inst->store.pointer = pointer;
@@ -1694,6 +1697,8 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
         }
 
         case IR_INST_STORE: {
+            assert(inst->store.value);
+            assert(inst->store.pointer);
             uint32_t params[2] = {inst->store.pointer->id, inst->store.value->id};
             irModuleEncodeInst(m, SpvOpStore, params, 2);
             break;

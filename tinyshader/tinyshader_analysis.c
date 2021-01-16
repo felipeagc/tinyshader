@@ -1263,7 +1263,8 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
         {
             if (assigned_expr->kind == EXPR_IDENT &&
                 assigned_expr->ident.decl->kind == DECL_VAR &&
-                assigned_expr->ident.decl->var.immutable)
+                ((assigned_expr->ident.decl->var.type_modifiers & TYPE_MODIFIER_CONST) ||
+                 (assigned_expr->ident.decl->var.storage_class == VAR_STORAGE_CLASS_UNIFORM)))
             {
                 ts__addErr(
                     compiler,
@@ -1299,7 +1300,15 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
         if (decl->kind == DECL_VAR)
         {
-            expr->assignable = !decl->var.immutable;
+            expr->assignable = true;
+            if (decl->var.storage_class == VAR_STORAGE_CLASS_UNIFORM)
+            {
+                expr->assignable = false;
+            }
+            if (decl->var.type_modifiers & TYPE_MODIFIER_CONST)
+            {
+                expr->assignable = false;
+            }
         }
 
         expr->ident.decl = decl;
@@ -2528,14 +2537,13 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
                 if ((params.ptr[0]->kind != EXPR_IDENT) || (!params.ptr[0]->ident.decl) ||
                     (params.ptr[0]->ident.decl->kind != DECL_VAR) ||
-                    (params.ptr[0]->ident.decl->var.kind != VAR_GROUPSHARED))
+                    (params.ptr[0]->ident.decl->var.storage_class != VAR_STORAGE_CLASS_GROUPSHARED))
                 {
                     ts__addErr(
                         compiler,
                         &expr->loc,
                         "Interlocked functions require first parameter to be a "
-                        "groupshared "
-                        "variable");
+                        "groupshared variable");
                     break;
                 }
 
@@ -2580,7 +2588,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
                 if ((params.ptr[0]->kind != EXPR_IDENT) || (!params.ptr[0]->ident.decl) ||
                     (params.ptr[0]->ident.decl->kind != DECL_VAR) ||
-                    (params.ptr[0]->ident.decl->var.kind != VAR_GROUPSHARED))
+                    (params.ptr[0]->ident.decl->var.storage_class != VAR_STORAGE_CLASS_GROUPSHARED))
                 {
                     ts__addErr(
                         compiler,
@@ -2644,7 +2652,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
                 if ((params.ptr[0]->kind != EXPR_IDENT) || (!params.ptr[0]->ident.decl) ||
                     (params.ptr[0]->ident.decl->kind != DECL_VAR) ||
-                    (params.ptr[0]->ident.decl->var.kind != VAR_GROUPSHARED))
+                    (params.ptr[0]->ident.decl->var.storage_class != VAR_STORAGE_CLASS_GROUPSHARED))
                 {
                     ts__addErr(
                         compiler,
@@ -2707,7 +2715,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
                 if ((params.ptr[0]->kind != EXPR_IDENT) || (!params.ptr[0]->ident.decl) ||
                     (params.ptr[0]->ident.decl->kind != DECL_VAR) ||
-                    (params.ptr[0]->ident.decl->var.kind != VAR_GROUPSHARED))
+                    (params.ptr[0]->ident.decl->var.storage_class != VAR_STORAGE_CLASS_GROUPSHARED))
                 {
                     ts__addErr(
                         compiler,
@@ -3803,7 +3811,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                 continue;
             }
 
-            if (param_decl->var.kind == VAR_OUT_PARAM)
+            if (param_decl->var.parameter_kind == PARAM_OUT)
             {
                 // We pass a pointer when it's pass-by-reference
                 param_types[i] =
@@ -3894,7 +3902,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
     }
 
     case DECL_VAR: {
-        if (decl->var.kind == VAR_PLAIN && !a->scope_func)
+        if (decl->var.storage_class == VAR_STORAGE_CLASS_FUNCTION && !a->scope_func)
         {
             ts__addErr(
                 compiler, &decl->loc, "variable declaration must be inside a function");
@@ -3914,7 +3922,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
 
         decl->type = decl->var.type_expr->as_type;
 
-        if (decl->var.kind == VAR_PLAIN && a->scope_func)
+        if (decl->var.storage_class == VAR_STORAGE_CLASS_FUNCTION && a->scope_func)
         {
             arrPush(compiler, &a->scope_func->func.var_decls, decl);
         }
@@ -3942,7 +3950,8 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
         {
             AstAttribute *attr = &decl->attributes.ptr[i];
 
-            if (decl->var.kind == VAR_UNIFORM && strcmp(attr->name, "vk::binding") == 0)
+            if (decl->var.storage_class == VAR_STORAGE_CLASS_UNIFORM &&
+                strcmp(attr->name, "vk::binding") == 0)
             {
                 if (arrLength(attr->values) >= 1)
                 {
@@ -3977,7 +3986,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
             }
         }
 
-        if (decl->var.kind == VAR_UNIFORM)
+        if (decl->var.storage_class == VAR_STORAGE_CLASS_UNIFORM)
         {
             if (!got_binding_index)
             {
@@ -3995,28 +4004,9 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
         break;
     }
 
-    case DECL_CONST: {
-        analyzerAnalyzeExpr(a, decl->constant.type_expr, newBasicType(m, TYPE_TYPE));
-        if (!decl->constant.type_expr->as_type)
-        {
-            ts__addErr(
-                compiler,
-                &decl->loc,
-                "constant type expression does not represent a type");
-        }
-
-        analyzerAnalyzeExpr(
-            a, decl->constant.value_expr, decl->constant.type_expr->as_type);
-
-        decl->type = decl->constant.type_expr->as_type;
-        decl->resolved_int = decl->constant.value_expr->resolved_int;
-
-        break;
-    }
-
     case DECL_STRUCT_FIELD: {
-        analyzerAnalyzeExpr(a, decl->struct_field.type_expr, newBasicType(m, TYPE_TYPE));
-        if (!decl->struct_field.type_expr->as_type)
+        analyzerAnalyzeExpr(a, decl->var.type_expr, newBasicType(m, TYPE_TYPE));
+        if (!decl->var.type_expr->as_type)
         {
             ts__addErr(
                 compiler,
@@ -4024,7 +4014,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                 "could not resolve type of struct field '%s'", decl->name);
         }
 
-        decl->type = decl->struct_field.type_expr->as_type;
+        decl->type = decl->var.type_expr->as_type;
 
         AstType *struct_type = ts__getStructType(decl->type);
         if (struct_type)
@@ -4054,7 +4044,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
         for (uint32_t i = 0; i < arrLength(decl->struct_.fields); ++i)
         {
             AstDecl *field = decl->struct_.fields.ptr[i];
-            field->struct_field.index = i;
+            field->var.field_index = i;
             analyzerTryRegisterDecl(a, field);
             analyzerAnalyzeDecl(a, field);
 
