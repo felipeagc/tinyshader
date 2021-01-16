@@ -3640,6 +3640,35 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
         }
         }
 
+        if (expr->binary.left->resolved_int && expr->binary.right->resolved_int)
+        {
+            int64_t left_int = *expr->binary.left->resolved_int;
+            int64_t right_int = *expr->binary.right->resolved_int;
+
+            expr->resolved_int = NEW(compiler, int64_t);
+            switch (expr->binary.op)
+            {
+            case BINOP_ADD: *expr->resolved_int = left_int + right_int; break;
+            case BINOP_SUB: *expr->resolved_int = left_int - right_int; break;
+            case BINOP_MUL: *expr->resolved_int = left_int * right_int; break;
+            case BINOP_DIV: *expr->resolved_int = left_int / right_int; break;
+            case BINOP_MOD: *expr->resolved_int = left_int % right_int; break;
+            case BINOP_RSHIFT: *expr->resolved_int = left_int >> right_int; break;
+            case BINOP_LSHIFT: *expr->resolved_int = left_int << right_int; break;
+            case BINOP_BITAND: *expr->resolved_int = left_int & right_int; break;
+            case BINOP_BITOR: *expr->resolved_int = left_int | right_int; break;
+            case BINOP_BITXOR: *expr->resolved_int = left_int ^ right_int; break;
+            case BINOP_LOGICAL_AND: *expr->resolved_int = left_int && right_int; break;
+            case BINOP_LOGICAL_OR: *expr->resolved_int = left_int || right_int; break;
+            case BINOP_EQ: *expr->resolved_int = left_int == right_int; break;
+            case BINOP_NOTEQ: *expr->resolved_int = left_int != right_int; break;
+            case BINOP_LESS: *expr->resolved_int = left_int < right_int; break;
+            case BINOP_LESSEQ: *expr->resolved_int = left_int <= right_int; break;
+            case BINOP_GREATER: *expr->resolved_int = left_int > right_int; break;
+            case BINOP_GREATEREQ: *expr->resolved_int = left_int >= right_int; break;
+            }
+        }
+
         break;
     }
 
