@@ -4,6 +4,43 @@
  */
 #include "tinyshader_internal.h"
 
+void ts__irSetInstName(IRModule *m, IRInst *inst, const char *name)
+{
+    assert(inst);
+    assert(name);
+
+    IRInstNameEntry entry = {0};
+    entry.inst = inst;
+    entry.name = name;
+
+    arrPush(m->compiler, &m->inst_name_entries, entry);
+}
+
+void ts__irSetTypeName(IRModule *m, IRType *type, const char *name)
+{
+    assert(type);
+    assert(name);
+
+    IRTypeNameEntry entry = {0};
+    entry.type = type;
+    entry.name = name;
+
+    arrPush(m->compiler, &m->type_name_entries, entry);
+}
+
+void ts__irSetMemberName(IRModule *m, IRType *type, uint32_t member_index, const char *name)
+{
+    assert(type);
+    assert(name);
+
+    IRMemberNameEntry entry = {0};
+    entry.type = type;
+    entry.member_index = member_index;
+    entry.name = name;
+
+    arrPush(m->compiler, &m->member_name_entries, entry);
+}
+
 static char *irConstToString(TsCompiler *compiler, IRInst *inst);
 
 static char *irTypeToString(TsCompiler *compiler, IRType *type)
@@ -1370,6 +1407,87 @@ static void irModuleReserveConstantIds(IRModule *m)
     {
         IRInst *inst = m->constants.ptr[i];
         inst->id = irModuleReserveId(m);
+    }
+}
+
+static void irModuleEncodeNames(IRModule *m)
+{
+    ArrayOfUint32 old_stream = m->stream;
+
+    memset(&m->stream, 0, sizeof(m->stream));
+
+    for (uint32_t i = 0; i < m->names_start; ++i)
+    {
+        arrPush(m->compiler, &m->stream, old_stream.ptr[i]);
+    }
+
+    IRInstNameEntry *inst_entries = NEW_ARRAY(m->compiler, IRInstNameEntry, m->id_bound);
+    IRTypeNameEntry *type_entries = NEW_ARRAY(m->compiler, IRTypeNameEntry, m->id_bound);
+
+    for (uint32_t i = 0; i < m->inst_name_entries.len; ++i)
+    {
+        IRInstNameEntry *entry = &m->inst_name_entries.ptr[i];
+        if (entry->inst->id == 0) continue;
+
+        assert(entry->inst->id < m->id_bound);
+        inst_entries[entry->inst->id] = *entry;
+    }
+
+    for (uint32_t i = 0; i < m->type_name_entries.len; ++i)
+    {
+        IRTypeNameEntry *entry = &m->type_name_entries.ptr[i];
+        if (entry->type->id == 0) continue;
+
+        assert(entry->type->id < m->id_bound);
+        type_entries[entry->type->id] = *entry;
+    }
+
+    for (uint32_t i = 0; i < m->id_bound; ++i)
+    {
+        IRInstNameEntry *inst_entry = &inst_entries[i];
+        IRTypeNameEntry *type_entry = &type_entries[i];
+
+        if (inst_entry->name)
+        {
+            size_t name_len = strlen(inst_entry->name);
+            size_t word_count = (ROUND_TO_4(name_len + 1) / 4) + 1;
+            uint32_t *params = NEW_ARRAY(m->compiler, uint32_t, word_count);
+            params[0] = i;
+            memcpy(&params[1], inst_entry->name, name_len);
+
+            irModuleEncodeInst(m, SpvOpName, params, word_count);
+        }
+
+        if (type_entry->name)
+        {
+            size_t name_len = strlen(type_entry->name);
+            size_t word_count = (ROUND_TO_4(name_len + 1) / 4) + 1;
+            uint32_t *params = NEW_ARRAY(m->compiler, uint32_t, word_count);
+            params[0] = i;
+            memcpy(&params[1], type_entry->name, name_len);
+
+            irModuleEncodeInst(m, SpvOpName, params, word_count);
+        }
+    }
+
+    for (uint32_t i = 0; i < m->member_name_entries.len; ++i)
+    {
+        IRMemberNameEntry *member_entry = &m->member_name_entries.ptr[i];
+        if (member_entry->type->id == 0) continue;
+
+        size_t name_len = strlen(member_entry->name);
+        size_t word_count = (ROUND_TO_4(name_len + 1) / 4) + 2;
+        uint32_t *params = NEW_ARRAY(m->compiler, uint32_t, word_count);
+        params[0] = member_entry->type->id;
+        params[1] = member_entry->member_index;
+        memcpy(&params[2], member_entry->name, name_len);
+
+        irModuleEncodeInst(m, SpvOpMemberName, params, word_count);
+    }
+
+    for (uint32_t i = m->names_start; i < old_stream.len; ++i)
+    {
+        arrPush(m->compiler, &m->stream, old_stream.ptr[i]);
     }
 }
 
@@ -2781,6 +2899,8 @@ static void irModuleEncodeModule(IRModule *m)
 
     irModuleReserveConstantIds(m);
 
+    m->names_start = m->stream.len;
+
     irModuleEncodeDecorations(m);
 
     irModuleEncodeConstants(m);
@@ -2790,6 +2910,8 @@ static void irModuleEncodeModule(IRModule *m)
     irModuleEncodeGlobals(m);
 
     irModuleEncodeFunctions(m);
+
+    irModuleEncodeNames(m);
 
     // Fill out ID bound
     m->stream.ptr[3] = m->id_bound;

@@ -102,6 +102,8 @@ static inline bool isWhitespace(char c)
 //
 ////////////////////////////////
 
+typedef ARRAY_OF(uint32_t) ArrayOfUint32;
+
 typedef struct HashMap
 {
     TsCompiler *compiler;
@@ -739,6 +741,25 @@ struct IRInst
     };
 };
 
+typedef struct IRInstNameEntry
+{
+    IRInst *inst;
+    const char *name;
+} IRInstNameEntry;
+
+typedef struct IRTypeNameEntry
+{
+    IRType *type;
+    const char *name;
+} IRTypeNameEntry;
+
+typedef struct IRMemberNameEntry
+{
+    IRType *type;
+    uint32_t member_index;
+    const char *name;
+} IRMemberNameEntry;
+
 struct IRModule
 {
     TsCompiler *compiler;
@@ -755,13 +776,19 @@ struct IRModule
     ArrayOfIRInstPtr globals;         /* This counts uniforms/storage variables and all
                                          inputs/outputs of every stage */
 
+    ARRAY_OF(IRInstNameEntry) inst_name_entries;
+    ARRAY_OF(IRTypeNameEntry) type_name_entries;
+    ARRAY_OF(IRMemberNameEntry) member_name_entries;
+
     uint32_t glsl_ext_inst; // ID of the imported GLSL instruction set
     bool uses_image_query;
 
     IRInst *current_block;
 
     uint32_t id_bound;
-    ARRAY_OF(uint32_t) stream;
+    ArrayOfUint32 stream;
+
+    size_t names_start;
 };
 
 //
@@ -1385,6 +1412,10 @@ void ts__astModuleBuild(Module *ast_mod, IRModule *ir_mod);
 
 IRModule *ts__irModuleCreate(TsCompiler *compiler);
 void ts__irModuleDestroy(IRModule *m);
+
+void ts__irSetInstName(IRModule *m, IRInst *inst, const char *name);
+void ts__irSetTypeName(IRModule *m, IRType *type, const char *name);
+void ts__irSetMemberName(IRModule *m, IRType *type, uint32_t member_index, const char *name);
 
 IRType *ts__irNewBasicType(IRModule *m, IRTypeKind kind);
 IRType *ts__irNewPointerType(IRModule *m, SpvStorageClass storage_class, IRType *sub);

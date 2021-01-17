@@ -2033,12 +2033,34 @@ static void astBuildDecl(Module *ast_mod, IRModule *ir_mod, AstDecl *decl)
             ts__irBuildStore(ir_mod, decl->value, initializer);
         }
 
+        if (decl->name)
+        {
+            ts__irSetInstName(ir_mod, decl->value, decl->name);
+        }
+
+        break;
+    }
+
+    case DECL_STRUCT:
+    {
+        assert(decl->as_type);
+        if (decl->name)
+        {
+            AstType *type = decl->as_type;
+            IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, type);
+            ts__irSetTypeName(ir_mod, ir_type, decl->name);
+
+            for (uint32_t i = 0; i < type->struct_.field_count; ++i)
+            {
+                AstDecl *field_decl = type->struct_.field_decls[i];
+                ts__irSetMemberName(ir_mod, ir_type, i, field_decl->name);
+            }
+        }
         break;
     }
 
     case DECL_ALIAS: break;
     case DECL_STRUCT_FIELD: break;
-    case DECL_STRUCT: break;
     }
 }
 
@@ -2326,6 +2348,11 @@ void ts__astModuleBuild(Module *ast_mod, IRModule *ir_mod)
                     ts__irAddFuncParam(ir_mod, decl->value, ir_param_type, by_reference);
             }
 
+            if (decl->name)
+            {
+                ts__irSetInstName(ir_mod, decl->value, decl->name);
+            }
+
             break;
         }
 
@@ -2370,6 +2397,12 @@ void ts__astModuleBuild(Module *ast_mod, IRModule *ir_mod)
             binding_dec.kind = SpvDecorationBinding;
             binding_dec.value = decl->var.binding;
             ts__irDecorateInst(ir_mod, decl->value, &binding_dec);
+
+            if (decl->name)
+            {
+                ts__irSetInstName(ir_mod, decl->value, decl->name);
+            }
+
             break;
         }
 
