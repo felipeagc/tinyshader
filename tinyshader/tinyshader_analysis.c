@@ -4019,12 +4019,27 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                 m, return_type, param_types, arrLength(decl->func.params));
         }
 
+        bool found_return = (return_type->kind == TYPE_VOID);
+
         for (uint32_t i = 0; i < arrLength(decl->func.stmts); ++i)
         {
             AstStmt *stmt = decl->func.stmts.ptr[i];
             analyzerAnalyzeStmt(a, stmt);
+
+            if (stmt->kind == STMT_RETURN)
+            {
+                found_return = true;
+            }
         }
         analyzerPopScope(a, decl->scope);
+
+        if (!found_return)
+        {
+            ts__addErr(
+                compiler,
+                &decl->loc,
+                "missing return statement for function '%s'", decl->name);
+        }
 
         if (strcmp(m->entry_point, decl->name) == 0)
         {
