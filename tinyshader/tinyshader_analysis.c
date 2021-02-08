@@ -498,6 +498,7 @@ static uint32_t typeSizeOf(Module *m, AstType *type)
 
     switch (type->kind)
     {
+    case TYPE_BOOL: size = 1; break;
     case TYPE_INT: size = type->int_.bits / 8; break;
     case TYPE_FLOAT: size = type->float_.bits / 8; break;
 
@@ -546,7 +547,6 @@ static uint32_t typeSizeOf(Module *m, AstType *type)
     case TYPE_IMAGE:
     case TYPE_SAMPLER:
     case TYPE_POINTER:
-    case TYPE_BOOL:
     case TYPE_FUNC:
     case TYPE_VOID:
     case TYPE_TYPE: size = 0; break;
@@ -595,7 +595,6 @@ static AstType *newPointerType(Module *m, SpvStorageClass storage_class, AstType
 static AstType *newArrayType(Module *m, AstType *elem_type, size_t size)
 {
     assert(size > 0);
-
     AstType *ty = NEW(m->compiler, AstType);
     ty->kind = TYPE_ARRAY;
     ty->array.sub = elem_type;
@@ -3736,6 +3735,119 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
         break;
     }
 
+    case EXPR_COMPOSITE_LITERAL:
+    {
+        if (!expected_type)
+        {
+            ts__addErr(compiler, &expr->loc, "could not deduce type of composite literal");
+            break;
+        }
+
+        AstExpr **exprs = expr->composite_literal.exprs.ptr;
+        size_t exprs_length = expr->composite_literal.exprs.len;
+
+        switch (expected_type->kind)
+        {
+        case TYPE_RUNTIME_ARRAY:
+        {
+            if (exprs_length <= 0)
+            {
+                ts__addErr(
+                    compiler,
+                    &expr->loc,
+                    "array size must be greater than zero");
+                break;
+            }
+
+            expr->type = newArrayType(m, expected_type->array.sub, exprs_length);
+            
+            AstType *subtype = expr->type->array.sub;
+            for (size_t i = 0; i < exprs_length; ++i)
+            {
+                analyzerAnalyzeExpr(a, exprs[i], subtype);
+            }
+
+            break;
+        }
+        case TYPE_ARRAY:
+        {
+            expr->type = expected_type;
+
+            if (exprs_length != expr->type->array.size)
+            {
+                ts__addErr(
+                    compiler,
+                    &expr->loc,
+                    "expected %zu array elements, instead got %zu",
+                    (size_t)expr->type->array.size,
+                    exprs_length);
+                break;
+            }
+
+            AstType *subtype = expr->type->array.sub;
+            for (size_t i = 0; i < exprs_length; ++i)
+            {
+                analyzerAnalyzeExpr(a, exprs[i], subtype);
+            }
+
+            break;
+        }
+        case TYPE_VECTOR:
+        {
+            expr->type = expected_type;
+
+            if (exprs_length != expr->type->vector.size)
+            {
+                ts__addErr(
+                    compiler,
+                    &expr->loc,
+                    "expected %zu vector elements, instead got %zu",
+                    (size_t)expr->type->vector.size,
+                    exprs_length);
+                break;
+            }
+
+            AstType *subtype = expr->type->vector.elem_type;
+            for (size_t i = 0; i < exprs_length; ++i)
+            {
+                analyzerAnalyzeExpr(a, exprs[i], subtype);
+            }
+
+            break;
+        }
+        case TYPE_INT:
+        case TYPE_FLOAT:
+        {
+            expr->type = expected_type;
+
+            if (exprs_length != 1)
+            {
+                ts__addErr(
+                    compiler,
+                    &expr->loc,
+                    "expected a single value for scalar initializer, instead got %zu",
+                    exprs_length);
+                break;
+            }
+
+            analyzerAnalyzeExpr(a, exprs[0], expr->type);
+
+            break;
+        }
+        default:
+        {
+            ts__addErr(
+                compiler,
+                &expr->loc,
+                "invalid type for composite literal: '%s', expected an array or vector type",
+                typeToPrettyString(compiler, expected_type));
+            break;
+        }
+        }
+
+        break;
+    }
+
     case EXPR_AUTO_CAST:
     {
         assert(expr->auto_cast.sub);
@@ -3748,9 +3860,13 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
     {
         if (!expr->type)
         {
-            ts__addErr(compiler, &expr->loc, "could not resolve type for expression");
+            assert(compiler->errors.len > 0);
+            /* ts__addErr(compiler, &expr->loc, "could not resolve type for expression"); */
         }
-        else if (expr->type != expected_type)
+        else if (expr->type != expected_type &&
+                 !(expr->type->kind == TYPE_ARRAY &&
+                   expected_type->kind == TYPE_RUNTIME_ARRAY &&
+                   expr->type->array.sub == expected_type->array.sub))
         {
             bool is_auto_castable = false;
 
@@ -4127,6 +4243,14 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
         if (decl->var.value_expr)
         {
             analyzerAnalyzeExpr(a, decl->var.value_expr, decl->var.type_expr->as_type);
+
+            if (decl->var.value_expr->type &&
+                decl->var.type_expr->as_type->kind == TYPE_RUNTIME_ARRAY &&
+                decl->var.value_expr->type->kind == TYPE_ARRAY &&
+                decl->var.type_expr->as_type->array.sub == decl->var.value_expr->type->array.sub)
+            {
+                decl->var.type_expr->as_type = decl->var.value_expr->type;
+            }
         }
 
         decl->type = decl->var.type_expr->as_type;

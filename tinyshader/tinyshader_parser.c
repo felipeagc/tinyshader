@@ -1003,10 +1003,40 @@ static AstDecl *parseVarDecl(
         {
             parserNext(p, 1);
 
-            AstExpr *value_expr = parseExpr(p);
-            if (!value_expr) return NULL;
+            Location value_expr_loc = parserBeginLoc(p);
 
-            decl->var.value_expr = value_expr;
+            if (parserPeek(p, 0)->kind == TOKEN_LCURLY)
+            {
+                parserNext(p, 1);
+
+                AstExpr *value_expr = NEW(compiler, AstExpr);
+                value_expr->kind = EXPR_COMPOSITE_LITERAL;
+
+                while (parserPeek(p, 0)->kind != TOKEN_RCURLY)
+                {
+                    AstExpr *elem_expr = parseExpr(p);
+                    if (!elem_expr) return NULL;
+
+                    arrPush(compiler, &value_expr->composite_literal.exprs, elem_expr);
+
+                    if (parserPeek(p, 0)->kind != TOKEN_RCURLY)
+                    {
+                        if (!parserConsume(p, TOKEN_COMMA)) return NULL;
+                    }
+                }
+
+                if (!parserConsume(p, TOKEN_RCURLY)) return NULL;
+
+                parserEndLoc(p, &value_expr_loc);
+                value_expr->loc = value_expr_loc;
+                decl->var.value_expr = value_expr;
+            }
+            else
+            {
+                AstExpr *value_expr = parseExpr(p);
+                if (!value_expr) return NULL;
+                decl->var.value_expr = value_expr;
+            }
         }
     }
 

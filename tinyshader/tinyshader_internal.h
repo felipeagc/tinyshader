@@ -1071,6 +1071,7 @@ typedef enum AstExprKind {
     EXPR_AUTO_CAST,
     EXPR_ARRAY_TYPE,
     EXPR_RUNTIME_ARRAY_TYPE,
+    EXPR_COMPOSITE_LITERAL,
 } AstExprKind;
 
 struct AstStmt
@@ -1279,6 +1280,11 @@ struct AstExpr
             AstExpr *sub;
             AstExpr *size;
         } array_type;
+
+        struct
+        {
+            ArrayOfAstExprPtr exprs;
+        } composite_literal;
     };
 };
 

@@ -577,12 +577,24 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
                 IRBuiltinInstKind ir_builtin_kind;
                 switch (builtin_func_kind)
                 {
-                case AST_BUILTIN_FUNC_INTERLOCKED_ADD: ir_builtin_kind = IR_BUILTIN_INTERLOCKED_ADD; break;
-                case AST_BUILTIN_FUNC_INTERLOCKED_AND: ir_builtin_kind = IR_BUILTIN_INTERLOCKED_AND; break;
-                case AST_BUILTIN_FUNC_INTERLOCKED_MIN: ir_builtin_kind = IR_BUILTIN_INTERLOCKED_MIN; break;
-                case AST_BUILTIN_FUNC_INTERLOCKED_MAX: ir_builtin_kind = IR_BUILTIN_INTERLOCKED_MAX; break;
-                case AST_BUILTIN_FUNC_INTERLOCKED_OR: ir_builtin_kind = IR_BUILTIN_INTERLOCKED_OR; break;
-                case AST_BUILTIN_FUNC_INTERLOCKED_XOR: ir_builtin_kind = IR_BUILTIN_INTERLOCKED_XOR; break;
+                case AST_BUILTIN_FUNC_INTERLOCKED_ADD:
+                    ir_builtin_kind = IR_BUILTIN_INTERLOCKED_ADD;
+                    break;
+                case AST_BUILTIN_FUNC_INTERLOCKED_AND:
+                    ir_builtin_kind = IR_BUILTIN_INTERLOCKED_AND;
+                    break;
+                case AST_BUILTIN_FUNC_INTERLOCKED_MIN:
+                    ir_builtin_kind = IR_BUILTIN_INTERLOCKED_MIN;
+                    break;
+                case AST_BUILTIN_FUNC_INTERLOCKED_MAX:
+                    ir_builtin_kind = IR_BUILTIN_INTERLOCKED_MAX;
+                    break;
+                case AST_BUILTIN_FUNC_INTERLOCKED_OR:
+                    ir_builtin_kind = IR_BUILTIN_INTERLOCKED_OR;
+                    break;
+                case AST_BUILTIN_FUNC_INTERLOCKED_XOR:
+                    ir_builtin_kind = IR_BUILTIN_INTERLOCKED_XOR;
+                    break;
                 default: assert(0); break;
                 }
 
@@ -604,7 +616,11 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
                 ir_param_values[4] = param_values[2];
 
                 expr->value = ts__irBuildBuiltinCall(
-                    ir_mod, IR_BUILTIN_INTERLOCKED_EXCHANGE, result_type, ir_param_values, ir_param_count);
+                    ir_mod,
+                    IR_BUILTIN_INTERLOCKED_EXCHANGE,
+                    result_type,
+                    ir_param_values,
+                    ir_param_count);
                 break;
             }
 
@@ -623,7 +639,11 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
                 ir_param_values[6] = param_values[3];
 
                 expr->value = ts__irBuildBuiltinCall(
-                    ir_mod, IR_BUILTIN_INTERLOCKED_COMPARE_EXCHANGE, result_type, ir_param_values, ir_param_count);
+                    ir_mod,
+                    IR_BUILTIN_INTERLOCKED_COMPARE_EXCHANGE,
+                    result_type,
+                    ir_param_values,
+                    ir_param_count);
                 break;
             }
 
@@ -641,7 +661,11 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
                 ir_param_values[5] = param_values[2];
 
                 expr->value = ts__irBuildBuiltinCall(
-                    ir_mod, IR_BUILTIN_INTERLOCKED_COMPARE_STORE, result_type, ir_param_values, ir_param_count);
+                    ir_mod,
+                    IR_BUILTIN_INTERLOCKED_COMPARE_STORE,
+                    result_type,
+                    ir_param_values,
+                    ir_param_count);
                 break;
             }
 
@@ -1617,6 +1641,48 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
         {
             assert(0);
         }
+        break;
+    }
+
+    case EXPR_COMPOSITE_LITERAL:
+    {
+        assert(expr->type);
+
+        AstExpr **exprs = expr->composite_literal.exprs.ptr;
+        size_t exprs_length = expr->composite_literal.exprs.len;
+
+        IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, expr->type);
+
+        IRInst **elems = NEW_ARRAY_UNINIT(compiler, IRInst **, exprs_length);
+        for (size_t i = 0; i < exprs_length; ++i)
+        {
+            astBuildExpr(ast_mod, ir_mod, exprs[i]);
+            elems[i] = exprs[i]->value;
+        }
+
+        switch (expr->type->kind)
+        {
+        case TYPE_VECTOR:
+        case TYPE_ARRAY:
+        {
+            expr->value = ts__irBuildCompositeConstruct(
+                ir_mod, ir_type, elems, exprs_length);
+            break;
+        }
+        case TYPE_FLOAT:
+        case TYPE_INT:
+        {
+            assert(exprs_length == 1);
+            expr->value = exprs[0]->value;
+            break;
+        }
+        default:
+        {
+            assert(0);
+            break;
+        }
+        }
+
         break;
     }
 
