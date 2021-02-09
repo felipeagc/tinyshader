@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 import os, subprocess
 
@@ -48,13 +48,13 @@ def test_dir(dir, expected_result):
         dxc_stage = None
         if no_ext_name.endswith(".frag"):
             stage = "fragment"
-            dxc_stage = "ps_6_6"
+            dxc_stage = "ps_6_0"
         elif no_ext_name.endswith(".vert"):
             stage = "vertex"
-            dxc_stage = "vs_6_6"
+            dxc_stage = "vs_6_0"
         elif no_ext_name.endswith(".comp"):
             stage = "compute"
-            dxc_stage = "cs_6_6"
+            dxc_stage = "cs_6_0"
         else:
             continue
 

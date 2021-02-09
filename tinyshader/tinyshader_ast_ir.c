@@ -2424,7 +2424,7 @@ void ts__astModuleBuild(Module *ast_mod, IRModule *ir_mod)
 
         case DECL_VAR: {
             IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, decl->type);
-            SpvStorageClass storage_class;
+            SpvStorageClass storage_class = SpvStorageClassUniform;
 
             switch (decl->var.storage_class)
             {
@@ -2669,12 +2669,13 @@ void ts__astModuleBuild(Module *ast_mod, IRModule *ir_mod)
 
         ts__irBuildReturn(ir_mod, NULL);
 
-        SpvExecutionModel execution_model;
+        SpvExecutionModel execution_model = SpvExecutionModelFragment;
         switch (ast_mod->stage)
         {
         case TS_SHADER_STAGE_COMPUTE: execution_model = SpvExecutionModelGLCompute; break;
         case TS_SHADER_STAGE_FRAGMENT: execution_model = SpvExecutionModelFragment; break;
         case TS_SHADER_STAGE_VERTEX: execution_model = SpvExecutionModelVertex; break;
+        default: assert(0); break;
         }
 
         ArrayOfIRInstPtr entry_point_globals = {0};

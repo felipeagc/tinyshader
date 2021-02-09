@@ -210,7 +210,8 @@ static const char *preprocessorLoadFileContent(
     fseek(f, 0, SEEK_SET);
 
     char *data = NEW_ARRAY_UNINIT(p->compiler, char, *out_size);
-    fread(data, 1, *out_size, f);
+    size_t read_size = fread(data, 1, *out_size, f);
+    assert(read_size == *out_size);
 
     fclose(f);
 

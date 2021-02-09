@@ -534,7 +534,7 @@ void ts__sbAppend(StringBuilder *sb, const char *str)
     {
         sbGrow(sb);
     }
-    strncpy(&sb->buf[sb->len], str, len);
+    memcpy(&sb->buf[sb->len], str, len);
     sb->len += len;
 }
 
