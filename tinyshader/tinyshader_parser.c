@@ -1363,6 +1363,67 @@ static AstStmt *parseStmt(Parser *p)
     return NULL;
 }
 
+static bool parseAttr(Parser *p, AstAttribute *attr)
+{
+    assert(p);
+    TsCompiler *compiler = p->compiler;
+
+    memset(attr, 0, sizeof(*attr));
+
+    Token *namespace = NULL;
+    Token *attr_name = NULL;
+
+    namespace = parserConsume(p, TOKEN_IDENT);
+    if (!namespace) return false;
+
+    if (parserPeek(p, 0)->kind == TOKEN_COLON_COLON)
+    {
+        parserNext(p, 1);
+        attr_name = parserConsume(p, TOKEN_IDENT);
+        if (!attr_name) return false;
+    }
+    else
+    {
+        attr_name = namespace;
+        namespace = NULL;
+    }
+
+    assert(attr_name);
+
+    ts__sbReset(&compiler->sb);
+    if (namespace)
+    {
+        ts__sbAppend(&compiler->sb, namespace->str);
+        ts__sbAppend(&compiler->sb, "::");
+    }
+
+    ts__sbAppend(&compiler->sb, attr_name->str);
+
+    attr->name = ts__sbBuild(&compiler->sb, &compiler->alloc);
+
+    if (parserPeek(p, 0)->kind == TOKEN_LPAREN)
+    {
+        parserNext(p, 1);
+
+        while (parserPeek(p, 0)->kind != TOKEN_RPAREN)
+        {
+            AstExpr *value = parseExpr(p);
+            if (!value) return NULL;
+
+            arrPush(p->compiler, &attr->values, value);
+
+            if (parserPeek(p, 0)->kind != TOKEN_RPAREN)
+            {
+                if (!parserConsume(p, TOKEN_COMMA)) return false;
+            }
+        }
+
+        if (!parserConsume(p, TOKEN_RPAREN)) return false;
+    }
+
+    return true;
+}
+
 static AstDecl *parseTopLevel(Parser *p)
 {
     assert(p);
@@ -1370,78 +1431,44 @@ static AstDecl *parseTopLevel(Parser *p)
 
     ArrayOfAstAttribute attributes = {0};
 
-    int attr_start = 0;
-    if (parserPeek(p, 0)->kind == TOKEN_LBRACK)
+    while ((parserLengthLeft(p) >= 1 && parserPeek(p, 0)->kind == TOKEN_LBRACK) ||
+           (parserLengthLeft(p) >= 2 &&
+            parserPeek(p, 0)->kind == TOKEN_LBRACK &&
+            parserPeek(p, 1)->kind == TOKEN_LBRACK))
     {
-        parserNext(p, 1);
-        attr_start++;
-    }
-
-    if (parserPeek(p, 0)->kind == TOKEN_LBRACK)
-    {
-        parserNext(p, 1);
-        attr_start++;
-    }
-
-    if (attr_start > 0)
-    {
-        Token *namespace = NULL;
-        Token *attr_name = NULL;
-
-        namespace = parserConsume(p, TOKEN_IDENT);
-        if (!namespace) return NULL;
-
-        if (parserPeek(p, 0)->kind == TOKEN_COLON_COLON)
+        int attr_start = 0;
+        if (parserPeek(p, 0)->kind == TOKEN_LBRACK)
         {
             parserNext(p, 1);
-            attr_name = parserConsume(p, TOKEN_IDENT);
-            if (!attr_name) return NULL;
-        }
-        else
-        {
-            attr_name = namespace;
-            namespace = NULL;
+            attr_start++;
         }
 
-        assert(attr_name);
-
-        ts__sbReset(&compiler->sb);
-        if (namespace)
-        {
-            ts__sbAppend(&compiler->sb, namespace->str);
-            ts__sbAppend(&compiler->sb, "::");
-        }
-
-        ts__sbAppend(&compiler->sb, attr_name->str);
-
-        AstAttribute attr = {0};
-        attr.name = ts__sbBuild(&compiler->sb, &compiler->alloc);
-
-        if (parserPeek(p, 0)->kind == TOKEN_LPAREN)
+        if (parserPeek(p, 0)->kind == TOKEN_LBRACK)
         {
             parserNext(p, 1);
+            attr_start++;
+        }
 
-            while (parserPeek(p, 0)->kind != TOKEN_RPAREN)
+        if (attr_start > 0)
+        {
+            while (parserLengthLeft(p) > 0 && parserPeek(p, 0)->kind != TOKEN_RBRACK)
             {
-                AstExpr *value = parseExpr(p);
-                if (!value) return NULL;
+                AstAttribute attr = {0};
+                if (!parseAttr(p, &attr)) return NULL;
+                arrPush(p->compiler, &attributes, attr);
 
-                arrPush(p->compiler, &attr.values, value);
-
-                if (parserPeek(p, 0)->kind != TOKEN_RPAREN)
+                if (parserPeek(p, 0)->kind != TOKEN_COMMA)
                 {
-                    if (!parserConsume(p, TOKEN_COMMA)) return NULL;
+                    break;
                 }
+
+                parserNext(p, 1);
             }
 
-            if (!parserConsume(p, TOKEN_RPAREN)) return NULL;
-        }
-
-        arrPush(p->compiler, &attributes, attr);
-
-        for (int i = 0; i < attr_start; ++i)
-        {
-            if (!parserConsume(p, TOKEN_RBRACK)) return NULL;
+            for (int i = 0; i < attr_start; ++i)
+            {
+                if (!parserConsume(p, TOKEN_RBRACK)) return NULL;
+            }
         }
     }
 
