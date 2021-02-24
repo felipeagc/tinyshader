@@ -11,6 +11,7 @@
 #pragma warning(disable:4996)
 #endif
 
+#include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -28,7 +29,8 @@ static char *loadFile(const char *path, size_t *out_size)
     fseek(f, 0, SEEK_SET);
 
     char *data = malloc(*out_size);
-    fread(data, 1, *out_size, f);
+    size_t read_size = fread(data, 1, *out_size, f);
+    assert(read_size == *out_size);
 
     fclose(f);
 

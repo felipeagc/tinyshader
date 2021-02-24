@@ -45,8 +45,6 @@ static char *irConstToString(TsCompiler *compiler, IRInst *inst);
 
 static char *irTypeToString(TsCompiler *compiler, IRType *type)
 {
-    if (type->string) return type->string;
-
     char *prefix = NULL;
     char *storage_class = NULL;
     char *sub = NULL;
@@ -103,6 +101,7 @@ static char *irTypeToString(TsCompiler *compiler, IRType *type)
         case SpvStorageClassStorageBuffer: storage_class = "storage"; break;
         case SpvStorageClassFunction: storage_class = "function"; break;
         case SpvStorageClassWorkgroup: storage_class = "groupshared"; break;
+        case SpvStorageClassPushConstant: storage_class = "pushconstant"; break;
 
         default: assert(0); break;
         }

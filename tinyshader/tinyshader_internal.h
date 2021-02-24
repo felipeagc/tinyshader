@@ -1022,6 +1022,7 @@ typedef enum AstVarStorageClass {
     VAR_STORAGE_CLASS_FUNCTION        = 1,
     VAR_STORAGE_CLASS_UNIFORM         = 2,
     VAR_STORAGE_CLASS_GROUPSHARED     = 3,
+    VAR_STORAGE_CLASS_PUSH_CONSTANT   = 4,
 } AstVarStorageClass;
 
 typedef enum AstTypeModifier {

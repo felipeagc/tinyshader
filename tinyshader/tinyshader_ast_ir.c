@@ -85,7 +85,14 @@ static IRType *convertTypeToIR(Module *module, IRModule *ir_module, AstType *typ
     }
 
     case TYPE_CONSTANT_BUFFER: {
-        IRType *struct_type = convertTypeToIR(module, ir_module, type->buffer.sub);
+        AstType ast_struct_type = *type->buffer.sub;
+
+        ts__sbReset(&module->compiler->sb);
+        ts__sbSprintf(
+            &module->compiler->sb, "type.ConstantBuffer.%s", ast_struct_type.struct_.name);
+        ast_struct_type.struct_.name = ts__sbBuild(&module->compiler->sb, &module->compiler->alloc);
+
+        IRType *struct_type = convertTypeToIR(module, ir_module, &ast_struct_type);
 
         IRDecoration struct_dec = {0};
         struct_dec.kind = SpvDecorationBlock;
@@ -178,6 +185,14 @@ static IRType *convertTypeToIR(Module *module, IRModule *ir_module, AstType *typ
             type->struct_.field_count,
             type->struct_.field_decorations.ptr,
             arrLength(type->struct_.field_decorations));
+
+        ts__irSetTypeName(ir_module, struct_type, type->struct_.name);
+
+        for (uint32_t i = 0; i < type->struct_.field_count; ++i)
+        {
+            AstDecl *field_decl = type->struct_.field_decls[i];
+            ts__irSetMemberName(ir_module, struct_type, i, field_decl->name);
+        }
 
         return struct_type;
     }
@@ -2108,23 +2123,6 @@ static void astBuildDecl(Module *ast_mod, IRModule *ir_mod, AstDecl *decl)
     }
 
     case DECL_STRUCT:
-    {
-        assert(decl->as_type);
-        if (decl->name)
-        {
-            AstType *type = decl->as_type;
-            IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, type);
-            ts__irSetTypeName(ir_mod, ir_type, decl->name);
-
-            for (uint32_t i = 0; i < type->struct_.field_count; ++i)
-            {
-                AstDecl *field_decl = type->struct_.field_decls[i];
-                ts__irSetMemberName(ir_mod, ir_type, i, field_decl->name);
-            }
-        }
-        break;
-    }
-
     case DECL_ALIAS: break;
     case DECL_STRUCT_FIELD: break;
     }
@@ -2423,8 +2421,35 @@ void ts__astModuleBuild(Module *ast_mod, IRModule *ir_mod)
         }
 
         case DECL_VAR: {
-            IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, decl->type);
+            IRType *ir_type = NULL;
             SpvStorageClass storage_class = SpvStorageClassUniform;
+
+            if (decl->var.storage_class == VAR_STORAGE_CLASS_PUSH_CONSTANT)
+            {
+                assert(decl->type->kind == TYPE_STRUCT);
+                AstType *new_type = NEW(compiler, AstType);
+                *new_type = *decl->type;
+
+                ts__sbReset(&compiler->sb);
+                ts__sbSprintf(
+                    &compiler->sb, "type.PushConstant.%s", new_type->struct_.name);
+                new_type->struct_.name = ts__sbBuild(&compiler->sb, &compiler->alloc);
+
+                decl->type = new_type;
+
+                ir_type = convertTypeToIR(ast_mod, ir_mod, decl->type);
+
+                IRDecoration struct_dec = {0};
+                struct_dec.kind = SpvDecorationBlock;
+
+                ts__irDecorateType(ir_mod, ir_type, &struct_dec);
+            }
+            else
+            {
+                ir_type = convertTypeToIR(ast_mod, ir_mod, decl->type);
+            }
+
+            assert(ir_type);
 
             switch (decl->var.storage_class)
             {
@@ -2446,6 +2471,11 @@ void ts__astModuleBuild(Module *ast_mod, IRModule *ir_mod)
                 storage_class = SpvStorageClassWorkgroup;
                 break;
             }
+            case VAR_STORAGE_CLASS_PUSH_CONSTANT:
+            {
+                storage_class = SpvStorageClassPushConstant;
+                break;
+            }
             default: break;
             }
 
@@ -2454,15 +2484,24 @@ void ts__astModuleBuild(Module *ast_mod, IRModule *ir_mod)
                 ir_type,
                 storage_class);
 
-            IRDecoration set_dec = {0};
-            set_dec.kind = SpvDecorationDescriptorSet;
-            set_dec.value = decl->var.set;
-            ts__irDecorateInst(ir_mod, decl->value, &set_dec);
+            switch (decl->var.storage_class)
+            {
+            case VAR_STORAGE_CLASS_UNIFORM:
+            {
+                IRDecoration set_dec = {0};
+                set_dec.kind = SpvDecorationDescriptorSet;
+                set_dec.value = decl->var.set;
+                ts__irDecorateInst(ir_mod, decl->value, &set_dec);
 
-            IRDecoration binding_dec = {0};
-            binding_dec.kind = SpvDecorationBinding;
-            binding_dec.value = decl->var.binding;
-            ts__irDecorateInst(ir_mod, decl->value, &binding_dec);
+                IRDecoration binding_dec = {0};
+                binding_dec.kind = SpvDecorationBinding;
+                binding_dec.value = decl->var.binding;
+                ts__irDecorateInst(ir_mod, decl->value, &binding_dec);
+                break;
+            }
+
+            default: break;
+            }
 
             if (decl->name)
             {
@@ -2669,7 +2708,7 @@ void ts__astModuleBuild(Module *ast_mod, IRModule *ir_mod)
 
         ts__irBuildReturn(ir_mod, NULL);
 
-        SpvExecutionModel execution_model = SpvExecutionModelFragment;
+        SpvExecutionModel execution_model = SpvExecutionModelMax;
         switch (ast_mod->stage)
         {
         case TS_SHADER_STAGE_COMPUTE: execution_model = SpvExecutionModelGLCompute; break;

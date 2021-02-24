@@ -58,8 +58,6 @@ static bool scopeAdd(Scope *scope, const char *name, AstDecl *decl)
 
 static char *typeToString(TsCompiler *compiler, AstType *type)
 {
-    if (type->string) return type->string;
-
     char *prefix = NULL;
     char *storage_class = NULL;
     char *sub = NULL;
@@ -4273,6 +4271,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
             }
         }
 
+        bool is_push_constant = false;
         bool got_binding_index = false;
 
         uint32_t binding_index = 0;
@@ -4284,9 +4283,16 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
             AstAttribute *attr = &decl->attributes.ptr[i];
 
             if (decl->var.storage_class == VAR_STORAGE_CLASS_UNIFORM &&
+                strcmp(attr->name, "vk::push_constant") == 0)
+            {
+                decl->var.storage_class = VAR_STORAGE_CLASS_PUSH_CONSTANT;
+                is_push_constant = true;
+            }
+
+            if (decl->var.storage_class == VAR_STORAGE_CLASS_UNIFORM &&
                 strcmp(attr->name, "vk::binding") == 0)
             {
-                if (arrLength(attr->values) >= 1)
+                if (attr->values.len >= 1)
                 {
                     if (!attr->values.ptr[0]->resolved_int)
                     {
@@ -4302,7 +4308,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                     }
                 }
 
-                if (arrLength(attr->values) >= 2)
+                if (attr->values.len >= 2)
                 {
                     if (!attr->values.ptr[1]->resolved_int)
                     {
@@ -4317,6 +4323,24 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
                     }
                 }
             }
+        }
+
+        if (is_push_constant && got_binding_index)
+        {
+            ts__addErr(
+                compiler,
+                &decl->loc,
+                "vk::push_constant attribute cannot be used together with vk::binding attribute");
+            break;
+        }
+
+        if (is_push_constant && decl->type->kind != TYPE_STRUCT)
+        {
+            ts__addErr(
+                compiler,
+                &decl->loc,
+                "push constants must be of a struct type");
+            break;
         }
 
         if (decl->var.storage_class == VAR_STORAGE_CLASS_UNIFORM)
