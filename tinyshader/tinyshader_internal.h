@@ -749,19 +749,6 @@ typedef struct IRInstNameEntry
     const char *name;
 } IRInstNameEntry;
 
-typedef struct IRTypeNameEntry
-{
-    IRType *type;
-    const char *name;
-} IRTypeNameEntry;
-
-typedef struct IRMemberNameEntry
-{
-    IRType *type;
-    uint32_t member_index;
-    const char *name;
-} IRMemberNameEntry;
-
 struct IRModule
 {
     TsCompiler *compiler;
@@ -779,8 +766,6 @@ struct IRModule
                                          inputs/outputs of every stage */
 
     ARRAY_OF(IRInstNameEntry) inst_name_entries;
-    ARRAY_OF(IRTypeNameEntry) type_name_entries;
-    ARRAY_OF(IRMemberNameEntry) member_name_entries;
 
     uint32_t glsl_ext_inst; // ID of the imported GLSL instruction set
     bool uses_image_query;

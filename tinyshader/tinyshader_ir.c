@@ -1423,103 +1423,71 @@ static void irModuleReserveConstantIds(IRModule *m)
     }
 }
 
+/*
+  In this function we insert OpNames in the middle of an existing stream.
+  To do that, we create a new stream instead, copying the old before/after parts.
+  We have to do this because the instruction IDs weren't assigned ahead of time.
+ */
 static void irModuleEncodeNames(IRModule *m)
 {
-    for (uint32_t i = 0; i < arrLength(m->type_cache.values); ++i)
-    {
-        IRType *type = (IRType *)m->type_cache.values.ptr[i];
-        if (type->op_name)
-        {
-            IRTypeNameEntry entry = {0};
-            entry.type = type;
-            entry.name = type->op_name;
-            arrPush(m->compiler, &m->type_name_entries, entry);
-        }
-
-        for (size_t j = 0; j < type->op_member_names.len; ++j)
-        {
-            IRMemberNameEntry entry = {0};
-            entry.type = type;
-            entry.member_index = j;
-            entry.name = type->op_member_names.ptr[j];
-
-            arrPush(m->compiler, &m->member_name_entries, entry);
-        }
-    }
-
     ArrayOfUint32 old_stream = m->stream;
 
     memset(&m->stream, 0, sizeof(m->stream));
 
+    // Copy the beginning of the stream
     for (uint32_t i = 0; i < m->names_start; ++i)
     {
         arrPush(m->compiler, &m->stream, old_stream.ptr[i]);
     }
 
-    IRInstNameEntry *inst_entries = NEW_ARRAY(m->compiler, IRInstNameEntry, m->id_bound);
-    IRTypeNameEntry *type_entries = NEW_ARRAY(m->compiler, IRTypeNameEntry, m->id_bound);
+    // Insert OpNames for types
+    for (uint32_t i = 0; i < arrLength(m->type_cache.values); ++i)
+    {
+        IRType *type = (IRType *)m->type_cache.values.ptr[i];
+        if (type->op_name)
+        {
+            size_t name_len = strlen(type->op_name);
+            size_t word_count = (ROUND_TO_4(name_len + 1) / 4) + 1;
+            uint32_t *params = NEW_ARRAY(m->compiler, uint32_t, word_count);
+            params[0] = type->id;
+            memcpy(&params[1], type->op_name, name_len);
 
+            irModuleEncodeInst(m, SpvOpName, params, word_count);
+        }
+
+        // Insert OpMemberNames for member types (if present)
+        for (size_t j = 0; j < type->op_member_names.len; ++j)
+        {
+            const char *member_name = type->op_member_names.ptr[j];
+            if (!member_name) continue;
+
+            size_t name_len = strlen(member_name);
+            size_t word_count = (ROUND_TO_4(name_len + 1) / 4) + 2;
+            uint32_t *params = NEW_ARRAY(m->compiler, uint32_t, word_count);
+            params[0] = type->id;
+            params[1] = j;
+            memcpy(&params[2], member_name, name_len);
+
+            irModuleEncodeInst(m, SpvOpMemberName, params, word_count);
+        }
+    }
+
+    // Insert OpNames for instructions
     for (uint32_t i = 0; i < m->inst_name_entries.len; ++i)
     {
         IRInstNameEntry *entry = &m->inst_name_entries.ptr[i];
         if (entry->inst->id == 0) continue;
 
-        assert(entry->inst->id < m->id_bound);
-        inst_entries[entry->inst->id] = *entry;
-    }
-
-    for (uint32_t i = 0; i < m->type_name_entries.len; ++i)
-    {
-        IRTypeNameEntry *entry = &m->type_name_entries.ptr[i];
-        if (entry->type->id == 0) continue;
-
-        assert(entry->type->id < m->id_bound);
-        type_entries[entry->type->id] = *entry;
-    }
-
-    for (uint32_t i = 0; i < m->id_bound; ++i)
-    {
-        IRInstNameEntry *inst_entry = &inst_entries[i];
-        IRTypeNameEntry *type_entry = &type_entries[i];
-
-        if (inst_entry->name)
-        {
-            size_t name_len = strlen(inst_entry->name);
-            size_t word_count = (ROUND_TO_4(name_len + 1) / 4) + 1;
-            uint32_t *params = NEW_ARRAY(m->compiler, uint32_t, word_count);
-            params[0] = i;
-            memcpy(&params[1], inst_entry->name, name_len);
-
-            irModuleEncodeInst(m, SpvOpName, params, word_count);
-        }
-
-        if (type_entry->name)
-        {
-            size_t name_len = strlen(type_entry->name);
-            size_t word_count = (ROUND_TO_4(name_len + 1) / 4) + 1;
-            uint32_t *params = NEW_ARRAY(m->compiler, uint32_t, word_count);
-            params[0] = i;
-            memcpy(&params[1], type_entry->name, name_len);
-
-            irModuleEncodeInst(m, SpvOpName, params, word_count);
-        }
-    }
-
-    for (uint32_t i = 0; i < m->member_name_entries.len; ++i)
-    {
-        IRMemberNameEntry *member_entry = &m->member_name_entries.ptr[i];
-        if (member_entry->type->id == 0) continue;
-
-        size_t name_len = strlen(member_entry->name);
-        size_t word_count = (ROUND_TO_4(name_len + 1) / 4) + 2;
+        size_t name_len = strlen(entry->name);
+        size_t word_count = (ROUND_TO_4(name_len + 1) / 4) + 1;
         uint32_t *params = NEW_ARRAY(m->compiler, uint32_t, word_count);
-        params[0] = member_entry->type->id;
-        params[1] = member_entry->member_index;
-        memcpy(&params[2], member_entry->name, name_len);
+        params[0] = entry->inst->id;
+        memcpy(&params[1], entry->name, name_len);
 
-        irModuleEncodeInst(m, SpvOpMemberName, params, word_count);
+        irModuleEncodeInst(m, SpvOpName, params, word_count);
     }
 
+    // Copy the rest of the stream
     for (uint32_t i = m->names_start; i < old_stream.len; ++i)
     {
         arrPush(m->compiler, &m->stream, old_stream.ptr[i]);
