@@ -106,6 +106,7 @@ static IRType *convertTypeToIR(Module *module, IRModule *ir_module, AstType *typ
         IRType *subtype = convertTypeToIR(module, ir_module, type->buffer.sub);
         IRType *array_type = ts__irNewRuntimeArrayType(ir_module, subtype);
 
+        assert(subtype->string);
         assert(type->buffer.sub->size > 0);
 
         IRDecoration array_dec = {0};
@@ -116,7 +117,9 @@ static IRType *convertTypeToIR(Module *module, IRModule *ir_module, AstType *typ
 
         ts__sbReset(&module->compiler->sb);
         ts__sbSprintf(
-            &module->compiler->sb, "__tmp_struct%u", module->compiler->counter++);
+            &module->compiler->sb,
+            "type.RWStructuredBuffer.%s",
+            ts__typeToPrettyString(module->compiler, type->buffer.sub));
         char *struct_name = ts__sbBuild(&module->compiler->sb, &module->compiler->alloc);
 
         IRMemberDecoration member_decs[1] = {0};
@@ -126,6 +129,8 @@ static IRType *convertTypeToIR(Module *module, IRModule *ir_module, AstType *typ
 
         IRType *struct_wrapper =
             ts__irNewStructType(ir_module, struct_name, &array_type, 1, member_decs, 1);
+
+        ts__irSetTypeName(ir_module, struct_wrapper, struct_name);
 
         IRDecoration struct_dec = {0};
         struct_dec.kind = SpvDecorationBufferBlock;
@@ -139,6 +144,7 @@ static IRType *convertTypeToIR(Module *module, IRModule *ir_module, AstType *typ
         IRType *subtype = convertTypeToIR(module, ir_module, type->buffer.sub);
         IRType *array_type = ts__irNewRuntimeArrayType(ir_module, subtype);
 
+        assert(subtype->string);
         assert(type->buffer.sub->size > 0);
 
         IRDecoration array_dec = {0};
@@ -149,7 +155,9 @@ static IRType *convertTypeToIR(Module *module, IRModule *ir_module, AstType *typ
 
         ts__sbReset(&module->compiler->sb);
         ts__sbSprintf(
-            &module->compiler->sb, "__tmp_struct%u", module->compiler->counter++);
+            &module->compiler->sb,
+            "type.StructuredBuffer.%s",
+            ts__typeToPrettyString(module->compiler, type->buffer.sub));
         char *struct_name = ts__sbBuild(&module->compiler->sb, &module->compiler->alloc);
 
         IRMemberDecoration member_decs[2] = {0};
@@ -162,6 +170,8 @@ static IRType *convertTypeToIR(Module *module, IRModule *ir_module, AstType *typ
 
         IRType *struct_wrapper =
             ts__irNewStructType(ir_module, struct_name, &array_type, 1, member_decs, 2);
+
+        ts__irSetTypeName(ir_module, struct_wrapper, struct_name);
 
         IRDecoration struct_dec = {0};
         struct_dec.kind = SpvDecorationBufferBlock;

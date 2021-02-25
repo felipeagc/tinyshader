@@ -1316,8 +1316,6 @@ typedef struct TsCompiler
     HashMap files; // Maps absolute paths to files
 
     ArrayOfError errors;
-
-    uint32_t counter; // General purpose unique number generator
 } TsCompiler;
 
 //
