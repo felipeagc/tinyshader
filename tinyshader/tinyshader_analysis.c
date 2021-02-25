@@ -3304,8 +3304,19 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
         AstType *subtype = expr->buffer.sub_expr->as_type;
         assert(subtype);
 
+        if (subtype->kind != TYPE_STRUCT)
+        {
+            ts__addErr(
+                compiler,
+                &expr->buffer.sub_expr->loc,
+                "'%s' cannot be used as a type parameter where a struct is required",
+                typeToPrettyString(compiler, subtype));
+            break;
+        }
+
         expr->type = type_type;
         expr->as_type = newConstantBufferType(m, subtype);
+
         break;
     }
 
