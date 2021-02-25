@@ -498,6 +498,14 @@ static uint32_t irModuleReserveId(IRModule *m)
 void ts__irDecorateType(
     IRModule *m, IRType *type, const IRDecoration *decoration)
 {
+    for (size_t i = 0; i < type->decorations.len; ++i)
+    {
+        if (decoration->kind == type->decorations.ptr[i].kind)
+        {
+            // Prevent duplicate decorations
+            return;
+        }
+    }
     arrPush(m->compiler, &type->decorations, *decoration);
 }
 
