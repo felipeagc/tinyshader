@@ -371,6 +371,8 @@ typedef struct IRType
     bool encoded;
 
     ArrayOfIRDecoration decorations;
+    const char *op_name;
+    ARRAY_OF(const char*) op_member_names;
 
     union
     {
@@ -1414,6 +1416,8 @@ AstType *ts__getLogicalType(AstType *type);
 uint32_t ts__getTypeElemCount(AstType *type);
 AstType *ts__getElemType(AstType *type);
 AstType *ts__getStructType(AstType *type);
+
+char *ts__typeToPrettyString(TsCompiler *compiler, AstType *type);
 
 void ts__astModuleBuild(Module *ast_mod, IRModule *ir_mod);
 

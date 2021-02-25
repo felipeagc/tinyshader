@@ -236,7 +236,7 @@ static char *typeToString(TsCompiler *compiler, AstType *type)
     return type->string;
 }
 
-static char *typeToPrettyString(TsCompiler *compiler, AstType *type)
+char *ts__typeToPrettyString(TsCompiler *compiler, AstType *type)
 {
     char *str = NULL;
 
@@ -277,7 +277,7 @@ static char *typeToPrettyString(TsCompiler *compiler, AstType *type)
 
     case TYPE_VECTOR:
     {
-        char *elem_str = typeToPrettyString(compiler, type->vector.elem_type);
+        char *elem_str = ts__typeToPrettyString(compiler, type->vector.elem_type);
 
         ts__sbReset(&compiler->sb);
         ts__sbSprintf(&compiler->sb, "%s%u", elem_str, type->vector.size);
@@ -287,8 +287,8 @@ static char *typeToPrettyString(TsCompiler *compiler, AstType *type)
 
     case TYPE_MATRIX:
     {
-        char *elem_str = typeToPrettyString(compiler,
-                                            type->matrix.col_type->vector.elem_type);
+        char *elem_str = ts__typeToPrettyString(compiler,
+                                                type->matrix.col_type->vector.elem_type);
         ts__sbReset(&compiler->sb);
         ts__sbSprintf(&compiler->sb,
                       "%s%ux%u",
@@ -306,7 +306,7 @@ static char *typeToPrettyString(TsCompiler *compiler, AstType *type)
 
     case TYPE_CONSTANT_BUFFER:
     {
-        char *sub_str = typeToPrettyString(compiler, type->buffer.sub);
+        char *sub_str = ts__typeToPrettyString(compiler, type->buffer.sub);
 
         ts__sbReset(&compiler->sb);
         ts__sbSprintf(&compiler->sb, "ConstantBuffer<%s>", sub_str);
@@ -316,7 +316,7 @@ static char *typeToPrettyString(TsCompiler *compiler, AstType *type)
 
     case TYPE_STRUCTURED_BUFFER:
     {
-        char *sub_str = typeToPrettyString(compiler, type->buffer.sub);
+        char *sub_str = ts__typeToPrettyString(compiler, type->buffer.sub);
 
         ts__sbReset(&compiler->sb);
         ts__sbSprintf(&compiler->sb, "StructuredBuffer<%s>", sub_str);
@@ -326,7 +326,7 @@ static char *typeToPrettyString(TsCompiler *compiler, AstType *type)
 
     case TYPE_RW_STRUCTURED_BUFFER:
     {
-        char *sub_str = typeToPrettyString(compiler, type->buffer.sub);
+        char *sub_str = ts__typeToPrettyString(compiler, type->buffer.sub);
 
         ts__sbReset(&compiler->sb);
         ts__sbSprintf(&compiler->sb, "RWStructuredBuffer<%s>", sub_str);
@@ -336,7 +336,7 @@ static char *typeToPrettyString(TsCompiler *compiler, AstType *type)
 
     case TYPE_RUNTIME_ARRAY:
     {
-        char *sub_str = typeToPrettyString(compiler, type->array.sub);
+        char *sub_str = ts__typeToPrettyString(compiler, type->array.sub);
 
         ts__sbReset(&compiler->sb);
         ts__sbSprintf(&compiler->sb, "%s[]", sub_str);
@@ -346,7 +346,7 @@ static char *typeToPrettyString(TsCompiler *compiler, AstType *type)
 
     case TYPE_ARRAY:
     {
-        char *sub_str = typeToPrettyString(compiler, type->array.sub);
+        char *sub_str = ts__typeToPrettyString(compiler, type->array.sub);
 
         ts__sbReset(&compiler->sb);
         ts__sbSprintf(&compiler->sb, "%s[%zu]", sub_str, type->array.size);
@@ -355,11 +355,11 @@ static char *typeToPrettyString(TsCompiler *compiler, AstType *type)
     }
 
     case TYPE_FUNC: {
-        char *return_type = typeToPrettyString(compiler, type->func.return_type);
+        char *return_type = ts__typeToPrettyString(compiler, type->func.return_type);
         char **params = NEW_ARRAY(compiler, char *, type->func.param_count);
         for (uint32_t i = 0; i < type->func.param_count; ++i)
         {
-            params[i] = typeToPrettyString(compiler, type->func.params[i]);
+            params[i] = ts__typeToPrettyString(compiler, type->func.params[i]);
         }
 
         ts__sbReset(&compiler->sb);
@@ -387,7 +387,7 @@ static char *typeToPrettyString(TsCompiler *compiler, AstType *type)
     }
 
     case TYPE_IMAGE: {
-        char *sub_str = typeToPrettyString(compiler, type->image.sampled_type);
+        char *sub_str = ts__typeToPrettyString(compiler, type->image.sampled_type);
 
         ts__sbReset(&compiler->sb);
 
@@ -523,6 +523,8 @@ static uint32_t typeSizeOf(Module *m, AstType *type)
     }
 
     case TYPE_STRUCT: {
+        uint32_t struct_alignment = typeAlignOf(m, type);
+
         for (uint32_t i = 0; i < type->struct_.field_count; ++i)
         {
             AstType *field = type->struct_.fields[i];
@@ -536,6 +538,12 @@ static uint32_t typeSizeOf(Module *m, AstType *type)
             arrPush(m->compiler, &type->struct_.field_decorations, member_dec);
 
             size += typeSizeOf(m, field);
+        }
+
+        // Add padding at the end of the struct
+        if (size % struct_alignment > 0)
+        {
+            size += (struct_alignment - (size % struct_alignment));
         }
 
         break;
@@ -3310,7 +3318,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 compiler,
                 &expr->buffer.sub_expr->loc,
                 "'%s' cannot be used as a type parameter where a struct is required",
-                typeToPrettyString(compiler, subtype));
+                ts__typeToPrettyString(compiler, subtype));
             break;
         }
 
@@ -3539,8 +3547,8 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                         compiler,
                         &expr->loc,
                         "invalid types for binary arithmentic operation: '%s' and '%s'",
-                        typeToPrettyString(compiler, left_type),
-                        typeToPrettyString(compiler, right_type));
+                        ts__typeToPrettyString(compiler, left_type),
+                        ts__typeToPrettyString(compiler, right_type));
                     break;
                 }
 
@@ -3555,8 +3563,8 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                         compiler,
                         &expr->loc,
                         "invalid types for binary arithmentic operation: '%s' and '%s'",
-                        typeToPrettyString(compiler, left_type),
-                        typeToPrettyString(compiler, right_type));
+                        ts__typeToPrettyString(compiler, left_type),
+                        ts__typeToPrettyString(compiler, right_type));
                     break;
                 }
 
@@ -3585,8 +3593,8 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                         compiler,
                         &expr->loc,
                         "invalid types for binary arithmentic operation: '%s' and '%s'",
-                        typeToPrettyString(compiler, left_type),
-                        typeToPrettyString(compiler, right_type));
+                        ts__typeToPrettyString(compiler, left_type),
+                        ts__typeToPrettyString(compiler, right_type));
                     break;
                 }
 
@@ -3849,7 +3857,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 compiler,
                 &expr->loc,
                 "invalid type for composite literal: '%s', expected an array or vector type",
-                typeToPrettyString(compiler, expected_type));
+                ts__typeToPrettyString(compiler, expected_type));
             break;
         }
         }
@@ -3905,8 +3913,8 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             {
                 ts__addErr(compiler, &expr->loc,
                         "unmatched types, expected '%s', instead got '%s'",
-                        typeToPrettyString(compiler, expected_type),
-                        typeToPrettyString(compiler, expr->type));
+                        ts__typeToPrettyString(compiler, expected_type),
+                        ts__typeToPrettyString(compiler, expr->type));
             }
         }
     }

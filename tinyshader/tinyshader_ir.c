@@ -18,14 +18,11 @@ void ts__irSetInstName(IRModule *m, IRInst *inst, const char *name)
 
 void ts__irSetTypeName(IRModule *m, IRType *type, const char *name)
 {
+    (void)m;
     assert(type);
     assert(name);
 
-    IRTypeNameEntry entry = {0};
-    entry.type = type;
-    entry.name = name;
-
-    arrPush(m->compiler, &m->type_name_entries, entry);
+    type->op_name = name;
 }
 
 void ts__irSetMemberName(IRModule *m, IRType *type, uint32_t member_index, const char *name)
@@ -33,12 +30,20 @@ void ts__irSetMemberName(IRModule *m, IRType *type, uint32_t member_index, const
     assert(type);
     assert(name);
 
-    IRMemberNameEntry entry = {0};
-    entry.type = type;
-    entry.member_index = member_index;
-    entry.name = name;
+    if (type->kind != IR_TYPE_STRUCT)
+    {
+        return;
+    }
 
-    arrPush(m->compiler, &m->member_name_entries, entry);
+    if (type->op_member_names.ptr == NULL)
+    {
+        type->op_member_names.cap = type->struct_.field_count;
+        type->op_member_names.len = type->struct_.field_count;
+        type->op_member_names.ptr = NEW_ARRAY(m->compiler, const char *, type->op_member_names.cap);
+    }
+
+    assert(member_index < type->op_member_names.len);
+    type->op_member_names.ptr[member_index] = name;
 }
 
 static char *irConstToString(TsCompiler *compiler, IRInst *inst);
@@ -193,6 +198,7 @@ static char *irTypeToString(TsCompiler *compiler, IRType *type)
     }
 
     ts__sbReset(&compiler->sb);
+
 
     assert(prefix);
     ts__sbAppend(&compiler->sb, prefix);
@@ -1411,6 +1417,28 @@ static void irModuleReserveConstantIds(IRModule *m)
 
 static void irModuleEncodeNames(IRModule *m)
 {
+    for (uint32_t i = 0; i < arrLength(m->type_cache.values); ++i)
+    {
+        IRType *type = (IRType *)m->type_cache.values.ptr[i];
+        if (type->op_name)
+        {
+            IRTypeNameEntry entry = {0};
+            entry.type = type;
+            entry.name = type->op_name;
+            arrPush(m->compiler, &m->type_name_entries, entry);
+        }
+
+        for (size_t j = 0; j < type->op_member_names.len; ++j)
+        {
+            IRMemberNameEntry entry = {0};
+            entry.type = type;
+            entry.member_index = j;
+            entry.name = type->op_member_names.ptr[j];
+
+            arrPush(m->compiler, &m->member_name_entries, entry);
+        }
+    }
+
     ArrayOfUint32 old_stream = m->stream;
 
     memset(&m->stream, 0, sizeof(m->stream));
