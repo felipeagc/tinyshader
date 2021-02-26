@@ -2507,6 +2507,19 @@ void ts__astModuleBuild(Module *ast_mod, IRModule *ir_mod)
                 binding_dec.kind = SpvDecorationBinding;
                 binding_dec.value = decl->var.binding;
                 ts__irDecorateInst(ir_mod, decl->value, &binding_dec);
+
+                switch (decl->type->kind)
+                {
+                case TYPE_RUNTIME_ARRAY:
+                    ir_mod->uses_descriptor_indexing = true;
+                    ir_mod->uses_runtime_descriptor_array = true;
+                    break;
+                case TYPE_ARRAY:
+                    ir_mod->uses_descriptor_indexing = true;
+                    break;
+                default: break;
+                }
+
                 break;
             }
 

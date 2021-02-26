@@ -2876,6 +2876,23 @@ static void irModuleEncodeModule(IRModule *m)
         irModuleEncodeInst(m, SpvOpCapability, params, 1);
     }
 
+    if (m->uses_runtime_descriptor_array)
+    {
+        uint32_t params[1] = {SpvCapabilityRuntimeDescriptorArrayEXT};
+        irModuleEncodeInst(m, SpvOpCapability, params, 1);
+    }
+
+    if (m->uses_descriptor_indexing)
+    {
+        const char *spv_ext_name = "SPV_EXT_descriptor_indexing";
+        size_t name_len = strlen(spv_ext_name);
+        size_t word_count = (ROUND_TO_4(name_len + 1) / 4);
+        uint32_t *params = NEW_ARRAY(m->compiler, uint32_t, word_count);
+        memcpy(&params[0], spv_ext_name, name_len);
+
+        irModuleEncodeInst(m, SpvOpExtension, params, word_count);
+    }
+
     {
         uint32_t params[5];
         memset(params, 0, sizeof(params));

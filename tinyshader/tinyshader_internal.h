@@ -769,6 +769,8 @@ struct IRModule
 
     uint32_t glsl_ext_inst; // ID of the imported GLSL instruction set
     bool uses_image_query;
+    bool uses_descriptor_indexing;
+    bool uses_runtime_descriptor_array;
 
     IRInst *current_block;
 
