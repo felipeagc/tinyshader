@@ -51,6 +51,15 @@ static bool isLvalue(IRInst *value)
         (value->kind == IR_INST_FUNC_PARAM && value->func_param.is_by_reference));
 }
 
+// These types cannot be alloca'd
+static bool isTypeOpaque(IRType *type)
+{
+    return (type->kind == IR_TYPE_SAMPLER ||
+            type->kind == IR_TYPE_SAMPLED_IMAGE ||
+            type->kind == IR_TYPE_IMAGE ||
+            type->kind == IR_TYPE_RUNTIME_ARRAY);
+}
+
 static IRInst *loadVal(IRModule *m, IRInst *value)
 {
     assert(value);
@@ -341,15 +350,32 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
     }
 
     case EXPR_VAR_ASSIGN: {
+        IRType *ir_type = convertTypeToIR(
+                ast_mod,
+                ir_mod,
+                expr->var_assign.assigned_expr->type);
+
         astBuildExpr(ast_mod, ir_mod, expr->var_assign.value_expr);
         IRInst *to_store = expr->var_assign.value_expr->value;
         assert(to_store);
-        to_store = loadVal(ir_mod, to_store);
 
-        astBuildExpr(ast_mod, ir_mod, expr->var_assign.assigned_expr);
-        IRInst *assigned_value = expr->var_assign.assigned_expr->value;
+        if (isTypeOpaque(ir_type))
+        {
+            assert(expr->var_assign.assigned_expr->kind == EXPR_IDENT);
+            assert(expr->var_assign.assigned_expr->ident.decl);
+            
+            AstDecl *decl = expr->var_assign.assigned_expr->ident.decl;
+            decl->value = to_store;
+        }
+        else
+        {
+            to_store = loadVal(ir_mod, to_store);
 
-        ts__irBuildStore(ir_mod, assigned_value, to_store);
+            astBuildExpr(ast_mod, ir_mod, expr->var_assign.assigned_expr);
+            IRInst *assigned_value = expr->var_assign.assigned_expr->value;
+
+            ts__irBuildStore(ir_mod, assigned_value, to_store);
+        }
 
         break;
     }
@@ -2070,7 +2096,12 @@ static void astBuildDecl(Module *ast_mod, IRModule *ir_mod, AstDecl *decl)
         {
             AstDecl *var_decl = decl->func.var_decls.ptr[i];
             IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, var_decl->type);
-            var_decl->value = ts__irBuildAlloca(ir_mod, ir_type);
+
+            var_decl->value = NULL;
+            if (!isTypeOpaque(ir_type))
+            {
+                var_decl->value = ts__irBuildAlloca(ir_mod, ir_type);
+            }
         }
 
         // Then we copy inputs into the allocas:
@@ -2111,17 +2142,25 @@ static void astBuildDecl(Module *ast_mod, IRModule *ir_mod, AstDecl *decl)
     }
 
     case DECL_VAR: {
-        IRInst *initializer = NULL;
-
-        assert(decl->value);
+        IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, decl->type);
 
         if (decl->var.value_expr)
         {
             astBuildExpr(ast_mod, ir_mod, decl->var.value_expr);
-            initializer = decl->var.value_expr->value;
+            IRInst *initializer = decl->var.value_expr->value;
             assert(initializer);
-            initializer = loadVal(ir_mod, initializer);
-            ts__irBuildStore(ir_mod, decl->value, initializer);
+
+            if (isTypeOpaque(ir_type))
+            {
+                decl->value = initializer;
+            }
+            else 
+            {
+                assert(decl->value);
+                initializer = loadVal(ir_mod, initializer);
+                ts__irBuildStore(ir_mod, decl->value, initializer);
+            }
+
         }
 
         if (decl->name)
@@ -2461,11 +2500,17 @@ void ts__astModuleBuild(Module *ast_mod, IRModule *ir_mod)
 
             assert(ir_type);
 
+            IRType *res_type = ir_type;
+            while (res_type->kind == IR_TYPE_RUNTIME_ARRAY || res_type->kind == IR_TYPE_ARRAY)
+            {
+                res_type = res_type->array.sub;
+            }
+
             switch (decl->var.storage_class)
             {
             case VAR_STORAGE_CLASS_UNIFORM:
             {
-                switch (ir_type->kind)
+                switch (res_type->kind)
                 {
                 case IR_TYPE_SAMPLER:
                 case IR_TYPE_IMAGE:
