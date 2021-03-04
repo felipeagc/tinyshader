@@ -9,7 +9,6 @@
 #pragma warning(disable : 4996)
 #endif
 
-#include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,10 +25,27 @@ typedef struct TsCompiler TsCompiler;
 #define TS__MAX(a, b) ((a) > (b) ? (a) : (b))
 #define TS__MIN(a, b) ((a) < (b) ? (a) : (b))
 
+#define TS_STR(a) #a
+
+#define TS_ASSERT(value)                                                                 \
+    do                                                                                   \
+    {                                                                                    \
+        if (!(value))                                                                      \
+        {                                                                                \
+            fprintf(                                                                     \
+                stderr,                                                                  \
+                "Tinyshader assertion failed: '%s' at %s:%d\n",                            \
+                TS_STR(value),                                                          \
+                __FILE__,                                                                \
+                __LINE__);                                                               \
+            abort();                                                                     \
+        }                                                                                \
+    } while (0)
+
 #ifdef __GNUC__
-    #define TS__PRINTF_FORMATTING(x, y) __attribute__((format(printf, x, y)))
+#define TS__PRINTF_FORMATTING(x, y) __attribute__((format(printf, x, y)))
 #else
-    #define TS__PRINTF_FORMATTING(x, y)
+#define TS__PRINTF_FORMATTING(x, y)
 #endif
 
 void *ts__arrayGrow(
@@ -372,7 +388,7 @@ typedef struct IRType
 
     ArrayOfIRDecoration decorations;
     const char *op_name;
-    ARRAY_OF(const char*) op_member_names;
+    ARRAY_OF(const char *) op_member_names;
 
     union
     {
@@ -759,8 +775,8 @@ struct IRModule
     ArrayOfIRInstPtr entry_points;
     ArrayOfIRInstPtr constants;
     ArrayOfIRInstPtr functions;
-    ArrayOfIRInstPtr input_globals; /* This only counts input variables */
-    ArrayOfIRInstPtr output_globals; /* This only counts output variables */
+    ArrayOfIRInstPtr input_globals;   /* This only counts input variables */
+    ArrayOfIRInstPtr output_globals;  /* This only counts output variables */
     ArrayOfIRInstPtr uniform_globals; /* This only counts uniforms/storage variables */
     ArrayOfIRInstPtr globals;         /* This counts uniforms/storage variables and all
                                          inputs/outputs of every stage */
@@ -1007,16 +1023,16 @@ typedef enum AstParameterKind {
 } AstParameterKind;
 
 typedef enum AstVarStorageClass {
-    VAR_STORAGE_CLASS_NONE            = 0,
-    VAR_STORAGE_CLASS_FUNCTION        = 1,
-    VAR_STORAGE_CLASS_UNIFORM         = 2,
-    VAR_STORAGE_CLASS_GROUPSHARED     = 3,
-    VAR_STORAGE_CLASS_PUSH_CONSTANT   = 4,
+    VAR_STORAGE_CLASS_NONE = 0,
+    VAR_STORAGE_CLASS_FUNCTION = 1,
+    VAR_STORAGE_CLASS_UNIFORM = 2,
+    VAR_STORAGE_CLASS_GROUPSHARED = 3,
+    VAR_STORAGE_CLASS_PUSH_CONSTANT = 4,
 } AstVarStorageClass;
 
 typedef enum AstTypeModifier {
-    TYPE_MODIFIER_CONST        = 1 << 0,
-    TYPE_MODIFIER_ROW_MAJOR    = 1 << 1,
+    TYPE_MODIFIER_CONST = 1 << 0,
+    TYPE_MODIFIER_ROW_MAJOR = 1 << 1,
     TYPE_MODIFIER_COLUMN_MAJOR = 1 << 2,
 } AstTypeModifier;
 
@@ -1384,15 +1400,12 @@ void ts__addErr(TsCompiler *compiler, const Location *loc, const char *msg, ...)
 File *ts__createFile(
     TsCompiler *compiler, const char *text, size_t text_size, const char *path);
 
-
 const char *ts__preprocess(TsCompiler *compiler, File *base_file, size_t *out_size);
-ArrayOfToken ts__lex(TsCompiler *compiler, File *file, const char *text, size_t text_size);
+ArrayOfToken
+ts__lex(TsCompiler *compiler, File *file, const char *text, size_t text_size);
 ArrayOfAstDeclPtr ts__parse(TsCompiler *compiler, ArrayOfToken tokens);
 void ts__analyze(
-    TsCompiler *compiler,
-    Module *module,
-    AstDecl **decls,
-    size_t decl_count);
+    TsCompiler *compiler, Module *module, AstDecl **decls, size_t decl_count);
 
 AstType *ts__getScalarType(AstType *type);
 AstType *ts__getScalarTypeNoVec(AstType *type);
@@ -1411,7 +1424,8 @@ void ts__irModuleDestroy(IRModule *m);
 
 void ts__irSetInstName(IRModule *m, IRInst *inst, const char *name);
 void ts__irSetTypeName(IRModule *m, IRType *type, const char *name);
-void ts__irSetMemberName(IRModule *m, IRType *type, uint32_t member_index, const char *name);
+void ts__irSetMemberName(
+    IRModule *m, IRType *type, uint32_t member_index, const char *name);
 
 IRType *ts__irNewBasicType(IRModule *m, IRTypeKind kind);
 IRType *ts__irNewPointerType(IRModule *m, SpvStorageClass storage_class, IRType *sub);
@@ -1421,8 +1435,8 @@ IRType *ts__irNewFloatType(IRModule *m, uint32_t bits);
 IRType *ts__irNewIntType(IRModule *m, uint32_t bits, bool is_signed);
 IRType *ts__irNewRuntimeArrayType(IRModule *m, IRType *sub);
 IRType *ts__irNewArrayType(IRModule *m, IRType *sub, IRInst *size);
-IRType *
-ts__irNewFuncType(IRModule *m, IRType *return_type, IRType **params, uint32_t param_count);
+IRType *ts__irNewFuncType(
+    IRModule *m, IRType *return_type, IRType **params, uint32_t param_count);
 IRType *ts__irNewStructType(
     IRModule *m,
     char *name,
@@ -1433,10 +1447,8 @@ IRType *ts__irNewStructType(
 IRType *ts__irNewImageType(IRModule *m, IRType *sampled_type, SpvDim dim);
 IRType *ts__irNewSampledImageType(IRModule *m, IRType *image_type);
 
-void ts__irDecorateType(
-    IRModule *m, IRType *type, const IRDecoration *decoration);
-void
-ts__irDecorateInst(IRModule *m, IRInst *inst, const IRDecoration *decoration);
+void ts__irDecorateType(IRModule *m, IRType *type, const IRDecoration *decoration);
+void ts__irDecorateInst(IRModule *m, IRInst *inst, const IRDecoration *decoration);
 
 IRInst *ts__irAddEntryPoint(
     IRModule *m,
@@ -1445,17 +1457,13 @@ IRInst *ts__irAddEntryPoint(
     SpvExecutionModel execution_model,
     IRInst **globals,
     uint32_t global_count);
-void
-ts__irEntryPointSetComputeDims(IRInst *entry_point, uint32_t x, uint32_t y, uint32_t z);
+void ts__irEntryPointSetComputeDims(
+    IRInst *entry_point, uint32_t x, uint32_t y, uint32_t z);
 IRInst *ts__irAddFunction(IRModule *m, IRType *func_type, SpvFunctionControlMask control);
-IRInst *
-ts__irAddFuncParam(IRModule *m, IRInst *func, IRType *type, bool is_by_reference);
+IRInst *ts__irAddFuncParam(IRModule *m, IRInst *func, IRType *type, bool is_by_reference);
 IRInst *ts__irCreateBlock(IRModule *m, IRInst *func);
 void ts__irAddBlock(IRModule *m, IRInst *block);
-IRInst *ts__irAddUniformGlobal(
-    IRModule *m,
-    IRType *type,
-    SpvStorageClass storage_class);
+IRInst *ts__irAddUniformGlobal(IRModule *m, IRType *type, SpvStorageClass storage_class);
 IRInst *ts__irAddInput(IRModule *m, IRType *type);
 IRInst *ts__irAddOutput(IRModule *m, IRType *type);
 IRInst *ts__irGetCurrentBlock(IRModule *m);
@@ -1464,7 +1472,8 @@ bool ts__irBlockHasTerminator(IRInst *block);
 
 IRInst *ts__irBuildConstFloat(IRModule *m, IRType *type, double value);
 IRInst *ts__irBuildConstInt(IRModule *m, IRType *type, uint64_t value);
-IRInst *ts__irBuildConstComposite(IRModule *m, IRType *type, IRInst **values, uint32_t value_count);
+IRInst *ts__irBuildConstComposite(
+    IRModule *m, IRType *type, IRInst **values, uint32_t value_count);
 IRInst *ts__irBuildConstBool(IRModule *m, bool value);
 IRInst *ts__irBuildAlloca(IRModule *m, IRType *type);
 void ts__irBuildStore(IRModule *m, IRInst *pointer, IRInst *value);

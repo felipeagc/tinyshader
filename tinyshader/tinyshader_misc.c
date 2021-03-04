@@ -40,9 +40,9 @@ void *ts__arrayGrow(
 {
     size_t desired_cap = TS__MAX(wanted_cap, ARRAY_INITIAL_CAPACITY);
     desired_cap = TS__MAX(desired_cap, (*cap) * 2);
-    assert(desired_cap > 0);
-    assert(desired_cap > (*cap));
-    assert(desired_cap >= wanted_cap);
+    TS_ASSERT(desired_cap > 0);
+    TS_ASSERT(desired_cap > (*cap));
+    TS_ASSERT(desired_cap >= wanted_cap);
 
     void* new_arr = ts__bumpAlloc(&compiler->alloc, item_size * desired_cap);
 
@@ -433,10 +433,10 @@ static void *blockAlloc(BumpBlock *block, size_t size)
     size_t padding = (block->pos % 8);
     if (padding > 0) padding = 8 - padding;
 
-    assert((block->size - block->pos) >= (size + padding));
+    TS_ASSERT((block->size - block->pos) >= (size + padding));
 
     void *data = block->data + block->pos + padding;
-    assert((uintptr_t)data % 8 == 0);
+    TS_ASSERT((uintptr_t)data % 8 == 0);
     block->pos += size + padding;
     return data;
 }
@@ -475,9 +475,9 @@ void *ts__bumpAlloc(BumpAlloc *alloc, size_t size)
 
 void *ts__bumpZeroAlloc(BumpAlloc *alloc, size_t size)
 {
-    assert(size > 0);
+    TS_ASSERT(size > 0);
     void *data = ts__bumpAlloc(alloc, size);
-    assert(data);
+    TS_ASSERT(data);
     memset(data, 0, size);
     return data;
 }

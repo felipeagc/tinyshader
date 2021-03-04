@@ -203,7 +203,7 @@ static const char *preprocessorLoadFileContent(
     Preprocessor *p, const char *path, size_t *out_size)
 {
     FILE *f = fopen(path, "rb");
-    if (!f) return false;
+    if (!f) return NULL;
 
     fseek(f, 0, SEEK_END);
     *out_size = ftell(f);
@@ -211,7 +211,11 @@ static const char *preprocessorLoadFileContent(
 
     char *data = NEW_ARRAY_UNINIT(p->compiler, char, *out_size);
     size_t read_size = fread(data, 1, *out_size, f);
-    assert(read_size == *out_size);
+    if (read_size != *out_size)
+    {
+        fclose(f);
+        return NULL;
+    }
 
     fclose(f);
 
@@ -563,7 +567,7 @@ static const char *ts__preprocessFile(Preprocessor *p, PreprocessorFile *f)
 
             if (ident)
             {
-                assert(ident_size > 0);
+                TS_ASSERT(ident_size > 0);
                 size_t expanded_size = 0;
                 const char *expanded = preprocessorExpandMacro(
                     p, ident, ident_size, NULL, &expanded_size);

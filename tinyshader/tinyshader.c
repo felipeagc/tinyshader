@@ -357,7 +357,7 @@ void tsCompilerOptionsDestroy(TsCompilerOptions *options)
 TsCompilerOutput *tsCompile(TsCompilerOptions *options)
 {
     TsCompiler *compiler = ts__CompilerCreate();
-    assert(options->entry_point);
+    TS_ASSERT(options->entry_point);
 
     TsCompilerOutput *output = malloc(sizeof(*output));
     memset(output, 0, sizeof(*output));

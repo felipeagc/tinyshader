@@ -235,7 +235,7 @@ static AstExpr *parsePrimaryExpr(Parser *p)
             type_expr->texture.dim = SpvDimCube;
             break;
 
-        default: assert(0); break;
+        default: TS_ASSERT(0); break;
         }
 
         if (parserPeek(p, 0)->kind == TOKEN_LESS)
@@ -365,7 +365,7 @@ static AstExpr *parseAccessFuncCall(Parser *p)
         }
         else
         {
-            assert(0);
+            TS_ASSERT(0);
         }
     }
 
@@ -389,7 +389,7 @@ static AstExpr *parsePostfixedUnaryExpr(Parser *p)
         {
         case TOKEN_ADDADD: op = UNOP_POST_INC; break;
         case TOKEN_SUBSUB: op = UNOP_POST_DEC; break;
-        default: assert(0); break;
+        default: TS_ASSERT(0); break;
         }
 
         AstExpr *new_expr = NEW(p->compiler, AstExpr);
@@ -424,7 +424,7 @@ static AstExpr *parsePrefixedUnaryExpr(Parser *p)
         case TOKEN_ADDADD: op = UNOP_PRE_INC; break;
         case TOKEN_SUBSUB: op = UNOP_PRE_DEC; break;
         case TOKEN_BITNOT: op = UNOP_BITNOT; break;
-        default: assert(0); break;
+        default: TS_ASSERT(0); break;
         }
 
         AstExpr *right = parsePrefixedUnaryExpr(p);
@@ -464,7 +464,7 @@ static AstExpr *parseMuliplication(Parser *p)
         case TOKEN_MUL: op = BINOP_MUL; break;
         case TOKEN_DIV: op = BINOP_DIV; break;
         case TOKEN_MOD: op = BINOP_MOD; break;
-        default: assert(0); break;
+        default: TS_ASSERT(0); break;
         }
 
         AstExpr *left = expr;
@@ -502,7 +502,7 @@ static AstExpr *parseAddition(Parser *p)
         {
         case TOKEN_ADD: op = BINOP_ADD; break;
         case TOKEN_SUB: op = BINOP_SUB; break;
-        default: assert(0); break;
+        default: TS_ASSERT(0); break;
         }
 
         AstExpr *left = expr;
@@ -540,7 +540,7 @@ static AstExpr *parseBitShift(Parser *p)
         {
         case TOKEN_LSHIFT: op = BINOP_LSHIFT; break;
         case TOKEN_RSHIFT: op = BINOP_RSHIFT; break;
-        default: assert(0); break;
+        default: TS_ASSERT(0); break;
         }
 
         AstExpr *left = expr;
@@ -586,7 +586,7 @@ static AstExpr *parseComparison(Parser *p)
         case TOKEN_LESSEQ: op = BINOP_LESSEQ; break;
         case TOKEN_GREATER: op = BINOP_GREATER; break;
         case TOKEN_GREATEREQ: op = BINOP_GREATEREQ; break;
-        default: assert(0); break;
+        default: TS_ASSERT(0); break;
         }
 
         AstExpr *left = expr;
@@ -622,7 +622,7 @@ static AstExpr *parseBitAnd(Parser *p)
         switch (op_tok->kind)
         {
         case TOKEN_BITAND: op = BINOP_BITAND; break;
-        default: assert(0); break;
+        default: TS_ASSERT(0); break;
         }
 
         AstExpr *left = expr;
@@ -658,7 +658,7 @@ static AstExpr *parseBitXor(Parser *p)
         switch (op_tok->kind)
         {
         case TOKEN_BITXOR: op = BINOP_BITXOR; break;
-        default: assert(0); break;
+        default: TS_ASSERT(0); break;
         }
 
         AstExpr *left = expr;
@@ -694,7 +694,7 @@ static AstExpr *parseBitOr(Parser *p)
         switch (op_tok->kind)
         {
         case TOKEN_BITOR: op = BINOP_BITOR; break;
-        default: assert(0); break;
+        default: TS_ASSERT(0); break;
         }
 
         AstExpr *left = expr;
@@ -842,7 +842,7 @@ static AstExpr *parseAssignExpr(Parser *p)
         }
         else
         {
-            AstBinaryOp binop;
+            AstBinaryOp binop = BINOP_ADD;
             switch (op_kind)
             {
             case TOKEN_ADD_ASSIGN: binop = BINOP_ADD; break;
@@ -853,7 +853,7 @@ static AstExpr *parseAssignExpr(Parser *p)
             case TOKEN_BITAND_ASSIGN: binop = BINOP_BITAND; break;
             case TOKEN_BITOR_ASSIGN: binop = BINOP_BITOR; break;
             case TOKEN_BITXOR_ASSIGN: binop = BINOP_BITXOR; break;
-            default: assert(0); break;
+            default: TS_ASSERT(0); break;
             }
 
             AstExpr *subexpr = NEW(p->compiler, AstExpr);
@@ -926,7 +926,7 @@ static AstDecl *parseVarDecl(
             type_modifiers |= TYPE_MODIFIER_CONST;
             break;
         }
-        default: assert(0);
+        default: TS_ASSERT(0);
         }
 
         parserNext(p, 1);
@@ -1289,7 +1289,7 @@ static AstStmt *parseStmt(Parser *p)
         AstDecl *decl = parseVarDecl(p, true, NULL, true, false, false);
         if (!decl) return NULL;
 
-        assert(decl->var.storage_class == VAR_STORAGE_CLASS_NONE);
+        TS_ASSERT(decl->var.storage_class == VAR_STORAGE_CLASS_NONE);
         decl->var.storage_class = VAR_STORAGE_CLASS_FUNCTION;
 
         if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
@@ -1333,7 +1333,7 @@ static AstStmt *parseStmt(Parser *p)
             AstDecl *decl = parseVarDecl(p, true, NULL, true, false, false);
             if (!decl) return NULL;
 
-            assert(decl->var.storage_class == VAR_STORAGE_CLASS_NONE);
+            TS_ASSERT(decl->var.storage_class == VAR_STORAGE_CLASS_NONE);
             decl->var.storage_class = VAR_STORAGE_CLASS_FUNCTION;
 
             if (!parserConsume(p, TOKEN_SEMICOLON)) return NULL;
@@ -1365,7 +1365,7 @@ static AstStmt *parseStmt(Parser *p)
 
 static bool parseAttr(Parser *p, AstAttribute *attr)
 {
-    assert(p);
+    TS_ASSERT(p);
     TsCompiler *compiler = p->compiler;
 
     memset(attr, 0, sizeof(*attr));
@@ -1388,7 +1388,7 @@ static bool parseAttr(Parser *p, AstAttribute *attr)
         namespace = NULL;
     }
 
-    assert(attr_name);
+    TS_ASSERT(attr_name);
 
     ts__sbReset(&compiler->sb);
     if (namespace)
@@ -1426,7 +1426,7 @@ static bool parseAttr(Parser *p, AstAttribute *attr)
 
 static AstDecl *parseTopLevel(Parser *p)
 {
-    assert(p);
+    TS_ASSERT(p);
     TsCompiler *compiler = p->compiler;
 
     ArrayOfAstAttribute attributes = {0};
@@ -1777,8 +1777,8 @@ static AstDecl *parseTopLevel(Parser *p)
 ArrayOfAstDeclPtr ts__parse(TsCompiler *compiler, ArrayOfToken tokens)
 {
     Parser *p = NEW(compiler, Parser);
-    assert(compiler);
-    assert(p);
+    TS_ASSERT(compiler);
+    TS_ASSERT(p);
 
     memset(p, 0, sizeof(*p));
     p->compiler = compiler;
@@ -1792,7 +1792,7 @@ ArrayOfAstDeclPtr ts__parse(TsCompiler *compiler, ArrayOfToken tokens)
         {
             // Just stop trying to parse more declarations
             // if we already found errors
-            assert(compiler->errors.len > 0);
+            TS_ASSERT(compiler->errors.len > 0);
             break;
         }
     }

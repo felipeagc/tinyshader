@@ -38,7 +38,7 @@ static IRInst *boolVal(IRModule *m, IRInst *value)
         return value;
     }
 
-    default: assert(0); break;
+    default: TS_ASSERT(0); break;
     }
 
     return NULL;
@@ -62,7 +62,7 @@ static bool isTypeOpaque(IRType *type)
 
 static IRInst *loadVal(IRModule *m, IRInst *value)
 {
-    assert(value);
+    TS_ASSERT(value);
     if (isLvalue(value))
     {
         return ts__irBuildLoad(m, value);
@@ -75,7 +75,7 @@ static IRType *convertTypeToIR(Module *module, IRModule *ir_module, AstType *typ
 {
     switch (type->kind)
     {
-    case TYPE_TYPE: assert(0); break;
+    case TYPE_TYPE: TS_ASSERT(0); break;
 
     case TYPE_VOID: {
         return ts__irNewBasicType(ir_module, IR_TYPE_VOID);
@@ -115,8 +115,8 @@ static IRType *convertTypeToIR(Module *module, IRModule *ir_module, AstType *typ
         IRType *subtype = convertTypeToIR(module, ir_module, type->buffer.sub);
         IRType *array_type = ts__irNewRuntimeArrayType(ir_module, subtype);
 
-        assert(subtype->string);
-        assert(type->buffer.sub->size > 0);
+        TS_ASSERT(subtype->string);
+        TS_ASSERT(type->buffer.sub->size > 0);
 
         IRDecoration array_dec = {0};
         array_dec.kind = SpvDecorationArrayStride;
@@ -153,8 +153,8 @@ static IRType *convertTypeToIR(Module *module, IRModule *ir_module, AstType *typ
         IRType *subtype = convertTypeToIR(module, ir_module, type->buffer.sub);
         IRType *array_type = ts__irNewRuntimeArrayType(ir_module, subtype);
 
-        assert(subtype->string);
-        assert(type->buffer.sub->size > 0);
+        TS_ASSERT(subtype->string);
+        TS_ASSERT(type->buffer.sub->size > 0);
 
         IRDecoration array_dec = {0};
         array_dec.kind = SpvDecorationArrayStride;
@@ -227,7 +227,7 @@ static IRType *convertTypeToIR(Module *module, IRModule *ir_module, AstType *typ
     }
 
     case TYPE_ARRAY: {
-        assert(type->array.size > 0);
+        TS_ASSERT(type->array.size > 0);
 
         IRType *size_type = ts__irNewIntType(ir_module, 32, false);
         IRInst *size = ts__irBuildConstInt(ir_module, size_type, type->array.size);
@@ -274,7 +274,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
 {
     TsCompiler *compiler = ast_mod->compiler;
 
-    assert(expr->type);
+    TS_ASSERT(expr->type);
 
     switch (expr->kind)
     {
@@ -299,7 +299,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
                 break;
             }
 
-            default: assert(0); break;
+            default: TS_ASSERT(0); break;
             }
 
             break;
@@ -328,7 +328,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
                 break;
             }
 
-            default: assert(0); break;
+            default: TS_ASSERT(0); break;
             }
 
             break;
@@ -344,7 +344,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
             break;
         }
 
-        default: assert(0);
+        default: TS_ASSERT(0);
         }
         break;
     }
@@ -357,12 +357,12 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
 
         astBuildExpr(ast_mod, ir_mod, expr->var_assign.value_expr);
         IRInst *to_store = expr->var_assign.value_expr->value;
-        assert(to_store);
+        TS_ASSERT(to_store);
 
         if (isTypeOpaque(ir_type))
         {
-            assert(expr->var_assign.assigned_expr->kind == EXPR_IDENT);
-            assert(expr->var_assign.assigned_expr->ident.decl);
+            TS_ASSERT(expr->var_assign.assigned_expr->kind == EXPR_IDENT);
+            TS_ASSERT(expr->var_assign.assigned_expr->ident.decl);
             
             AstDecl *decl = expr->var_assign.assigned_expr->ident.decl;
             decl->value = to_store;
@@ -387,7 +387,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
         case DECL_ALIAS:
         {
             AstDecl *accessed = decl->alias.accessed;
-            assert(accessed->type);
+            TS_ASSERT(accessed->type);
             switch (accessed->type->kind)
             {
             case TYPE_CONSTANT_BUFFER:
@@ -400,7 +400,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
 
                 IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, decl->type);
 
-                assert(decl->alias.accessed->value);
+                TS_ASSERT(decl->alias.accessed->value);
                 expr->value = ts__irBuildAccessChain(
                     ir_mod,
                     ir_type,
@@ -419,7 +419,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
 
         default:
         {
-            assert(decl);
+            TS_ASSERT(decl);
             expr->value = decl->value;
             break;
         }
@@ -430,8 +430,8 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
     case EXPR_SUBSCRIPT: {
         astBuildExpr(ast_mod, ir_mod, expr->subscript.left);
         astBuildExpr(ast_mod, ir_mod, expr->subscript.right);
-        assert(expr->subscript.left->value);
-        assert(expr->subscript.right->value);
+        TS_ASSERT(expr->subscript.left->value);
+        TS_ASSERT(expr->subscript.right->value);
 
         IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, expr->type);
 
@@ -475,10 +475,10 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
             break;
         }
 
-        default: assert(0); break;
+        default: TS_ASSERT(0); break;
         }
 
-        assert(index_count > 0);
+        TS_ASSERT(index_count > 0);
 
         expr->value = ts__irBuildAccessChain(
             ir_mod, ir_type, expr->subscript.left->value, indices, index_count);
@@ -490,11 +490,11 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
         IRType *index_type = ts__irNewIntType(ir_mod, 32, false);
 
         AstExpr *base = expr->access.base;
-        assert(base->type);
+        TS_ASSERT(base->type);
 
         astBuildExpr(ast_mod, ir_mod, base);
         IRInst *value = base->value;
-        assert(value);
+        TS_ASSERT(value);
 
         uint32_t index_count = 0;
         IRInst **indices = NEW_ARRAY(compiler, IRInst *, expr->access.chain.len);
@@ -503,19 +503,19 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
 
         if (struct_type)
         {
-            assert(struct_type->kind == TYPE_STRUCT);
+            TS_ASSERT(struct_type->kind == TYPE_STRUCT);
 
             for (uint32_t i = 0; i < expr->access.chain.len; ++i)
             {
                 AstExpr *field_ident = expr->access.chain.ptr[i];
-                assert(field_ident->kind == EXPR_IDENT);
+                TS_ASSERT(field_ident->kind == EXPR_IDENT);
 
                 if (!field_ident->ident.decl) break;
 
                 index_count++;
 
                 AstDecl *field_decl = field_ident->ident.decl;
-                assert(field_decl->kind == DECL_STRUCT_FIELD);
+                TS_ASSERT(field_decl->kind == DECL_STRUCT_FIELD);
 
                 indices[i] =
                     ts__irBuildConstInt(ir_mod, index_type, field_decl->var.field_index);
@@ -532,10 +532,10 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
             // Must be a vector swizzle
 
             AstExpr *field_ident = expr->access.chain.ptr[i];
-            assert(field_ident->kind == EXPR_IDENT);
-            assert(!field_ident->ident.decl);
-            assert(field_ident->ident.shuffle_indices);
-            assert(field_ident->ident.shuffle_index_count > 0);
+            TS_ASSERT(field_ident->kind == EXPR_IDENT);
+            TS_ASSERT(!field_ident->ident.decl);
+            TS_ASSERT(field_ident->ident.shuffle_indices);
+            TS_ASSERT(field_ident->ident.shuffle_index_count > 0);
 
             uint32_t *shuffle_indices = field_ident->ident.shuffle_indices;
             uint32_t shuffle_index_count = field_ident->ident.shuffle_index_count;
@@ -603,7 +603,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
                 AstExpr *param = expr->func_call.params.ptr[i];
                 astBuildExpr(ast_mod, ir_mod, param);
                 param_values[i] = param->value;
-                assert(param_values[i]);
+                TS_ASSERT(param_values[i]);
             }
 
             switch (builtin_func_kind)
@@ -646,7 +646,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
                 case AST_BUILTIN_FUNC_INTERLOCKED_XOR:
                     ir_builtin_kind = IR_BUILTIN_INTERLOCKED_XOR;
                     break;
-                default: assert(0); break;
+                default: TS_ASSERT(0); break;
                 }
 
                 expr->value = ts__irBuildBuiltinCall(
@@ -783,7 +783,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
                     break;
                 }
 
-                default: assert(0); break;
+                default: TS_ASSERT(0); break;
                 }
 
                 expr->value = ts__irBuildBarrier(
@@ -862,7 +862,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
                 case AST_BUILTIN_FUNC_DEVICE_MEMORY_BARRIER_WITH_GROUP_SYNC:
                 case AST_BUILTIN_FUNC_GROUP_MEMORY_BARRIER:
                 case AST_BUILTIN_FUNC_GROUP_MEMORY_BARRIER_WITH_GROUP_SYNC:
-                    assert(0);
+                    TS_ASSERT(0);
                     break;
                 }
 
@@ -872,7 +872,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
                 for (uint32_t i = 0; i < param_count; ++i)
                 {
                     ir_param_values[i] = loadVal(ir_mod, param_values[i]);
-                    assert(ir_param_values[i]);
+                    TS_ASSERT(ir_param_values[i]);
                 }
 
                 expr->value = ts__irBuildBuiltinCall(
@@ -881,7 +881,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
             }
             }
 
-            assert(expr->value);
+            TS_ASSERT(expr->value);
             break;
         }
 
@@ -889,13 +889,13 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
         {
             // Method call
             AstExpr *method_name_expr = expr->func_call.func_expr;
-            assert(method_name_expr->kind == EXPR_IDENT);
+            TS_ASSERT(method_name_expr->kind == EXPR_IDENT);
             char *method_name = method_name_expr->ident.name;
 
             AstType *self_type = expr->func_call.self_param->type;
 
             astBuildExpr(ast_mod, ir_mod, expr->func_call.self_param);
-            assert(expr->func_call.self_param->value);
+            TS_ASSERT(expr->func_call.self_param->value);
 
             if (self_type->kind == TYPE_IMAGE && strcmp(method_name, "Sample") == 0)
             {
@@ -908,7 +908,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
                 {
                     AstExpr *param = expr->func_call.params.ptr[i];
                     astBuildExpr(ast_mod, ir_mod, param);
-                    assert(param->value);
+                    TS_ASSERT(param->value);
                     param_values[i] = loadVal(ir_mod, param->value);
                 }
 
@@ -940,7 +940,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
                 {
                     AstExpr *param = expr->func_call.params.ptr[i];
                     astBuildExpr(ast_mod, ir_mod, param);
-                    assert(param->value);
+                    TS_ASSERT(param->value);
                     param_values[i] = loadVal(ir_mod, param->value);
                 }
 
@@ -974,7 +974,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
                 {
                     AstExpr *param = expr->func_call.params.ptr[i];
                     astBuildExpr(ast_mod, ir_mod, param);
-                    assert(param->value);
+                    TS_ASSERT(param->value);
                     param_values[i] = param->value;
                 }
 
@@ -984,7 +984,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
 
                 IRType *float_type = ts__irNewFloatType(ir_mod, 32);
 
-                assert(image->type->kind == IR_TYPE_IMAGE);
+                TS_ASSERT(image->type->kind == IR_TYPE_IMAGE);
                 switch (image->type->image.dim)
                 {
                 case SpvDim1D: {
@@ -1061,24 +1061,24 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
                     break;
                 }
 
-                default: assert(0); break;
+                default: TS_ASSERT(0); break;
                 }
             }
             else
             {
-                assert(0);
+                TS_ASSERT(0);
             }
             break;
         }
 
         AstType *func_type = expr->func_call.func_expr->type;
-        assert(func_type);
+        TS_ASSERT(func_type);
 
         if (func_type->kind == TYPE_TYPE)
         {
             // Type constructor
             AstType *constructed_type = expr->func_call.func_expr->as_type;
-            assert(constructed_type);
+            TS_ASSERT(constructed_type);
             IRType *ir_constructed_type = convertTypeToIR(ast_mod, ir_mod, constructed_type);
 
             uint32_t param_count = arrLength(expr->func_call.params);
@@ -1094,7 +1094,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
                 for (uint32_t i = 0; i < param_count; ++i)
                 {
                     astBuildExpr(ast_mod, ir_mod, params.ptr[i]);
-                    assert(params.ptr[i]->value);
+                    TS_ASSERT(params.ptr[i]->value);
                     IRInst *param_val = loadVal(ir_mod, params.ptr[i]->value);
 
                     if (params.ptr[i]->type->kind == TYPE_VECTOR)
@@ -1113,7 +1113,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
                     }
                 }
 
-                assert(elem_index == elem_count);
+                TS_ASSERT(elem_index == elem_count);
 
                 expr->value = ts__irBuildCompositeConstruct(
                     ir_mod, ir_constructed_type, elems, elem_count);
@@ -1121,13 +1121,13 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
             }
             case TYPE_MATRIX: {
                 AstType *col_type = constructed_type->matrix.col_type;
-                assert(col_type->kind == TYPE_VECTOR);
+                TS_ASSERT(col_type->kind == TYPE_VECTOR);
 
                 uint32_t col_count = constructed_type->matrix.col_count;
                 uint32_t col_size = col_type->vector.size;
 
                 uint32_t matrix_elem_count = col_size * col_count;
-                assert(matrix_elem_count == param_count);
+                TS_ASSERT(matrix_elem_count == param_count);
 
                 IRInst **columns = NEW_ARRAY(compiler, IRInst *, col_count);
 
@@ -1139,7 +1139,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
                         AstExpr *elem = params.ptr[i * col_size + j];
 
                         astBuildExpr(ast_mod, ir_mod, elem);
-                        assert(elem->value);
+                        TS_ASSERT(elem->value);
                         col_fields[j] = loadVal(ir_mod, elem->value);
                     }
 
@@ -1153,16 +1153,16 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
             }
             case TYPE_INT:
             case TYPE_FLOAT: {
-                assert(param_count == 1);
+                TS_ASSERT(param_count == 1);
 
                 astBuildExpr(ast_mod, ir_mod, params.ptr[0]);
-                assert(params.ptr[0]->value);
+                TS_ASSERT(params.ptr[0]->value);
                 expr->value = ts__irBuildCast(
                     ir_mod, ir_constructed_type, loadVal(ir_mod, params.ptr[0]->value));
                 break;
             }
             default: {
-                assert(0);
+                TS_ASSERT(0);
                 break;
             }
             }
@@ -1170,11 +1170,11 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
         else
         {
             // Actual function call
-            assert(func_type->kind == TYPE_FUNC);
+            TS_ASSERT(func_type->kind == TYPE_FUNC);
 
             astBuildExpr(ast_mod, ir_mod, expr->func_call.func_expr);
             IRInst *func_val = expr->func_call.func_expr->value;
-            assert(func_val);
+            TS_ASSERT(func_val);
 
             uint32_t param_count = arrLength(expr->func_call.params);
             IRInst **param_values = NEW_ARRAY(compiler, IRInst *, param_count);
@@ -1183,7 +1183,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
             {
                 AstExpr *param = expr->func_call.params.ptr[i];
                 astBuildExpr(ast_mod, ir_mod, param);
-                assert(param->value);
+                TS_ASSERT(param->value);
                 param_values[i] = param->value;
                 if (func_type->func.params[i]->kind == TYPE_POINTER)
                 {
@@ -1221,7 +1221,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
             {
             case TYPE_FLOAT: op = SpvOpFNegate; break;
             case TYPE_INT: op = SpvOpSNegate; break;
-            default: assert(0); break;
+            default: TS_ASSERT(0); break;
             }
 
             IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, expr->type);
@@ -1230,7 +1230,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
         }
 
         case UNOP_NOT: {
-            assert(0); // TODO: broken: use SpvINotEqual + SpvOpLogicalNot
+            TS_ASSERT(0); // TODO: broken: use SpvINotEqual + SpvOpLogicalNot
 
             astBuildExpr(ast_mod, ir_mod, expr->unary.right);
             IRInst *right_val = loadVal(ir_mod, expr->unary.right->value);
@@ -1247,7 +1247,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
 
             IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, expr->type);
 
-            SpvOp op_kind;
+            SpvOp op_kind = SpvOpIAdd;
             IRInst *one_val = NULL;
 
             switch (expr->type->kind)
@@ -1260,7 +1260,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
                 op_kind = SpvOpIAdd;
                 one_val = ts__irBuildConstInt(ir_mod, ir_type, 1);
                 break;
-            default: assert(0); break;
+            default: TS_ASSERT(0); break;
             }
 
             expr->value = ts__irBuildBinary(ir_mod, op_kind, ir_type, right_val, one_val);
@@ -1279,7 +1279,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
 
             IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, expr->type);
 
-            SpvOp op_kind;
+            SpvOp op_kind = SpvOpISub;
             IRInst *one_val = NULL;
 
             switch (expr->type->kind)
@@ -1292,7 +1292,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
                 op_kind = SpvOpISub;
                 one_val = ts__irBuildConstInt(ir_mod, ir_type, 1);
                 break;
-            default: assert(0); break;
+            default: TS_ASSERT(0); break;
             }
 
             expr->value = ts__irBuildBinary(ir_mod, op_kind, ir_type, right_val, one_val);
@@ -1311,7 +1311,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
 
             IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, expr->type);
 
-            SpvOp op_kind;
+            SpvOp op_kind = SpvOpIAdd;
             IRInst *one_val = NULL;
 
             switch (expr->type->kind)
@@ -1324,7 +1324,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
                 op_kind = SpvOpIAdd;
                 one_val = ts__irBuildConstInt(ir_mod, ir_type, 1);
                 break;
-            default: assert(0); break;
+            default: TS_ASSERT(0); break;
             }
 
             if (isLvalue(right_val_ptr))
@@ -1346,7 +1346,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
 
             IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, expr->type);
 
-            SpvOp op_kind;
+            SpvOp op_kind = SpvOpISub;
             IRInst *one_val = NULL;
 
             switch (expr->type->kind)
@@ -1359,7 +1359,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
                 op_kind = SpvOpISub;
                 one_val = ts__irBuildConstInt(ir_mod, ir_type, 1);
                 break;
-            default: assert(0); break;
+            default: TS_ASSERT(0); break;
             }
 
             if (isLvalue(right_val_ptr))
@@ -1393,7 +1393,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
         IRInst *right_val = loadVal(ir_mod, expr->binary.right->value);
 
         AstType *elem_type = ts__getElemType(expr->binary.left->type);
-        assert(elem_type);
+        TS_ASSERT(elem_type);
         SpvOp op = {0};
 
         IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, expr->type);
@@ -1444,7 +1444,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
             {
             case TYPE_FLOAT: op = SpvOpFAdd; break;
             case TYPE_INT: op = SpvOpIAdd; break;
-            default: assert(0); break;
+            default: TS_ASSERT(0); break;
             }
             break;
         }
@@ -1453,7 +1453,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
             {
             case TYPE_FLOAT: op = SpvOpFSub; break;
             case TYPE_INT: op = SpvOpISub; break;
-            default: assert(0); break;
+            default: TS_ASSERT(0); break;
             }
             break;
         }
@@ -1462,7 +1462,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
             {
             case TYPE_FLOAT: op = SpvOpFMul; break;
             case TYPE_INT: op = SpvOpIMul; break;
-            default: assert(0); break;
+            default: TS_ASSERT(0); break;
             }
             break;
         }
@@ -1476,7 +1476,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
                 else
                     op = SpvOpUDiv;
                 break;
-            default: assert(0); break;
+            default: TS_ASSERT(0); break;
             }
             break;
         }
@@ -1490,7 +1490,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
                 else
                     op = SpvOpUMod;
                 break;
-            default: assert(0); break;
+            default: TS_ASSERT(0); break;
             }
             break;
         }
@@ -1500,7 +1500,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
             {
             case TYPE_FLOAT: op = SpvOpFOrdEqual; break;
             case TYPE_INT: op = SpvOpIEqual; break;
-            default: assert(0); break;
+            default: TS_ASSERT(0); break;
             }
             break;
         }
@@ -1510,7 +1510,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
             {
             case TYPE_FLOAT: op = SpvOpFOrdNotEqual; break;
             case TYPE_INT: op = SpvOpINotEqual; break;
-            default: assert(0); break;
+            default: TS_ASSERT(0); break;
             }
             break;
         }
@@ -1525,7 +1525,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
                 else
                     op = SpvOpULessThan;
                 break;
-            default: assert(0); break;
+            default: TS_ASSERT(0); break;
             }
             break;
         }
@@ -1540,7 +1540,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
                 else
                     op = SpvOpULessThanEqual;
                 break;
-            default: assert(0); break;
+            default: TS_ASSERT(0); break;
             }
             break;
         }
@@ -1555,7 +1555,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
                 else
                     op = SpvOpUGreaterThan;
                 break;
-            default: assert(0); break;
+            default: TS_ASSERT(0); break;
             }
             break;
         }
@@ -1570,7 +1570,7 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
                 else
                     op = SpvOpUGreaterThanEqual;
                 break;
-            default: assert(0); break;
+            default: TS_ASSERT(0); break;
             }
             break;
         }
@@ -1690,14 +1690,14 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
         }
         else
         {
-            assert(0);
+            TS_ASSERT(0);
         }
         break;
     }
 
     case EXPR_COMPOSITE_LITERAL:
     {
-        assert(expr->type);
+        TS_ASSERT(expr->type);
 
         AstExpr **exprs = expr->composite_literal.exprs.ptr;
         size_t exprs_length = expr->composite_literal.exprs.len;
@@ -1723,13 +1723,13 @@ static void astBuildExpr(Module *ast_mod, IRModule *ir_mod, AstExpr *expr)
         case TYPE_FLOAT:
         case TYPE_INT:
         {
-            assert(exprs_length == 1);
+            TS_ASSERT(exprs_length == 1);
             expr->value = exprs[0]->value;
             break;
         }
         default:
         {
-            assert(0);
+            TS_ASSERT(0);
             break;
         }
         }
@@ -1769,7 +1769,7 @@ static void astBuildStmt(Module *ast_mod, IRModule *ir_mod, AstStmt *stmt)
         if (stmt->return_.value)
         {
             astBuildExpr(ast_mod, ir_mod, stmt->return_.value);
-            assert(stmt->return_.value->value);
+            TS_ASSERT(stmt->return_.value->value);
             ts__irBuildReturn(ir_mod, loadVal(ir_mod, stmt->return_.value->value));
         }
         else
@@ -1785,14 +1785,14 @@ static void astBuildStmt(Module *ast_mod, IRModule *ir_mod, AstStmt *stmt)
     }
 
     case STMT_CONTINUE: {
-        assert(ast_mod->continue_stack.len > 0);
+        TS_ASSERT(ast_mod->continue_stack.len > 0);
         IRInst *block = ast_mod->continue_stack.ptr[ast_mod->continue_stack.len - 1];
         ts__irBuildBr(ir_mod, block, NULL, NULL);
         break;
     }
 
     case STMT_BREAK: {
-        assert(ast_mod->break_stack.len > 0);
+        TS_ASSERT(ast_mod->break_stack.len > 0);
         IRInst *block = ast_mod->break_stack.ptr[ast_mod->break_stack.len - 1];
         ts__irBuildBr(ir_mod, block, NULL, NULL);
         break;
@@ -1815,7 +1815,7 @@ static void astBuildStmt(Module *ast_mod, IRModule *ir_mod, AstStmt *stmt)
     case STMT_IF: {
         astBuildExpr(ast_mod, ir_mod, stmt->if_.cond);
         IRInst *cond = stmt->if_.cond->value;
-        assert(cond);
+        TS_ASSERT(cond);
         cond = loadVal(ir_mod, cond);
         cond = boolVal(ir_mod, cond);
 
@@ -1883,7 +1883,7 @@ static void astBuildStmt(Module *ast_mod, IRModule *ir_mod, AstStmt *stmt)
 
             astBuildExpr(ast_mod, ir_mod, stmt->while_.cond);
             IRInst *cond = stmt->while_.cond->value;
-            assert(cond);
+            TS_ASSERT(cond);
             cond = loadVal(ir_mod, cond);
             cond = boolVal(ir_mod, cond);
 
@@ -1963,7 +1963,7 @@ static void astBuildStmt(Module *ast_mod, IRModule *ir_mod, AstStmt *stmt)
 
             astBuildExpr(ast_mod, ir_mod, stmt->do_while.cond);
             IRInst *cond = stmt->do_while.cond->value;
-            assert(cond);
+            TS_ASSERT(cond);
             cond = loadVal(ir_mod, cond);
             cond = boolVal(ir_mod, cond);
 
@@ -2005,7 +2005,7 @@ static void astBuildStmt(Module *ast_mod, IRModule *ir_mod, AstStmt *stmt)
             {
                 astBuildExpr(ast_mod, ir_mod, stmt->for_.cond);
                 cond = stmt->for_.cond->value;
-                assert(cond);
+                TS_ASSERT(cond);
                 cond = loadVal(ir_mod, cond);
                 cond = boolVal(ir_mod, cond);
             }
@@ -2148,7 +2148,7 @@ static void astBuildDecl(Module *ast_mod, IRModule *ir_mod, AstDecl *decl)
         {
             astBuildExpr(ast_mod, ir_mod, decl->var.value_expr);
             IRInst *initializer = decl->var.value_expr->value;
-            assert(initializer);
+            TS_ASSERT(initializer);
 
             if (isTypeOpaque(ir_type))
             {
@@ -2156,7 +2156,7 @@ static void astBuildDecl(Module *ast_mod, IRModule *ir_mod, AstDecl *decl)
             }
             else 
             {
-                assert(decl->value);
+                TS_ASSERT(decl->value);
                 initializer = loadVal(ir_mod, initializer);
                 ts__irBuildStore(ir_mod, decl->value, initializer);
             }
@@ -2258,7 +2258,7 @@ static void astRecursivelyAddOutputs(
     case DECL_FUNC:
     {
         AstType *return_type = decl->type->func.return_type;
-        assert(return_type);
+        TS_ASSERT(return_type);
 
         if (return_type->kind == TYPE_STRUCT)
         {
@@ -2275,7 +2275,7 @@ static void astRecursivelyAddOutputs(
         }
         else if (return_type->kind != TYPE_VOID)
         {
-            assert(decl->semantic);
+            TS_ASSERT(decl->semantic);
 
             IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, return_type);
             IRInst *value = ts__irAddOutput(ir_mod, ir_type);
@@ -2332,7 +2332,7 @@ static void astRecursivelyAddOutputs(
             IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, decl->type);
             IRInst *value = ts__irAddOutput(ir_mod, ir_type);
 
-            assert(decl->semantic);
+            TS_ASSERT(decl->semantic);
 
             IRDecoration dec = {0};
             if (!astSemanticToDecoration(
@@ -2405,7 +2405,7 @@ static void astRecursivelyAddInputs(
             IRType *ir_type = convertTypeToIR(ast_mod, ir_mod, decl->type);
             IRInst *value = ts__irAddInput(ir_mod, ir_type);
 
-            assert(decl->semantic);
+            TS_ASSERT(decl->semantic);
 
             IRDecoration dec = {0};
             if (!astSemanticToDecoration(
@@ -2439,7 +2439,7 @@ void ts__astModuleBuild(Module *ast_mod, IRModule *ir_mod)
         switch (decl->kind)
         {
         case DECL_FUNC: {
-            assert(decl->type);
+            TS_ASSERT(decl->type);
 
             if (!decl->func.called) break;
 
@@ -2475,7 +2475,7 @@ void ts__astModuleBuild(Module *ast_mod, IRModule *ir_mod)
 
             if (decl->var.storage_class == VAR_STORAGE_CLASS_PUSH_CONSTANT)
             {
-                assert(decl->type->kind == TYPE_STRUCT);
+                TS_ASSERT(decl->type->kind == TYPE_STRUCT);
                 AstType *new_type = NEW(compiler, AstType);
                 *new_type = *decl->type;
 
@@ -2498,7 +2498,7 @@ void ts__astModuleBuild(Module *ast_mod, IRModule *ir_mod)
                 ir_type = convertTypeToIR(ast_mod, ir_mod, decl->type);
             }
 
-            assert(ir_type);
+            TS_ASSERT(ir_type);
 
             IRType *res_type = ir_type;
             while (res_type->kind == IR_TYPE_RUNTIME_ARRAY || res_type->kind == IR_TYPE_ARRAY)
@@ -2612,7 +2612,7 @@ void ts__astModuleBuild(Module *ast_mod, IRModule *ir_mod)
         ArrayOfIRInstPtr inputs = {0};
         ArrayOfIRInstPtr outputs = {0};
 
-        assert(func_decl->type->kind == TYPE_FUNC);
+        TS_ASSERT(func_decl->type->kind == TYPE_FUNC);
 
         // Create the stage inputs/outputs
         uint32_t current_input_loc = 0;
@@ -2782,7 +2782,7 @@ void ts__astModuleBuild(Module *ast_mod, IRModule *ir_mod)
         case TS_SHADER_STAGE_COMPUTE: execution_model = SpvExecutionModelGLCompute; break;
         case TS_SHADER_STAGE_FRAGMENT: execution_model = SpvExecutionModelFragment; break;
         case TS_SHADER_STAGE_VERTEX: execution_model = SpvExecutionModelVertex; break;
-        default: assert(0); break;
+        default: TS_ASSERT(0); break;
         }
 
         ArrayOfIRInstPtr entry_point_globals = {0};
@@ -2807,9 +2807,9 @@ void ts__astModuleBuild(Module *ast_mod, IRModule *ir_mod)
 
         if (ast_mod->stage == TS_SHADER_STAGE_COMPUTE)
         {
-            assert(ast_mod->compute_dims[0] >= 1);
-            assert(ast_mod->compute_dims[1] >= 1);
-            assert(ast_mod->compute_dims[2] >= 1);
+            TS_ASSERT(ast_mod->compute_dims[0] >= 1);
+            TS_ASSERT(ast_mod->compute_dims[1] >= 1);
+            TS_ASSERT(ast_mod->compute_dims[2] >= 1);
 
             ts__irEntryPointSetComputeDims(
                 entry_point,

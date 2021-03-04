@@ -6,8 +6,8 @@
 
 void ts__irSetInstName(IRModule *m, IRInst *inst, const char *name)
 {
-    assert(inst);
-    assert(name);
+    TS_ASSERT(inst);
+    TS_ASSERT(name);
 
     IRInstNameEntry entry = {0};
     entry.inst = inst;
@@ -19,16 +19,16 @@ void ts__irSetInstName(IRModule *m, IRInst *inst, const char *name)
 void ts__irSetTypeName(IRModule *m, IRType *type, const char *name)
 {
     (void)m;
-    assert(type);
-    assert(name);
+    TS_ASSERT(type);
+    TS_ASSERT(name);
 
     type->op_name = name;
 }
 
 void ts__irSetMemberName(IRModule *m, IRType *type, uint32_t member_index, const char *name)
 {
-    assert(type);
-    assert(name);
+    TS_ASSERT(type);
+    TS_ASSERT(name);
 
     if (type->kind != IR_TYPE_STRUCT)
     {
@@ -42,7 +42,7 @@ void ts__irSetMemberName(IRModule *m, IRType *type, uint32_t member_index, const
         type->op_member_names.ptr = NEW_ARRAY(m->compiler, const char *, type->op_member_names.cap);
     }
 
-    assert(member_index < type->op_member_names.len);
+    TS_ASSERT(member_index < type->op_member_names.len);
     type->op_member_names.ptr[member_index] = name;
 }
 
@@ -108,10 +108,10 @@ static char *irTypeToString(TsCompiler *compiler, IRType *type)
         case SpvStorageClassWorkgroup: storage_class = "groupshared"; break;
         case SpvStorageClassPushConstant: storage_class = "pushconstant"; break;
 
-        default: assert(0); break;
+        default: TS_ASSERT(0); break;
         }
 
-        assert(type->ptr.sub);
+        TS_ASSERT(type->ptr.sub);
         sub = irTypeToString(compiler, type->ptr.sub);
         break;
     }
@@ -119,7 +119,7 @@ static char *irTypeToString(TsCompiler *compiler, IRType *type)
     case IR_TYPE_RUNTIME_ARRAY: {
         prefix = "r_array";
 
-        assert(type->array.sub);
+        TS_ASSERT(type->array.sub);
         sub = irTypeToString(compiler, type->array.sub);
         break;
     }
@@ -131,7 +131,7 @@ static char *irTypeToString(TsCompiler *compiler, IRType *type)
         ts__sbSprintf(&compiler->sb, "array[%s]", size_str);
         prefix = ts__sbBuild(&compiler->sb, &compiler->alloc);
 
-        assert(type->array.sub);
+        TS_ASSERT(type->array.sub);
         sub = irTypeToString(compiler, type->array.sub);
         break;
     }
@@ -184,7 +184,7 @@ static char *irTypeToString(TsCompiler *compiler, IRType *type)
         case SpvDim1D: postfix = "1D"; break;
         case SpvDim2D: postfix = "2D"; break;
         case SpvDim3D: postfix = "3D"; break;
-        default: assert(0); break;
+        default: TS_ASSERT(0); break;
         }
 
         break;
@@ -200,7 +200,7 @@ static char *irTypeToString(TsCompiler *compiler, IRType *type)
     ts__sbReset(&compiler->sb);
 
 
-    assert(prefix);
+    TS_ASSERT(prefix);
     ts__sbAppend(&compiler->sb, prefix);
 
     if (storage_class)
@@ -327,19 +327,19 @@ static bool irIsTypeCastable(IRType *src_type, IRType *dst_type, SpvOp *op)
         return false;
     }
 
-    assert(0);
+    TS_ASSERT(0);
 }
 
 static IRType *irGetCachedType(IRModule *m, IRType *type)
 {
     char *type_string = irTypeToString(m->compiler, type);
-    assert(type_string);
-    assert(strlen(type_string) > 0);
+    TS_ASSERT(type_string);
+    TS_ASSERT(strlen(type_string) > 0);
 
     IRType *found_type = NULL;
     if (ts__hashGet(&m->type_cache, type_string, (void **)&found_type))
     {
-        assert(found_type);
+        TS_ASSERT(found_type);
         return found_type;
     }
 
@@ -401,7 +401,7 @@ IRType *ts__irNewIntType(IRModule *m, uint32_t bits, bool is_signed)
 
 IRType *ts__irNewRuntimeArrayType(IRModule *m, IRType *sub)
 {
-    assert(sub);
+    TS_ASSERT(sub);
 
     IRType *ty = NEW(m->compiler, IRType);
     ty->kind = IR_TYPE_RUNTIME_ARRAY;
@@ -411,8 +411,8 @@ IRType *ts__irNewRuntimeArrayType(IRModule *m, IRType *sub)
 
 IRType *ts__irNewArrayType(IRModule *m, IRType *sub, IRInst *size)
 {
-    assert(sub);
-    assert(size);
+    TS_ASSERT(sub);
+    TS_ASSERT(size);
 
     IRType *ty = NEW(m->compiler, IRType);
     ty->kind = IR_TYPE_ARRAY;
@@ -589,7 +589,7 @@ IRInst *ts__irCreateBlock(IRModule *m, IRInst *func)
 // Finally adds the block to the function
 void ts__irAddBlock(IRModule *m, IRInst *block)
 {
-    assert(block->block.func->kind == IR_INST_FUNCTION);
+    TS_ASSERT(block->block.func->kind == IR_INST_FUNCTION);
     arrPush(m->compiler, &block->block.func->func.blocks, block);
 }
 
@@ -684,7 +684,7 @@ static char *irConstToString(TsCompiler *compiler, IRInst *inst)
                 ts__sbSprintf(
                     &compiler->sb, "double%lf", *((double *)inst->constant.value));
                 break;
-            default: assert(0); break;
+            default: TS_ASSERT(0); break;
             }
         }
         else if (inst->type->kind == IR_TYPE_INT)
@@ -708,7 +708,7 @@ static char *irConstToString(TsCompiler *compiler, IRInst *inst)
                     ts__sbSprintf(
                         &compiler->sb, "long%ld", *((long *)inst->constant.value));
                     break;
-                default: assert(0); break;
+                default: TS_ASSERT(0); break;
                 }
             }
             else
@@ -737,13 +737,13 @@ static char *irConstToString(TsCompiler *compiler, IRInst *inst)
                         "ulong%lu",
                         *((unsigned long *)inst->constant.value));
                     break;
-                default: assert(0); break;
+                default: TS_ASSERT(0); break;
                 }
             }
         }
         else
         {
-            assert(0);
+            TS_ASSERT(0);
         }
         break;
     }
@@ -780,7 +780,7 @@ static char *irConstToString(TsCompiler *compiler, IRInst *inst)
         break;
     }
 
-    default: assert(0); break;
+    default: TS_ASSERT(0); break;
     }
 
     char *const_name = ts__sbBuild(&compiler->sb, &compiler->alloc);
@@ -790,13 +790,13 @@ static char *irConstToString(TsCompiler *compiler, IRInst *inst)
 static IRInst *irGetCachedConst(IRModule *m, IRInst *inst)
 {
     char *const_string = irConstToString(m->compiler, inst);
-    assert(const_string);
-    assert(strlen(const_string) > 0);
+    TS_ASSERT(const_string);
+    TS_ASSERT(strlen(const_string) > 0);
 
     IRInst *found_inst = NULL;
     if (ts__hashGet(&m->const_cache, const_string, (void **)&found_inst))
     {
-        assert(found_inst);
+        TS_ASSERT(found_inst);
         return found_inst;
     }
 
@@ -814,7 +814,7 @@ static IRInst *irGetCachedConst(IRModule *m, IRInst *inst)
 
 IRInst *ts__irBuildConstFloat(IRModule *m, IRType *type, double value)
 {
-    assert(type->kind == IR_TYPE_FLOAT);
+    TS_ASSERT(type->kind == IR_TYPE_FLOAT);
 
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_CONSTANT;
@@ -837,7 +837,7 @@ IRInst *ts__irBuildConstFloat(IRModule *m, IRType *type, double value)
     }
     else
     {
-        assert(0);
+        TS_ASSERT(0);
     }
 
     inst = irGetCachedConst(m, inst);
@@ -847,7 +847,7 @@ IRInst *ts__irBuildConstFloat(IRModule *m, IRType *type, double value)
 
 IRInst *ts__irBuildConstInt(IRModule *m, IRType *type, uint64_t value)
 {
-    assert(type->kind == IR_TYPE_INT);
+    TS_ASSERT(type->kind == IR_TYPE_INT);
 
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_CONSTANT;
@@ -886,7 +886,7 @@ IRInst *ts__irBuildConstInt(IRModule *m, IRType *type, uint64_t value)
         break;
     }
 
-    default: assert(0);
+    default: TS_ASSERT(0);
     }
 
     inst = irGetCachedConst(m, inst);
@@ -939,8 +939,8 @@ IRInst *ts__irBuildAlloca(IRModule *m, IRType *type)
 
 void ts__irBuildStore(IRModule *m, IRInst *pointer, IRInst *value)
 {
-    assert(pointer);
-    assert(value);
+    TS_ASSERT(pointer);
+    TS_ASSERT(value);
 
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_STORE;
@@ -956,8 +956,8 @@ IRInst *ts__irBuildLoad(IRModule *m, IRInst *pointer)
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_LOAD;
 
-    assert(pointer->type);
-    assert(pointer->type->kind == IR_TYPE_POINTER);
+    TS_ASSERT(pointer->type);
+    TS_ASSERT(pointer->type->kind == IR_TYPE_POINTER);
 
     inst->type = pointer->type->ptr.sub;
     inst->load.pointer = pointer;
@@ -976,7 +976,7 @@ IRInst *ts__irBuildAccessChain(
 
     inst->type = ts__irNewPointerType(m, base->type->ptr.storage_class, type);
 
-    assert(base->type->kind == IR_TYPE_POINTER);
+    TS_ASSERT(base->type->kind == IR_TYPE_POINTER);
 
     inst->access_chain.base = base;
     inst->access_chain.index_count = index_count;
@@ -1003,9 +1003,9 @@ IRInst *ts__irBuildVectorShuffle(
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_VECTOR_SHUFFLE;
 
-    assert(vector_a->type->kind == IR_TYPE_VECTOR);
-    assert(vector_b->type->kind == IR_TYPE_VECTOR);
-    assert(vector_a->type->vector.elem_type == vector_b->type->vector.elem_type);
+    TS_ASSERT(vector_a->type->kind == IR_TYPE_VECTOR);
+    TS_ASSERT(vector_b->type->kind == IR_TYPE_VECTOR);
+    TS_ASSERT(vector_a->type->vector.elem_type == vector_b->type->vector.elem_type);
 
     inst->type = ts__irNewVectorType(m, vector_a->type->vector.elem_type, index_count);
 
@@ -1045,12 +1045,12 @@ IRInst *ts__irBuildCompositeExtract(
         }
         else
         {
-            assert(0);
+            TS_ASSERT(0);
         }
     }
     else
     {
-        assert(0);
+        TS_ASSERT(0);
     }
 
     inst->composite_extract.value = value;
@@ -1081,7 +1081,7 @@ IRInst *ts__irBuildCompositeConstruct(
     inst->composite_construct.field_count = field_count;
 
     IRInst *block = ts__irGetCurrentBlock(m);
-    assert(block);
+    TS_ASSERT(block);
     arrPush(m->compiler, &block->block.insts, inst);
 
     return inst;
@@ -1094,9 +1094,9 @@ ts__irBuildFuncCall(IRModule *m, IRInst *function, IRInst **params, uint32_t par
     inst->kind = IR_INST_FUNC_CALL;
 
     inst->type = function->type->func.return_type;
-    assert(inst->type);
+    TS_ASSERT(inst->type);
 
-    assert(param_count == function->type->func.param_count);
+    TS_ASSERT(param_count == function->type->func.param_count);
 
     inst->func_call.func = function;
     inst->func_call.params = params;
@@ -1119,7 +1119,7 @@ IRInst *ts__irBuildBuiltinCall(
     inst->kind = IR_INST_BUILTIN_CALL;
 
     inst->type = result_type;
-    assert(inst->type);
+    TS_ASSERT(inst->type);
 
     inst->builtin_call.kind = kind;
     inst->builtin_call.params = params;
@@ -1142,7 +1142,7 @@ IRInst *ts__irBuildBarrier(
     inst->kind = IR_INST_BARRIER;
 
     inst->type = ts__irNewBasicType(m, IR_TYPE_VOID);
-    assert(inst->type);
+    TS_ASSERT(inst->type);
 
     IRType *uint_type = ts__irNewIntType(m, 32, false);
 
@@ -1163,7 +1163,7 @@ ts__irBuildSampleImplicitLod(IRModule *m, IRType *type, IRInst *image_sampler, I
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_SAMPLE_IMPLICIT_LOD;
     inst->type = type;
-    assert(inst->type);
+    TS_ASSERT(inst->type);
 
     inst->sample.image_sampler = image_sampler;
     inst->sample.coords = coords;
@@ -1180,7 +1180,7 @@ IRInst *ts__irBuildSampleExplicitLod(
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_SAMPLE_EXPLICIT_LOD;
     inst->type = type;
-    assert(inst->type);
+    TS_ASSERT(inst->type);
 
     inst->sample.image_sampler = image_sampler;
     inst->sample.coords = coords;
@@ -1207,13 +1207,13 @@ IRInst *ts__irBuildQuerySizeLod(IRModule *m, IRInst *image, IRInst *lod)
     case SpvDim3D: dim = 3; break;
     case SpvDimCube: dim = 2; break;
 
-    default: assert(0); break;
+    default: TS_ASSERT(0); break;
     }
 
-    assert(dim > 0);
+    TS_ASSERT(dim > 0);
 
     inst->type = ts__irNewVectorType(m, ts__irNewIntType(m, 32, false), dim);
-    assert(inst->type);
+    TS_ASSERT(inst->type);
 
     inst->query_size_lod.image = image;
     inst->query_size_lod.lod = lod;
@@ -1232,7 +1232,7 @@ IRInst *ts__irBuildQueryLevels(IRModule *m, IRInst *image)
     m->uses_image_query = true;
 
     inst->type = ts__irNewIntType(m, 32, false);
-    assert(inst->type);
+    TS_ASSERT(inst->type);
 
     inst->query_levels.image = image;
 
@@ -1249,10 +1249,9 @@ IRInst *ts__irBuildCast(IRModule *m, IRType *dst_type, IRInst *value)
     inst->type = dst_type;
 
     IRType *src_type = value->type;
-    assert(src_type);
+    TS_ASSERT(src_type);
 
-    bool castable = irIsTypeCastable(src_type, dst_type, &inst->cast.op);
-    assert(castable);
+    TS_ASSERT(irIsTypeCastable(src_type, dst_type, &inst->cast.op));
 
     if (inst->cast.op == SpvOpNop)
     {
@@ -1273,7 +1272,7 @@ IRInst *ts__irBuildUnary(IRModule *m, SpvOp op, IRType *type, IRInst *right)
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_UNARY;
     inst->type = type;
-    assert(inst->type);
+    TS_ASSERT(inst->type);
 
     inst->unary.op = op;
     inst->unary.right = right;
@@ -1290,7 +1289,7 @@ ts__irBuildBinary(IRModule *m, SpvOp op, IRType *type, IRInst *left, IRInst *rig
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_BINARY;
     inst->type = type;
-    assert(inst->type);
+    TS_ASSERT(inst->type);
 
     inst->binary.op = op;
     inst->binary.left = left;
@@ -1308,7 +1307,7 @@ IRInst *ts__irBuildSelect(
     IRInst *inst = NEW(m->compiler, IRInst);
     inst->kind = IR_INST_SELECT;
     inst->type = type;
-    assert(inst->type);
+    TS_ASSERT(inst->type);
 
     inst->select.cond = cond;
     inst->select.true_value = true_value;
@@ -1499,8 +1498,8 @@ static void irModuleEncodeDecorations(IRModule *m)
     for (uint32_t i = 0; i < m->globals.len; ++i)
     {
         IRInst *inst = m->globals.ptr[i];
-        assert(inst->kind == IR_INST_VARIABLE);
-        assert(inst->id);
+        TS_ASSERT(inst->kind == IR_INST_VARIABLE);
+        TS_ASSERT(inst->id);
 
         for (uint32_t j = 0; j < inst->decorations.len; ++j)
         {
@@ -1509,7 +1508,7 @@ static void irModuleEncodeDecorations(IRModule *m)
             uint32_t params[3] = {inst->id, dec->kind, dec->value};
             switch (dec->kind)
             {
-            case SpvDecorationBlock: assert(0); break;
+            case SpvDecorationBlock: TS_ASSERT(0); break;
             default: break;
             }
             irModuleEncodeInst(m, SpvOpDecorate, params, param_count);
@@ -1519,7 +1518,7 @@ static void irModuleEncodeDecorations(IRModule *m)
     for (uint32_t i = 0; i < m->type_cache.values.len; ++i)
     {
         IRType *type = (IRType *)m->type_cache.values.ptr[i];
-        assert(type->id > 0);
+        TS_ASSERT(type->id > 0);
 
         if (type->kind == IR_TYPE_STRUCT)
         {
@@ -1706,9 +1705,9 @@ static void irModuleEncodeEntryPoints(IRModule *m)
     for (uint32_t i = 0; i < arrLength(m->entry_points); ++i)
     {
         IRInst *inst = m->entry_points.ptr[i];
-        assert(inst->kind == IR_INST_ENTRY_POINT);
-        assert(inst->entry_point.func);
-        assert(inst->entry_point.func->id);
+        TS_ASSERT(inst->kind == IR_INST_ENTRY_POINT);
+        TS_ASSERT(inst->entry_point.func);
+        TS_ASSERT(inst->entry_point.func->id);
 
         {
             size_t name_len = strlen(inst->entry_point.name);
@@ -1754,7 +1753,7 @@ static void irModuleEncodeEntryPoints(IRModule *m)
 
 static void irModuleEncodeBlock(IRModule *m, IRInst *block)
 {
-    assert(ts__irBlockHasTerminator(block));
+    TS_ASSERT(ts__irBlockHasTerminator(block));
 
     {
         uint32_t params[1] = {block->id};
@@ -1776,7 +1775,7 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             if (initializer)
             {
                 uint32_t initializer_id = initializer->id;
-                assert(initializer_id);
+                TS_ASSERT(initializer_id);
                 uint32_t params[4] = {
                     ptr_type->id, inst->id, storage_class, initializer_id};
                 irModuleEncodeInst(m, SpvOpVariable, params, 4);
@@ -1810,7 +1809,7 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
         case IR_INST_BRANCH: {
             if (inst->branch.continue_block && inst->branch.merge_block)
             {
-                assert(inst->branch.merge_block);
+                TS_ASSERT(inst->branch.merge_block);
 
                 uint32_t params[3] = {
                     inst->branch.merge_block->id,
@@ -1859,7 +1858,7 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             inst->id = irModuleReserveId(m);
 
             IRType *loaded_type = inst->load.pointer->type;
-            assert(loaded_type->kind == IR_TYPE_POINTER);
+            TS_ASSERT(loaded_type->kind == IR_TYPE_POINTER);
             loaded_type = loaded_type->ptr.sub;
 
             uint32_t params[3] = {loaded_type->id, inst->id, inst->load.pointer->id};
@@ -1868,8 +1867,8 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
         }
 
         case IR_INST_STORE: {
-            assert(inst->store.value);
-            assert(inst->store.pointer);
+            TS_ASSERT(inst->store.value);
+            TS_ASSERT(inst->store.pointer);
             uint32_t params[2] = {inst->store.pointer->id, inst->store.value->id};
             irModuleEncodeInst(m, SpvOpStore, params, 2);
             break;
@@ -1881,8 +1880,8 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             uint32_t param_count = 3 + inst->access_chain.index_count;
             uint32_t *params = NEW_ARRAY(m->compiler, uint32_t, param_count);
 
-            assert(inst->type->id > 0);
-            assert(inst->access_chain.base->id > 0);
+            TS_ASSERT(inst->type->id > 0);
+            TS_ASSERT(inst->access_chain.base->id > 0);
 
             params[0] = inst->type->id;
             params[1] = inst->id;
@@ -1890,7 +1889,7 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
 
             for (uint32_t i = 0; i < inst->access_chain.index_count; ++i)
             {
-                assert(inst->access_chain.indices[i]->id);
+                TS_ASSERT(inst->access_chain.indices[i]->id);
                 params[3 + i] = inst->access_chain.indices[i]->id;
             }
 
@@ -1918,14 +1917,14 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             uint32_t param_count = 2 + inst->composite_construct.field_count;
             uint32_t *params = NEW_ARRAY(m->compiler, uint32_t, param_count);
 
-            assert(inst->type->id > 0);
+            TS_ASSERT(inst->type->id > 0);
 
             params[0] = inst->type->id;
             params[1] = inst->id;
 
             for (uint32_t i = 0; i < inst->composite_construct.field_count; ++i)
             {
-                assert(inst->composite_construct.fields[i]->id);
+                TS_ASSERT(inst->composite_construct.fields[i]->id);
                 params[2 + i] = inst->composite_construct.fields[i]->id;
             }
 
@@ -1944,7 +1943,7 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             params[2] = inst->func_call.func->id;
             for (uint32_t i = 0; i < inst->func_call.param_count; ++i)
             {
-                assert(inst->func_call.params[i]->id);
+                TS_ASSERT(inst->func_call.params[i]->id);
                 params[3 + i] = inst->func_call.params[i]->id;
             }
 
@@ -1963,9 +1962,9 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
                 param_count = 3;
                 params = NEW_ARRAY(m->compiler, uint32_t, param_count);
 
-                assert(inst->barrier.execution_scope->id);
-                assert(inst->barrier.memory_scope->id);
-                assert(inst->barrier.semantics->id);
+                TS_ASSERT(inst->barrier.execution_scope->id);
+                TS_ASSERT(inst->barrier.memory_scope->id);
+                TS_ASSERT(inst->barrier.semantics->id);
 
                 params[0] = inst->barrier.execution_scope->id;
                 params[1] = inst->barrier.memory_scope->id;
@@ -1977,8 +1976,8 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
                 param_count = 2;
                 params = NEW_ARRAY(m->compiler, uint32_t, param_count);
 
-                assert(inst->barrier.memory_scope->id);
-                assert(inst->barrier.semantics->id);
+                TS_ASSERT(inst->barrier.memory_scope->id);
+                TS_ASSERT(inst->barrier.semantics->id);
 
                 params[0] = inst->barrier.memory_scope->id;
                 params[1] = inst->barrier.semantics->id;
@@ -1996,8 +1995,8 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
 
             for (uint32_t i = 0; i < param_value_count; ++i)
             {
-                assert(param_values[i]);
-                assert(param_values[i]->id);
+                TS_ASSERT(param_values[i]);
+                TS_ASSERT(param_values[i]->id);
             }
 
             switch (inst->builtin_call.kind)
@@ -2067,7 +2066,7 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
                 }
                 else
                 {
-                    assert(0);
+                    TS_ASSERT(0);
                 }
 
                 break;
@@ -2227,7 +2226,7 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
                 }
                 else
                 {
-                    assert(0);
+                    TS_ASSERT(0);
                 }
                 break;
             }
@@ -2405,7 +2404,7 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             }
 
             case IR_BUILTIN_INTERLOCKED_ADD: {
-                assert(param_values[0]->type->kind == IR_TYPE_POINTER);
+                TS_ASSERT(param_values[0]->type->kind == IR_TYPE_POINTER);
 
                 uint32_t params[6] = {
                     param_values[0]->type->ptr.sub->id,
@@ -2420,7 +2419,7 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             }
 
             case IR_BUILTIN_INTERLOCKED_AND: {
-                assert(param_values[0]->type->kind == IR_TYPE_POINTER);
+                TS_ASSERT(param_values[0]->type->kind == IR_TYPE_POINTER);
 
                 uint32_t params[6] = {
                     param_values[0]->type->ptr.sub->id,
@@ -2435,10 +2434,10 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             }
 
             case IR_BUILTIN_INTERLOCKED_MIN: {
-                assert(param_values[0]->type->kind == IR_TYPE_POINTER);
+                TS_ASSERT(param_values[0]->type->kind == IR_TYPE_POINTER);
 
                 IRType *int_type = param_values[0]->type->ptr.sub;
-                assert(int_type->kind == IR_TYPE_INT);
+                TS_ASSERT(int_type->kind == IR_TYPE_INT);
 
                 uint32_t params[6] = {
                     int_type->id,
@@ -2461,10 +2460,10 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             }
 
             case IR_BUILTIN_INTERLOCKED_MAX: {
-                assert(param_values[0]->type->kind == IR_TYPE_POINTER);
+                TS_ASSERT(param_values[0]->type->kind == IR_TYPE_POINTER);
 
                 IRType *int_type = param_values[0]->type->ptr.sub;
-                assert(int_type->kind == IR_TYPE_INT);
+                TS_ASSERT(int_type->kind == IR_TYPE_INT);
 
                 uint32_t params[6] = {
                     int_type->id,
@@ -2487,10 +2486,10 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             }
 
             case IR_BUILTIN_INTERLOCKED_OR: {
-                assert(param_values[0]->type->kind == IR_TYPE_POINTER);
+                TS_ASSERT(param_values[0]->type->kind == IR_TYPE_POINTER);
 
                 IRType *int_type = param_values[0]->type->ptr.sub;
-                assert(int_type->kind == IR_TYPE_INT);
+                TS_ASSERT(int_type->kind == IR_TYPE_INT);
 
                 uint32_t params[6] = {
                     int_type->id,
@@ -2506,10 +2505,10 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             }
 
             case IR_BUILTIN_INTERLOCKED_XOR: {
-                assert(param_values[0]->type->kind == IR_TYPE_POINTER);
+                TS_ASSERT(param_values[0]->type->kind == IR_TYPE_POINTER);
 
                 IRType *int_type = param_values[0]->type->ptr.sub;
-                assert(int_type->kind == IR_TYPE_INT);
+                TS_ASSERT(int_type->kind == IR_TYPE_INT);
 
                 uint32_t params[6] = {
                     int_type->id,
@@ -2525,10 +2524,10 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             }
 
             case IR_BUILTIN_INTERLOCKED_EXCHANGE: {
-                assert(param_values[0]->type->kind == IR_TYPE_POINTER);
+                TS_ASSERT(param_values[0]->type->kind == IR_TYPE_POINTER);
 
                 IRType *int_type = param_values[0]->type->ptr.sub;
-                assert(int_type->kind == IR_TYPE_INT);
+                TS_ASSERT(int_type->kind == IR_TYPE_INT);
 
                 uint32_t params[6] = {
                     int_type->id,
@@ -2548,10 +2547,10 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             }
 
             case IR_BUILTIN_INTERLOCKED_COMPARE_EXCHANGE: {
-                assert(param_values[0]->type->kind == IR_TYPE_POINTER);
+                TS_ASSERT(param_values[0]->type->kind == IR_TYPE_POINTER);
 
                 IRType *int_type = param_values[0]->type->ptr.sub;
-                assert(int_type->kind == IR_TYPE_INT);
+                TS_ASSERT(int_type->kind == IR_TYPE_INT);
 
                 uint32_t params[8] = {
                     int_type->id,
@@ -2573,10 +2572,10 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             }
 
             case IR_BUILTIN_INTERLOCKED_COMPARE_STORE: {
-                assert(param_values[0]->type->kind == IR_TYPE_POINTER);
+                TS_ASSERT(param_values[0]->type->kind == IR_TYPE_POINTER);
 
                 IRType *int_type = param_values[0]->type->ptr.sub;
-                assert(int_type->kind == IR_TYPE_INT);
+                TS_ASSERT(int_type->kind == IR_TYPE_INT);
 
                 uint32_t params[8] = {
                     int_type->id,
@@ -2658,7 +2657,7 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             }
 
             inst->id = irModuleReserveId(m);
-            assert(inst->cast.op != SpvOpNop);
+            TS_ASSERT(inst->cast.op != SpvOpNop);
 
             uint32_t params[3] = {inst->type->id, inst->id, inst->cast.value->id};
             irModuleEncodeInst(m, inst->cast.op, params, 3);
@@ -2672,7 +2671,7 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             uint32_t param_count = 3 + inst->composite_extract.index_count;
             uint32_t *params = NEW_ARRAY(m->compiler, uint32_t, param_count);
 
-            assert(inst->type->id > 0);
+            TS_ASSERT(inst->type->id > 0);
 
             params[0] = inst->type->id;
             params[1] = inst->id;
@@ -2693,7 +2692,7 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
             uint32_t param_count = 4 + inst->vector_shuffle.index_count;
             uint32_t *params = NEW_ARRAY(m->compiler, uint32_t, param_count);
 
-            assert(inst->type->id > 0);
+            TS_ASSERT(inst->type->id > 0);
 
             params[0] = inst->type->id;
             params[1] = inst->id;
@@ -2711,7 +2710,7 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
 
         case IR_INST_UNARY: {
             inst->id = irModuleReserveId(m);
-            assert(inst->type->id > 0);
+            TS_ASSERT(inst->type->id > 0);
 
             uint32_t param_count = 3;
             uint32_t params[3] = {inst->type->id, inst->id, inst->unary.right->id};
@@ -2722,7 +2721,7 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
 
         case IR_INST_BINARY: {
             inst->id = irModuleReserveId(m);
-            assert(inst->type->id > 0);
+            TS_ASSERT(inst->type->id > 0);
 
             uint32_t param_count = 4;
             uint32_t params[4] = {
@@ -2738,7 +2737,7 @@ static void irModuleEncodeBlock(IRModule *m, IRInst *block)
         case IR_INST_CONSTANT_COMPOSITE:
         case IR_INST_FUNCTION:
         case IR_INST_ENTRY_POINT:
-        case IR_INST_BLOCK: assert(0); break;
+        case IR_INST_BLOCK: TS_ASSERT(0); break;
         }
     }
 }
@@ -2755,13 +2754,13 @@ static void irModuleEncodeConstants(IRModule *m)
         {
         case IR_INST_CONSTANT: {
             uint32_t value_words = ROUND_TO_4(inst->constant.value_size_bytes) / 4;
-            assert((value_words * 4) >= inst->constant.value_size_bytes);
-            assert(value_words > 0);
+            TS_ASSERT((value_words * 4) >= inst->constant.value_size_bytes);
+            TS_ASSERT(value_words > 0);
 
             uint32_t *params = NEW_ARRAY(m->compiler, uint32_t, 2 + value_words);
             params[0] = inst->type->id;
             params[1] = inst->id;
-            assert(params[0] != params[1]);
+            TS_ASSERT(params[0] != params[1]);
             memcpy(&params[2], inst->constant.value, inst->constant.value_size_bytes);
 
             irModuleEncodeInst(m, SpvOpConstant, params, 2 + value_words);
@@ -2796,7 +2795,7 @@ static void irModuleEncodeConstants(IRModule *m)
             break;
         }
 
-        default: assert(0); break;
+        default: TS_ASSERT(0); break;
         }
     }
 }
@@ -2806,7 +2805,7 @@ static void irModuleEncodeGlobals(IRModule *m)
     for (uint32_t i = 0; i < m->globals.len; ++i)
     {
         IRInst *inst = m->globals.ptr[i];
-        assert(inst->kind == IR_INST_VARIABLE);
+        TS_ASSERT(inst->kind == IR_INST_VARIABLE);
 
         uint32_t params[3] = {inst->type->id, inst->id, inst->var.storage_class};
         irModuleEncodeInst(m, SpvOpVariable, params, 3);
@@ -2818,8 +2817,8 @@ static void irModuleEncodeFunctions(IRModule *m)
     for (uint32_t i = 0; i < arrLength(m->functions); ++i)
     {
         IRInst *inst = m->functions.ptr[i];
-        assert(inst->kind == IR_INST_FUNCTION);
-        assert(inst->id);
+        TS_ASSERT(inst->kind == IR_INST_FUNCTION);
+        TS_ASSERT(inst->id);
 
         {
             uint32_t params[4] = {
@@ -2853,7 +2852,7 @@ static void irModuleEncodeFunctions(IRModule *m)
 
 static void irModuleEncodeModule(IRModule *m)
 {
-    assert(m->stream.ptr == NULL);
+    TS_ASSERT(m->stream.ptr == NULL);
 
     static const uint8_t MAGIC_NUMBER[4] = {'T', 'I', 'N', 'Y'};
     uint32_t uint_magic_number;

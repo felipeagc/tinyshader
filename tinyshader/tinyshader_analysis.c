@@ -47,7 +47,7 @@ static AstDecl *scopeGetGlobal(Scope *scope, const char *name)
 
 static bool scopeAdd(Scope *scope, const char *name, AstDecl *decl)
 {
-    assert(scope);
+    TS_ASSERT(scope);
 
     if (scopeGetLocal(scope, name)) return false;
 
@@ -116,10 +116,10 @@ static char *typeToString(TsCompiler *compiler, AstType *type)
         case SpvStorageClassStorageBuffer: storage_class = "storage"; break;
         case SpvStorageClassFunction: storage_class = "function"; break;
 
-        default: assert(0); break;
+        default: TS_ASSERT(0); break;
         }
 
-        assert(type->ptr.sub);
+        TS_ASSERT(type->ptr.sub);
         sub = typeToString(compiler, type->ptr.sub);
         break;
     }
@@ -202,7 +202,7 @@ static char *typeToString(TsCompiler *compiler, AstType *type)
         case SpvDim1D: postfix = "1D"; break;
         case SpvDim2D: postfix = "2D"; break;
         case SpvDim3D: postfix = "3D"; break;
-        default: assert(0); break;
+        default: TS_ASSERT(0); break;
         }
 
         break;
@@ -211,7 +211,7 @@ static char *typeToString(TsCompiler *compiler, AstType *type)
 
     ts__sbReset(&compiler->sb);
 
-    assert(prefix);
+    TS_ASSERT(prefix);
     ts__sbAppend(&compiler->sb, prefix);
 
     if (storage_class)
@@ -251,7 +251,7 @@ char *ts__typeToPrettyString(TsCompiler *compiler, AstType *type)
         {
         case 32: str = "float"; break;
         case 64: str = "double"; break;
-        default: assert(0); break;
+        default: TS_ASSERT(0); break;
         }
 
         break;
@@ -269,7 +269,7 @@ char *ts__typeToPrettyString(TsCompiler *compiler, AstType *type)
             break;
         }
 
-        default: assert(0); break;
+        default: TS_ASSERT(0); break;
         }
 
         break;
@@ -300,7 +300,7 @@ char *ts__typeToPrettyString(TsCompiler *compiler, AstType *type)
     }
 
     case TYPE_POINTER: {
-        assert(0);
+        TS_ASSERT(0);
         break;
     }
 
@@ -397,7 +397,7 @@ char *ts__typeToPrettyString(TsCompiler *compiler, AstType *type)
         case SpvDim1D: ts__sbAppend(&compiler->sb, "Texture1D"); break;
         case SpvDim2D: ts__sbAppend(&compiler->sb, "Texture2D"); break;
         case SpvDim3D: ts__sbAppend(&compiler->sb, "Texture3D"); break;
-        default: assert(0); break;
+        default: TS_ASSERT(0); break;
         }
 
         ts__sbAppend(&compiler->sb, "<");
@@ -414,12 +414,12 @@ char *ts__typeToPrettyString(TsCompiler *compiler, AstType *type)
 
 static uint32_t padToAlignment(uint32_t current, uint32_t align)
 {
-    assert(align >= 1);
+    TS_ASSERT(align >= 1);
 
     uint32_t minum = current & (align - 1);
     if (minum)
     {
-        assert((current % align) != 0);
+        TS_ASSERT((current % align) != 0);
         current += align - minum;
     }
 
@@ -428,7 +428,7 @@ static uint32_t padToAlignment(uint32_t current, uint32_t align)
 
 static uint32_t typeAlignOf(Module *m, AstType *type)
 {
-    assert(type);
+    TS_ASSERT(type);
     if (type->align > 0) return type->align;
 
     uint32_t align = 1;
@@ -449,7 +449,7 @@ static uint32_t typeAlignOf(Module *m, AstType *type)
         case 2: align = typeAlignOf(m, type->vector.elem_type) * 2; break;
         case 3:
         case 4: align = typeAlignOf(m, type->vector.elem_type) * 4; break;
-        default: assert(0); break;
+        default: TS_ASSERT(0); break;
         }
 
         break;
@@ -489,7 +489,7 @@ static uint32_t typeAlignOf(Module *m, AstType *type)
 
 static uint32_t typeSizeOf(Module *m, AstType *type)
 {
-    assert(type);
+    TS_ASSERT(type);
     if (type->size > 0) return type->size;
 
     uint32_t size = 0;
@@ -512,7 +512,7 @@ static uint32_t typeSizeOf(Module *m, AstType *type)
         case 2: size = typeSizeOf(m, type->vector.elem_type) * 2; break;
         case 3: size = typeSizeOf(m, type->vector.elem_type) * 3; break;
         case 4: size = typeSizeOf(m, type->vector.elem_type) * 4; break;
-        default: assert(0); break;
+        default: TS_ASSERT(0); break;
         }
         break;
     }
@@ -565,13 +565,13 @@ static uint32_t typeSizeOf(Module *m, AstType *type)
 static AstType *getCachedType(Module *m, AstType *type)
 {
     char *type_string = typeToString(m->compiler, type);
-    assert(type_string);
-    assert(strlen(type_string) > 0);
+    TS_ASSERT(type_string);
+    TS_ASSERT(strlen(type_string) > 0);
 
     AstType *found_type = NULL;
     if (ts__hashGet(&m->type_cache, type_string, (void **)&found_type))
     {
-        assert(found_type);
+        TS_ASSERT(found_type);
         return found_type;
     }
 
@@ -600,7 +600,7 @@ static AstType *newPointerType(Module *m, SpvStorageClass storage_class, AstType
 
 static AstType *newArrayType(Module *m, AstType *elem_type, size_t size)
 {
-    assert(size > 0);
+    TS_ASSERT(size > 0);
     AstType *ty = NEW(m->compiler, AstType);
     ty->kind = TYPE_ARRAY;
     ty->array.sub = elem_type;
@@ -784,7 +784,7 @@ static bool isTypeCastable(AstType *src_type, AstType *dst_type)
         return false;
     }
 
-    assert(0);
+    TS_ASSERT(0);
 }
 
 AstType *ts__getScalarType(AstType *type)
@@ -1021,7 +1021,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl);
 
 static void analyzerPushScope(Analyzer *a, Scope *scope)
 {
-    assert(scope);
+    TS_ASSERT(scope);
     arrPush(a->compiler, &a->scope_stack, scope);
     if (scope->owner && scope->owner->kind == DECL_FUNC)
     {
@@ -1031,11 +1031,11 @@ static void analyzerPushScope(Analyzer *a, Scope *scope)
 
 static void analyzerPopScope(Analyzer *a, Scope *scope)
 {
-    assert(scope);
-    assert(arrLength(a->scope_stack) > 0);
+    TS_ASSERT(scope);
+    TS_ASSERT(arrLength(a->scope_stack) > 0);
 
     Scope *last_scope = a->scope_stack.ptr[arrLength(a->scope_stack) - 1];
-    assert(last_scope == scope);
+    TS_ASSERT(last_scope == scope);
 
     arrPop(&a->scope_stack);
 
@@ -1115,7 +1115,7 @@ static void analyzerRecursivelyCheckForSemanticStrings(
     case DECL_VAR:
     {
         AstType *var_type = decl->type;
-        assert(var_type);
+        TS_ASSERT(var_type);
 
         if (var_type->kind == TYPE_STRUCT)
         {
@@ -1153,7 +1153,7 @@ static void analyzerRecursivelyCheckForSemanticStrings(
 
 static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_type)
 {
-    assert(expr);
+    TS_ASSERT(expr);
 
     TsCompiler *compiler = a->compiler;
     Scope *scope = analyzerCurrentScope(a);
@@ -1216,10 +1216,10 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            default: assert(0); break;
+            default: TS_ASSERT(0); break;
             }
 
-            assert(elem_type);
+            TS_ASSERT(elem_type);
 
             expr->as_type = newVectorType(
                 a->module, elem_type, (uint32_t)expr->primary.token->vector_type.dim);
@@ -1247,10 +1247,10 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 break;
             }
 
-            default: assert(0); break;
+            default: TS_ASSERT(0); break;
             }
 
-            assert(elem_type);
+            TS_ASSERT(elem_type);
 
             AstType *col_type = newVectorType(
                 a->module, elem_type, (uint32_t)expr->primary.token->matrix_type.dim1);
@@ -1304,7 +1304,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             break;
         }
 
-        default: assert(0); break;
+        default: TS_ASSERT(0); break;
         }
         break;
     }
@@ -1491,15 +1491,15 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
         AstExpr *left = expr->access.base;
         analyzerAnalyzeExpr(a, left, NULL);
 
-        assert(arrLength(expr->access.chain) > 0);
+        TS_ASSERT(expr->access.chain.len > 0);
 
-        for (uint32_t i = 0; i < arrLength(expr->access.chain); ++i)
+        for (uint32_t i = 0; i < expr->access.chain.len; ++i)
         {
             AstExpr *right = expr->access.chain.ptr[i];
 
             if (!left->type)
             {
-                assert(compiler->errors.len > 0);
+                TS_ASSERT(compiler->errors.len > 0);
                 break;
             }
 
@@ -1507,7 +1507,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
             if (struct_type)
             {
-                assert(left->scope);
+                TS_ASSERT(left->scope);
 
                 analyzerPushScope(a, left->scope);
                 analyzerAnalyzeExpr(a, right, NULL);
@@ -1515,7 +1515,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             }
             else if (left->type->kind == TYPE_VECTOR)
             {
-                assert(right->kind == EXPR_IDENT);
+                TS_ASSERT(right->kind == EXPR_IDENT);
 
                 char *selector = right->ident.name;
                 size_t new_vec_dim = strlen(selector);
@@ -1806,7 +1806,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 }
                 else
                 {
-                    assert(0);
+                    TS_ASSERT(0);
                 }
 
                 break;
@@ -2578,7 +2578,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                     expr->type = newIntType(m, 32, false);
                     break;
                 }
-                default: assert(0); break;
+                default: TS_ASSERT(0); break;
                 }
 
                 if (dim > 0)
@@ -2851,7 +2851,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
         {
             AstExpr *method_name_expr =
                 func_expr->access.chain.ptr[arrLength(func_expr->access.chain) - 1];
-            assert(method_name_expr->kind == EXPR_IDENT);
+            TS_ASSERT(method_name_expr->kind == EXPR_IDENT);
             char *method_name = method_name_expr->ident.name;
 
             // Remove last element from access (the method name)
@@ -2896,7 +2896,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                     func_param_types[1] = newVectorType(m, float_type, 3);
                     break;
 
-                default: assert(0); break;
+                default: TS_ASSERT(0); break;
                 }
 
                 if (func_param_count != arrLength(expr->func_call.params))
@@ -2943,7 +2943,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                     func_param_types[1] = newVectorType(m, float_type, 3);
                     break;
 
-                default: assert(0); break;
+                default: TS_ASSERT(0); break;
                 }
 
                 if (func_param_count != arrLength(expr->func_call.params))
@@ -3012,10 +3012,10 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                     func_param_types[3] = float_type; // mip count
                     break;
 
-                default: assert(0); break;
+                default: TS_ASSERT(0); break;
                 }
 
-                assert(func_param_count > 0);
+                TS_ASSERT(func_param_count > 0);
 
                 if (func_param_count != arrLength(expr->func_call.params))
                 {
@@ -3054,7 +3054,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             // Type constructor
 
             AstType *constructed_type = func_expr->as_type;
-            assert(constructed_type);
+            TS_ASSERT(constructed_type);
 
             expr->type = constructed_type;
 
@@ -3111,7 +3111,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             }
             case TYPE_MATRIX: {
                 AstType *col_type = constructed_type->matrix.col_type;
-                assert(col_type->kind == TYPE_VECTOR);
+                TS_ASSERT(col_type->kind == TYPE_VECTOR);
                 wanted_elem_count =
                     constructed_type->matrix.col_count * col_type->vector.size;
                 wanted_elem_type = col_type->vector.elem_type;
@@ -3158,7 +3158,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
                 if (!params.ptr[0]->type)
                 {
-                    assert(compiler->errors.len > 0);
+                    TS_ASSERT(compiler->errors.len > 0);
                     break;
                 }
 
@@ -3222,7 +3222,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
         AstType *subtype = expr->array_type.sub->as_type;
         if (!subtype)
         {
-            assert(compiler->errors.len > 0);
+            TS_ASSERT(compiler->errors.len > 0);
             break;
         }
 
@@ -3255,7 +3255,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
         AstType *subtype = expr->array_type.sub->as_type;
         if (!subtype)
         {
-            assert(compiler->errors.len > 0);
+            TS_ASSERT(compiler->errors.len > 0);
             break;
         }
 
@@ -3286,7 +3286,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
             sampled_type = newVectorType(m, newFloatType(m, 32), 4);
         }
 
-        assert(sampled_type);
+        TS_ASSERT(sampled_type);
 
         if (!(sampled_type->kind == TYPE_VECTOR || sampled_type->kind == TYPE_INT ||
               sampled_type->kind == TYPE_FLOAT))
@@ -3302,7 +3302,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
     }
 
     case EXPR_CONSTANT_BUFFER_TYPE: {
-        assert(expr->buffer.sub_expr);
+        TS_ASSERT(expr->buffer.sub_expr);
 
         AstType *type_type = newBasicType(m, TYPE_TYPE);
 
@@ -3310,7 +3310,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
         if (!expr->buffer.sub_expr->type) break;
 
         AstType *subtype = expr->buffer.sub_expr->as_type;
-        assert(subtype);
+        TS_ASSERT(subtype);
 
         if (subtype->kind != TYPE_STRUCT)
         {
@@ -3329,7 +3329,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
     }
 
     case EXPR_STRUCTURED_BUFFER_TYPE: {
-        assert(expr->buffer.sub_expr);
+        TS_ASSERT(expr->buffer.sub_expr);
 
         AstType *type_type = newBasicType(m, TYPE_TYPE);
 
@@ -3337,7 +3337,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
         if (!expr->buffer.sub_expr->type) break;
 
         AstType *subtype = expr->buffer.sub_expr->as_type;
-        assert(subtype);
+        TS_ASSERT(subtype);
 
         expr->type = type_type;
         expr->as_type = newStructuredBufferType(m, subtype);
@@ -3345,7 +3345,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
     }
 
     case EXPR_RW_STRUCTURED_BUFFER_TYPE: {
-        assert(expr->buffer.sub_expr);
+        TS_ASSERT(expr->buffer.sub_expr);
 
         AstType *type_type = newBasicType(m, TYPE_TYPE);
 
@@ -3353,7 +3353,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
         if (!expr->buffer.sub_expr->type) break;
 
         AstType *subtype = expr->buffer.sub_expr->as_type;
-        assert(subtype);
+        TS_ASSERT(subtype);
 
         expr->type = type_type;
         expr->as_type = newRWStructuredBufferType(m, subtype);
@@ -3577,13 +3577,13 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 AstType *scalar_type = NULL;
                 if (left_type->kind == TYPE_VECTOR)
                 {
-                    assert(!vector_type);
+                    TS_ASSERT(!vector_type);
                     vector_type = left_type;
                     scalar_type = right_type;
                 }
                 else if (right_type->kind == TYPE_VECTOR)
                 {
-                    assert(!vector_type);
+                    TS_ASSERT(!vector_type);
                     vector_type = right_type;
                     scalar_type = left_type;
                 }
@@ -3598,10 +3598,10 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                     break;
                 }
 
-                assert(vector_type);
-                assert(scalar_type);
-                assert(vector_type->kind == TYPE_VECTOR);
-                assert(scalar_type->kind != TYPE_VECTOR);
+                TS_ASSERT(vector_type);
+                TS_ASSERT(scalar_type);
+                TS_ASSERT(vector_type->kind == TYPE_VECTOR);
+                TS_ASSERT(scalar_type->kind != TYPE_VECTOR);
 
                 if (ts__getScalarType(vector_type) != scalar_type)
                 {
@@ -3615,7 +3615,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
                 expr->type = vector_type;
             }
 
-            assert(expr->type);
+            TS_ASSERT(expr->type);
 
             break;
         }
@@ -3867,8 +3867,8 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
 
     case EXPR_AUTO_CAST:
     {
-        assert(expr->auto_cast.sub);
-        assert(expr->auto_cast.sub->type);
+        TS_ASSERT(expr->auto_cast.sub);
+        TS_ASSERT(expr->auto_cast.sub->type);
         break;
     }
     }
@@ -3877,7 +3877,7 @@ static void analyzerAnalyzeExpr(Analyzer *a, AstExpr *expr, AstType *expected_ty
     {
         if (!expr->type)
         {
-            assert(compiler->errors.len > 0);
+            TS_ASSERT(compiler->errors.len > 0);
             /* ts__addErr(compiler, &expr->loc, "could not resolve type for expression"); */
         }
         else if (expr->type != expected_type &&
@@ -3938,7 +3938,7 @@ static void analyzerAnalyzeStmt(Analyzer *a, AstStmt *stmt)
     }
 
     case STMT_RETURN: {
-        assert(a->scope_func);
+        TS_ASSERT(a->scope_func);
         if (!a->scope_func->type) break;
 
         AstType *return_type = a->scope_func->type->func.return_type;
@@ -3961,12 +3961,12 @@ static void analyzerAnalyzeStmt(Analyzer *a, AstStmt *stmt)
     }
 
     case STMT_DISCARD: {
-        assert(a->scope_func);
+        TS_ASSERT(a->scope_func);
         break;
     }
 
     case STMT_CONTINUE: {
-        assert(a->scope_func);
+        TS_ASSERT(a->scope_func);
         if (arrLength(a->continue_stack) == 0)
         {
             ts__addErr(
@@ -3976,7 +3976,7 @@ static void analyzerAnalyzeStmt(Analyzer *a, AstStmt *stmt)
     }
 
     case STMT_BREAK: {
-        assert(a->scope_func);
+        TS_ASSERT(a->scope_func);
         if (arrLength(a->break_stack) == 0)
         {
             ts__addErr(
@@ -4123,7 +4123,7 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
         for (uint32_t i = 0; i < arrLength(decl->func.params); ++i)
         {
             AstDecl *param_decl = decl->func.params.ptr[i];
-            assert(param_decl->kind == DECL_VAR);
+            TS_ASSERT(param_decl->kind == DECL_VAR);
 
             analyzerTryRegisterDecl(a, param_decl);
             analyzerAnalyzeDecl(a, param_decl);
@@ -4473,14 +4473,14 @@ static void analyzerAnalyzeDecl(Analyzer *a, AstDecl *decl)
         char *name = decl->name;
 
         AstDecl *accessed = decl->alias.accessed;
-        assert(accessed->type);
+        TS_ASSERT(accessed->type);
         switch (accessed->type->kind)
         {
         case TYPE_CONSTANT_BUFFER:
         {
-            assert(accessed->scope);
+            TS_ASSERT(accessed->scope);
             AstDecl *field_decl = scopeGetLocal(accessed->scope, name);
-            assert(field_decl->type);
+            TS_ASSERT(field_decl->type);
             decl->type = field_decl->type;
             decl->scope = field_decl->scope;
             decl->alias.field_decl = field_decl;
@@ -4505,7 +4505,7 @@ void ts__analyze(
     a->module->decls = decls;
     a->module->decl_count = decl_count;
 
-    assert(!module->scope);
+    TS_ASSERT(!module->scope);
 
     module->scope = NEW(compiler, Scope);
     scopeInit(compiler, module->scope, NULL, NULL);
