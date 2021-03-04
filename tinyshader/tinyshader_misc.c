@@ -171,7 +171,7 @@ char *ts__getCurrentDir(TsCompiler *compiler)
     }
     else
     {
-        assert(sizeof(TCHAR) == sizeof(wchar_t));
+        TS_ASSERT(sizeof(TCHAR) == sizeof(wchar_t));
         return utf16ToUtf8(compiler, (wchar_t *)buf);
     }
 
